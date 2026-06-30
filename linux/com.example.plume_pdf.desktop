@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Plume PDF
+Exec=plume_pdf
+Icon=com.example.plume_pdf
+Terminal=false
+Categories=Office;Viewer;
+StartupNotify=true
+StartupWMClass=com.example.plume_pdf
+X-GNOME-WMClass=com.example.plume_pdf

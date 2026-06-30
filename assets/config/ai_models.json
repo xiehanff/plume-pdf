@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "id": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "label": "DeepSeek (deepseek-v4-flash)",
+      "supportsVision": false
+    },
+    {
+      "id": "Qwen/Qwen3-VL-30B-A3B-Instruct",
+      "provider": "siliconFlow",
+      "label": "硅基流动 (Qwen3-VL-30B-A3B)",
+      "supportsVision": true
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+    <TrackFileAccess>false</TrackFileAccess>
+  </PropertyGroup>
+</Project>

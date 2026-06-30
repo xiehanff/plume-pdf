@@ -1,0 +1,60 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+**/build/
+windows/installer/dist/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# fvm
+.fvm/
+
+# Local fork: gpt_markdown non-essential files
+packages/gpt_markdown/doc/
+packages/gpt_markdown/example/
+packages/gpt_markdown/test/
+packages/gpt_markdown/screenshots/
+packages/gpt_markdown/push.sh
+packages/gpt_markdown/start.sh
+
+# AI config files
+CLAUDE.md
+AGENTS.md
+.claude/
+.agents/
+.codex/
