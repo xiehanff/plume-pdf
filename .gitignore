@@ -12,6 +12,12 @@
 .swiftpm/
 migrate_working_dir/
 
+# Build artifacts / installers
+*.deb
+*.dmg
+*.app
+*.exe
+
 # IntelliJ related
 *.iml
 *.ipr
