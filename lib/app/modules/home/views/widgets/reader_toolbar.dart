@@ -123,8 +123,10 @@ class ReaderToolbar extends StatelessWidget {
                   tooltip: '侧边栏',
                   onPressed: onToggleSidebar,
                   selected: sidebarVisible,
-                  child: const _HugeToolbarIcon(
-                    icon: HugeIcons.strokeRoundedSidebarLeft,
+                  child: _HugeToolbarIcon(
+                    icon: sidebarVisible
+                        ? HugeIcons.strokeRoundedSidebarLeft
+                        : HugeIcons.strokeRoundedLayoutAlignLeft,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -228,8 +230,10 @@ class ReaderToolbar extends StatelessWidget {
                     tooltip: aiSidebarVisible ? '隐藏 AI 侧边栏' : '显示 AI 侧边栏',
                     selected: aiSidebarVisible,
                     onPressed: onToggleAiSidebar,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedSidebarRight,
+                    child: _HugeToolbarIcon(
+                      icon: aiSidebarVisible
+                          ? HugeIcons.strokeRoundedSidebarRight
+                          : HugeIcons.strokeRoundedLayoutAlignRight,
                     ),
                   ),
                 ],
