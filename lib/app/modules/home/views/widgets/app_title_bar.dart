@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// 跨 macOS/Linux/Windows 的应用标题栏。
@@ -66,15 +67,24 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                   children: <Widget>[
                     _WindowButton(
                       tooltip: '最小化',
-                      icon: Icons.minimize_rounded,
+                      icon: HugeIcon(
+                        icon: HugeIcons.strokeRoundedMinusSign,
+                        color: foregroundColor,
+                        size: 16,
+                        strokeWidth: 1.5,
+                      ),
                       color: foregroundColor,
                       onPressed: windowManager.minimize,
                     ),
                     _WindowButton(
                       tooltip: _isMaximized ? '还原' : '最大化',
-                      icon: _isMaximized
-                          ? Icons.filter_none_rounded
-                          : Icons.crop_square_rounded,
+                      icon: Icon(
+                        _isMaximized
+                            ? Icons.filter_none_rounded
+                            : Icons.crop_square_rounded,
+                        size: 16,
+                        color: foregroundColor,
+                      ),
                       color: foregroundColor,
                       onPressed: () {
                         if (_isMaximized) {
@@ -86,7 +96,11 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                     ),
                     _WindowButton(
                       tooltip: '关闭',
-                      icon: Icons.close_rounded,
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: foregroundColor,
+                      ),
                       color: foregroundColor,
                       isClose: true,
                       onPressed: windowManager.close,
@@ -129,7 +143,7 @@ class _WindowButton extends StatelessWidget {
   });
 
   final String tooltip;
-  final IconData icon;
+  final Widget icon;
   final Color color;
   final VoidCallback onPressed;
   final bool isClose;
@@ -147,7 +161,7 @@ class _WindowButton extends StatelessWidget {
           hoverColor: isClose ? Colors.red : color.withValues(alpha: 0.08),
         ),
         onPressed: onPressed,
-        icon: Icon(icon, size: 16, color: color),
+        icon: icon,
       ),
     );
   }
