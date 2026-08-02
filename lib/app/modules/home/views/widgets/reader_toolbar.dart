@@ -67,7 +67,6 @@ class ReaderToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isWindows = defaultTargetPlatform == TargetPlatform.windows;
     final bool showCenteredAppTitle = isWindows && !hasDocument;
-    final bool showLeadingTitle = fileName != null || !showCenteredAppTitle;
 
     return Container(
       height: 40,
@@ -127,108 +126,100 @@ class ReaderToolbar extends StatelessWidget {
                     icon: HugeIcons.strokeRoundedFolderOpen,
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (showLeadingTitle)
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 120),
-                    child: Text(
-                      fileName ?? 'Plume PDF',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
           // 右侧：历史记录 + debug + 阅读工具
           Positioned(
             right: 0,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                _ToolbarIconButton(
-                  tooltip: '最近阅读',
-                  onPressed: onShowRecentFiles,
-                  child: const _HugeToolbarIcon(
-                    icon: HugeIcons.strokeRoundedTransactionHistory,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _BackgroundThemeMenu(
-                  theme: backgroundTheme,
-                  onSelected: onSetBackgroundTheme,
-                ),
-                const SizedBox(width: 4),
-                if (kDebugMode)
+            top: 0,
+            bottom: 0,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
                   _ToolbarIconButton(
-                    tooltip: 'Debug Gallery',
-                    onPressed: () => Get.toNamed(Routes.debugGallery),
-                    child: const Icon(
-                      Icons.bug_report,
-                      size: 16,
-                      color: AppColors.debugIcon,
-                    ),
-                  ),
-                if (kDebugMode && hasDocument) const SizedBox(width: 4),
-                if (hasDocument) ...<Widget>[
-                  _ToolbarIconButton(
-                    tooltip: spreadMode ? '双页模式' : '单页模式',
-                    selected: spreadMode,
-                    onPressed: onToggleSpreadMode,
-                    child: _HugeToolbarIcon(
-                      icon: spreadMode
-                          ? HugeIcons.strokeRoundedBookOpenCheck
-                          : HugeIcons.strokeRoundedBookOpen01,
+                    tooltip: '最近阅读',
+                    onPressed: onShowRecentFiles,
+                    child: const _HugeToolbarIcon(
+                      icon: HugeIcons.strokeRoundedTransactionHistory,
                     ),
                   ),
                   const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: aiSelectionMode ? '退出 AI 选择模式' : 'AI 选择模式',
-                    selected: aiSelectionMode,
-                    onPressed: onToggleAiSelectionMode,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedAiGenerative,
-                    ),
+                  _BackgroundThemeMenu(
+                    theme: backgroundTheme,
+                    onSelected: onSetBackgroundTheme,
                   ),
                   const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: '适宽',
-                    onPressed: onFitWidth,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedArrowHorizontal,
+                  if (kDebugMode)
+                    _ToolbarIconButton(
+                      tooltip: 'Debug Gallery',
+                      onPressed: () => Get.toNamed(Routes.debugGallery),
+                      child: const Icon(
+                        Icons.bug_report,
+                        size: 16,
+                        color: AppColors.debugIcon,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: '缩小',
-                    onPressed: onZoomOut,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedMinusSign,
+                  if (kDebugMode && hasDocument) const SizedBox(width: 4),
+                  if (hasDocument) ...<Widget>[
+                    _ToolbarIconButton(
+                      tooltip: spreadMode ? '双页模式' : '单页模式',
+                      selected: spreadMode,
+                      onPressed: onToggleSpreadMode,
+                      child: _HugeToolbarIcon(
+                        icon: spreadMode
+                            ? HugeIcons.strokeRoundedBookOpenCheck
+                            : HugeIcons.strokeRoundedBookOpen01,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: '放大',
-                    onPressed: onZoomIn,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedAdd01,
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: aiSelectionMode ? '退出 AI 选择模式' : 'AI 选择模式',
+                      selected: aiSelectionMode,
+                      onPressed: onToggleAiSelectionMode,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedAiGenerative,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: aiSidebarVisible ? '隐藏 AI 侧边栏' : '显示 AI 侧边栏',
-                    selected: aiSidebarVisible,
-                    onPressed: onToggleAiSidebar,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedSidebarRight,
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: '适宽',
+                      onPressed: onFitWidth,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedArrowHorizontal,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: '缩小',
+                      onPressed: onZoomOut,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedMinusSign,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: '放大',
+                      onPressed: onZoomIn,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedAdd01,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: aiSidebarVisible ? '隐藏 AI 侧边栏' : '显示 AI 侧边栏',
+                      selected: aiSidebarVisible,
+                      onPressed: onToggleAiSidebar,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedSidebarRight,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],
