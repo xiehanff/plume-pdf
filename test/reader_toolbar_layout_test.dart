@@ -51,6 +51,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byTooltip('侧边栏'), findsOneWidget);
       expect(find.byTooltip('打开文件'), findsOneWidget);
+      expect(find.byTooltip('Debug Gallery'), findsNothing);
       expect(find.text('sample.pdf'), findsNothing);
 
       debugDefaultTargetPlatformOverride = null;

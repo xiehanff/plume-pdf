@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
 
-import '../../../../routes/app_pages.dart';
 import '../../../../theme/app_colors.dart';
 import 'page_navigator.dart';
 
@@ -129,7 +127,7 @@ class ReaderToolbar extends StatelessWidget {
               ],
             ),
           ),
-          // 右侧：历史记录 + debug + 阅读工具
+          // 右侧：历史记录 + 阅读工具
           Positioned(
             right: 0,
             top: 0,
@@ -152,18 +150,7 @@ class ReaderToolbar extends StatelessWidget {
                     theme: backgroundTheme,
                     onSelected: onSetBackgroundTheme,
                   ),
-                  const SizedBox(width: 4),
-                  if (kDebugMode)
-                    _ToolbarIconButton(
-                      tooltip: 'Debug Gallery',
-                      onPressed: () => Get.toNamed(Routes.debugGallery),
-                      child: const Icon(
-                        Icons.bug_report,
-                        size: 16,
-                        color: AppColors.debugIcon,
-                      ),
-                    ),
-                  if (kDebugMode && hasDocument) const SizedBox(width: 4),
+                  if (hasDocument) const SizedBox(width: 4),
                   if (hasDocument) ...<Widget>[
                     _ToolbarIconButton(
                       tooltip: spreadMode ? '双页模式' : '单页模式',
