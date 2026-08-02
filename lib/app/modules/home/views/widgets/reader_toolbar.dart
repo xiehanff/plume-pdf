@@ -72,12 +72,7 @@ class ReaderToolbar extends StatelessWidget {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.scaffoldBg,
-        border: Border(
-          bottom: BorderSide(color: AppColors.borderSubtle),
-        ),
-      ),
+      color: AppColors.scaffoldBg,
       child: Stack(
         children: <Widget>[
           // 中间：页码导航 + 缩放（绝对居中，不影响左右布局）
@@ -95,10 +90,7 @@ class ReaderToolbar extends StatelessWidget {
                     onSubmitted: onPageSubmitted,
                   ),
                   const SizedBox(width: 12),
-                  _ZoomLabelButton(
-                    label: zoomLabel,
-                    onPressed: onActualSize,
-                  ),
+                  _ZoomLabelButton(label: zoomLabel, onPressed: onActualSize),
                 ],
               ),
             )
@@ -175,8 +167,11 @@ class ReaderToolbar extends StatelessWidget {
                   _ToolbarIconButton(
                     tooltip: 'Debug Gallery',
                     onPressed: () => Get.toNamed(Routes.debugGallery),
-                    child: const Icon(Icons.bug_report,
-                        size: 16, color: AppColors.debugIcon),
+                    child: const Icon(
+                      Icons.bug_report,
+                      size: 16,
+                      color: AppColors.debugIcon,
+                    ),
                   ),
                 if (kDebugMode && hasDocument) const SizedBox(width: 4),
                 if (hasDocument) ...<Widget>[
@@ -243,10 +238,7 @@ class ReaderToolbar extends StatelessWidget {
 }
 
 class _ZoomLabelButton extends StatelessWidget {
-  const _ZoomLabelButton({
-    required this.label,
-    required this.onPressed,
-  });
+  const _ZoomLabelButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;
@@ -296,9 +288,10 @@ class _ToolbarIconButton extends StatelessWidget {
         minimumSize: const Size(30, 30),
         maximumSize: const Size(30, 30),
         padding: EdgeInsets.zero,
-        foregroundColor: selected ? AppColors.textPrimary : AppColors.textSecondary,
-        backgroundColor:
-            selected ? AppColors.seed : AppColors.fillFaint,
+        foregroundColor: selected
+            ? AppColors.textPrimary
+            : AppColors.textSecondary,
+        backgroundColor: selected ? AppColors.seed : AppColors.fillFaint,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       icon: child!,
@@ -313,19 +306,12 @@ class _HugeToolbarIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HugeIcon(
-      icon: icon,
-      size: 16,
-      strokeWidth: 1.5,
-    );
+    return HugeIcon(icon: icon, size: 16, strokeWidth: 1.5);
   }
 }
 
 class _BackgroundThemeMenu extends StatelessWidget {
-  const _BackgroundThemeMenu({
-    required this.theme,
-    required this.onSelected,
-  });
+  const _BackgroundThemeMenu({required this.theme, required this.onSelected});
 
   final PdfBackgroundTheme theme;
   final ValueChanged<PdfBackgroundTheme> onSelected;
@@ -354,10 +340,7 @@ class _BackgroundThemeMenu extends StatelessWidget {
                         )
                       : const SizedBox.shrink(),
                 ),
-                Text(
-                  t.label,
-                  style: const TextStyle(fontSize: 13),
-                ),
+                Text(t.label, style: const TextStyle(fontSize: 13)),
               ],
             ),
           );
@@ -370,9 +353,7 @@ class _BackgroundThemeMenu extends StatelessWidget {
           color: AppColors.fillFaint,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Center(
-          child: _BackgroundThemeIcon(theme: theme),
-        ),
+        child: Center(child: _BackgroundThemeIcon(theme: theme)),
       ),
     );
   }
@@ -400,10 +381,6 @@ class _BackgroundThemeIcon extends StatelessWidget {
         icon = HugeIcons.strokeRoundedLeaf01;
         break;
     }
-    return HugeIcon(
-      icon: icon,
-      size: 16,
-      strokeWidth: 1.5,
-    );
+    return HugeIcon(icon: icon, size: 16, strokeWidth: 1.5);
   }
 }

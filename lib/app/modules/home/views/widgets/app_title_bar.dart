@@ -58,37 +58,41 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
               ),
             Expanded(child: widget.child),
             if (!Platform.isMacOS)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _WindowButton(
-                    tooltip: '最小化',
-                    icon: Icons.minimize_rounded,
-                    color: foregroundColor,
-                    onPressed: windowManager.minimize,
-                  ),
-                  _WindowButton(
-                    tooltip: _isMaximized ? '还原' : '最大化',
-                    icon: _isMaximized
-                        ? Icons.filter_none_rounded
-                        : Icons.crop_square_rounded,
-                    color: foregroundColor,
-                    onPressed: () {
-                      if (_isMaximized) {
-                        windowManager.unmaximize();
-                      } else {
-                        windowManager.maximize();
-                      }
-                    },
-                  ),
-                  _WindowButton(
-                    tooltip: '关闭',
-                    icon: Icons.close_rounded,
-                    color: foregroundColor,
-                    isClose: true,
-                    onPressed: windowManager.close,
-                  ),
-                ],
+              Align(
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    _WindowButton(
+                      tooltip: '最小化',
+                      icon: Icons.minimize_rounded,
+                      color: foregroundColor,
+                      onPressed: windowManager.minimize,
+                    ),
+                    _WindowButton(
+                      tooltip: _isMaximized ? '还原' : '最大化',
+                      icon: _isMaximized
+                          ? Icons.filter_none_rounded
+                          : Icons.crop_square_rounded,
+                      color: foregroundColor,
+                      onPressed: () {
+                        if (_isMaximized) {
+                          windowManager.unmaximize();
+                        } else {
+                          windowManager.maximize();
+                        }
+                      },
+                    ),
+                    _WindowButton(
+                      tooltip: '关闭',
+                      icon: Icons.close_rounded,
+                      color: foregroundColor,
+                      isClose: true,
+                      onPressed: windowManager.close,
+                    ),
+                  ],
+                ),
               ),
           ],
         ),
@@ -134,15 +138,13 @@ class _WindowButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 42,
-      height: 34,
+      height: 50,
       child: IconButton(
         tooltip: tooltip,
         padding: EdgeInsets.zero,
         style: IconButton.styleFrom(
           shape: const RoundedRectangleBorder(),
-          hoverColor: isClose
-              ? Theme.of(context).colorScheme.error
-              : color.withValues(alpha: 0.08),
+          hoverColor: isClose ? Colors.red : color.withValues(alpha: 0.08),
         ),
         onPressed: onPressed,
         icon: Icon(icon, size: 16, color: color),
