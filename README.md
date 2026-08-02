@@ -9,7 +9,7 @@ A high-performance desktop PDF reader built with Flutter + PDFium, featuring Dee
 - Open local PDFs with recent file history (grid layout)
 - macOS: open via Finder double-click, Dock icon drag, or window drop
 - Windows: open via "Open with" / double-click `.pdf` to launch and load
-- Linux: release `.deb` package available for Debian/Ubuntu-based systems
+- Linux: release `.rpm` package available for Fedora-based systems; `.deb` packaging instructions are also available
 - Table of contents sidebar with chapter navigation (preserves manual selection within multi-level TOC on the same page)
 - Previous / next page and page number jump
 - Zoom in / out / fit width / reset to `100%`
@@ -29,7 +29,7 @@ A high-performance desktop PDF reader built with Flutter + PDFium, featuring Dee
 |---|---|---|
 | macOS | Available | Native Vision OCR, PDF default opener registration, Dock/Finder open and window drop |
 | Windows | Available | Native OCR, keyboard shortcuts, window title, rounded icon, `.pdf` file association |
-| Linux | Available | Release `.deb` package for Debian/Ubuntu-based systems, native title bar/icon handling |
+| Linux | Available | Release `.rpm` package for Fedora-based systems, native title bar/icon handling |
 
 ## Development
 
@@ -66,10 +66,11 @@ Related document:
 
 ## Linux Distribution
 
-- Debian package: `plume-pdf_0.0.9+7_amd64.deb`
-- Suitable for Debian / Ubuntu-based systems
-- GitHub release asset: download the attached `.deb` from the latest release
-- How to package: [Linux Debian package distribution](./docs/linux-deb-distribution.md)
+- RPM package: `plume-pdf-0.0.11-9.fc44.x86_64.rpm`
+- Suitable for Fedora-based systems
+- GitHub release asset: download the attached `.rpm` from the `v0.0.11` release
+- How to package: [Linux RPM package distribution](./docs/linux-rpm-distribution.md)
+- Debian/Ubuntu packaging instructions: [Linux Debian package distribution](./docs/linux-deb-distribution.md)
 
 ## Technical Notes
 

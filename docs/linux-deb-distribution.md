@@ -1,6 +1,6 @@
 # Linux Debian Package Distribution
 
-项目路径：`/home/hax/Documents/plume-pdf`
+项目路径：项目根目录
 
 这份文档只记录两件事：
 
@@ -27,7 +27,7 @@ build/linux/x64/release/bundle/
 ## 3. 组装 Debian 包目录
 
 ```bash
-pkg_root=/tmp/opencode/plume_pdf_deb_root
+pkg_root=/tmp/plume_pdf_deb_root
 rm -rf "$pkg_root"
 mkdir -p "$pkg_root/DEBIAN"
 mkdir -p "$pkg_root/opt"
@@ -42,7 +42,7 @@ cp -a linux/icons/hicolor "$pkg_root/usr/share/icons/"
 ```bash
 cat > "$pkg_root/DEBIAN/control" <<'EOF'
 Package: plume-pdf
-Version: 0.0.9+7
+Version: 0.0.11+9
 Section: utils
 Priority: optional
 Architecture: amd64
@@ -70,21 +70,13 @@ X-GNOME-WMClass=com.example.plume_pdf
 EOF
 ```
 
-## 6. 修复图标文件名（重要）
+## 6. 检查图标文件名
 
-`linux/icons/hicolor/*/apps/` 下图标文件名为 `com.example.mint_pdf.png`（项目重命名前的遗留），但 desktop entry 引用的是 `Icon=com.example.plume_pdf`。名称不匹配会导致安装后图标不显示。
-
-打包前修正：
+当前源文件已经使用 `com.example.plume_pdf.png`，需要与 desktop entry 中的 `Icon=com.example.plume_pdf` 保持一致：
 
 ```bash
-for dir in "$pkg_root/usr/share/icons/"*/*/apps/; do
-  if [ -f "${dir}com.example.mint_pdf.png" ]; then
-    mv "${dir}com.example.mint_pdf.png" "${dir}com.example.plume_pdf.png"
-  fi
-done
+find linux/icons/hicolor -path '*/apps/com.example.plume_pdf.png' -print
 ```
-
-同时建议将源文件 `linux/icons/hicolor/*/apps/com.example.mint_pdf.png` 批量重命名为 `com.example.plume_pdf.png`，从源头解决。
 
 ## 7. postinst 脚本 — 安装后刷新图标缓存
 
@@ -109,13 +101,13 @@ chmod 755 "$pkg_root/DEBIAN/postinst"
 ## 8. 生成 `.deb`
 
 ```bash
-dpkg-deb --build --root-owner-group "$pkg_root" /tmp/opencode/plume-pdf_0.0.9+7_amd64.deb
+dpkg-deb --build --root-owner-group "$pkg_root" /tmp/plume-pdf_0.0.11+9_amd64.deb
 ```
 
 ## 9. 安装测试
 
 ```bash
-sudo apt install /tmp/opencode/plume-pdf_0.0.9+7_amd64.deb
+sudo apt install /tmp/plume-pdf_0.0.11+9_amd64.deb
 # 如果缺少依赖
 sudo apt install -f
 ```
@@ -125,7 +117,7 @@ sudo apt install -f
 ## 10. 输出位置
 
 ```text
-/tmp/opencode/plume-pdf_0.0.9+7_amd64.deb
+/tmp/plume-pdf_0.0.11+9_amd64.deb
 ```
 
 ## 11. 图标不显示的排查

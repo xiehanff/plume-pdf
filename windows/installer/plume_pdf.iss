@@ -1,6 +1,6 @@
 #define MyAppName "Plume PDF"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.0.10"
+  #define MyAppVersion "0.0.11"
 #endif
 #define MyAppPublisher "xiehan"
 #define MyAppExeName "plume_pdf.exe"
