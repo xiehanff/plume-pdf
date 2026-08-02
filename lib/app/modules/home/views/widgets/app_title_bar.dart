@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-/// 无系统边框的应用标题栏。
+/// 跨 macOS/Linux/Windows 的应用标题栏。
 ///
 /// macOS 左侧预留 72px 给红绿灯按钮并设为可拖拽区域；
-/// Windows/Linux 在右侧显示自定义窗口控制按钮。
+/// Linux/Windows 在右侧显示自定义窗口控制按钮，并允许拖动标题栏。
 class AppTitleBar extends StatefulWidget {
   const AppTitleBar({required this.child, super.key});
 
@@ -23,6 +23,14 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    _updateMaximizedState();
+  }
+
+  Future<void> _updateMaximizedState() async {
+    final bool isMaximized = await windowManager.isMaximized();
+    if (mounted && isMaximized != _isMaximized) {
+      setState(() => _isMaximized = isMaximized);
+    }
   }
 
   @override
@@ -34,8 +42,10 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final Color backgroundColor = Theme.of(context).scaffoldBackgroundColor;
-    final Color foregroundColor = Theme.of(context).colorScheme.onSurfaceVariant;
-    return ColoredBox(
+    final Color foregroundColor = Theme.of(
+      context,
+    ).colorScheme.onSurfaceVariant;
+    final Widget titleBar = ColoredBox(
       color: backgroundColor,
       child: SizedBox(
         height: 50,
@@ -84,16 +94,24 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
         ),
       ),
     );
+
+    // macOS keeps the native traffic-light buttons. On Linux/Windows the
+    // custom controls share this area, so the whole bar is draggable.
+    return Platform.isMacOS ? titleBar : DragToMoveArea(child: titleBar);
   }
 
   @override
   void onWindowMaximize() {
-    if (mounted) setState(() => _isMaximized = true);
+    if (mounted) {
+      setState(() => _isMaximized = true);
+    }
   }
 
   @override
   void onWindowUnmaximize() {
-    if (mounted) setState(() => _isMaximized = false);
+    if (mounted) {
+      setState(() => _isMaximized = false);
+    }
   }
 }
 
