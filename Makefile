@@ -1,4 +1,4 @@
-.PHONY: get upgrade clean analyze run run-windows build-windows build-macos build-msix-windows build-installer-windows package-windows package-rpm
+.PHONY: get upgrade clean analyze run run-windows run-macos build-windows build-macos build-msix-windows build-installer-windows package-windows package-rpm package-macos
 
 FLUTTER := fvm flutter
 DART     := fvm dart
@@ -41,3 +41,6 @@ package-windows:
 
 package-rpm:
 	bash scripts/build_linux_rpm.sh
+
+package-macos:
+	bash scripts/build_macos_dmg.sh
