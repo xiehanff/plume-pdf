@@ -3,9 +3,20 @@ import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
+  override func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+    FileOpenChannel.handleOpenFiles([filename])
+    return true
+  }
+
   override func application(_ sender: NSApplication, openFiles filenames: [String]) {
     FileOpenChannel.handleOpenFiles(filenames)
     sender.reply(toOpenOrPrint: .success)
+  }
+
+  override func application(_ application: NSApplication, open urls: [URL]) {
+    FileOpenChannel.handleOpenFiles(
+      urls.filter { $0.isFileURL }.map(\.path)
+    )
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
