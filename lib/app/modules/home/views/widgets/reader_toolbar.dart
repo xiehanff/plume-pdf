@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
 
-import '../../../../routes/app_pages.dart';
 import '../../../../theme/app_colors.dart';
 import 'page_navigator.dart';
 
@@ -67,17 +65,11 @@ class ReaderToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isWindows = defaultTargetPlatform == TargetPlatform.windows;
     final bool showCenteredAppTitle = isWindows && !hasDocument;
-    final bool showLeadingTitle = fileName != null || !showCenteredAppTitle;
 
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.scaffoldBg,
-        border: Border(
-          bottom: BorderSide(color: AppColors.borderSubtle),
-        ),
-      ),
+      color: AppColors.scaffoldBg,
       child: Stack(
         children: <Widget>[
           // 中间：页码导航 + 缩放（绝对居中，不影响左右布局）
@@ -95,10 +87,7 @@ class ReaderToolbar extends StatelessWidget {
                     onSubmitted: onPageSubmitted,
                   ),
                   const SizedBox(width: 12),
-                  _ZoomLabelButton(
-                    label: zoomLabel,
-                    onPressed: onActualSize,
-                  ),
+                  _ZoomLabelButton(label: zoomLabel, onPressed: onActualSize),
                 ],
               ),
             )
@@ -137,107 +126,89 @@ class ReaderToolbar extends StatelessWidget {
                     icon: HugeIcons.strokeRoundedFolderOpen,
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (showLeadingTitle)
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 120),
-                    child: Text(
-                      fileName ?? 'Plume PDF',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
-          // 右侧：历史记录 + debug + 阅读工具
+          // 右侧：历史记录 + 阅读工具
           Positioned(
             right: 0,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                _ToolbarIconButton(
-                  tooltip: '最近阅读',
-                  onPressed: onShowRecentFiles,
-                  child: const _HugeToolbarIcon(
-                    icon: HugeIcons.strokeRoundedTransactionHistory,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _BackgroundThemeMenu(
-                  theme: backgroundTheme,
-                  onSelected: onSetBackgroundTheme,
-                ),
-                const SizedBox(width: 4),
-                if (kDebugMode)
+            top: 0,
+            bottom: 0,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
                   _ToolbarIconButton(
-                    tooltip: 'Debug Gallery',
-                    onPressed: () => Get.toNamed(Routes.debugGallery),
-                    child: const Icon(Icons.bug_report,
-                        size: 16, color: AppColors.debugIcon),
-                  ),
-                if (kDebugMode && hasDocument) const SizedBox(width: 4),
-                if (hasDocument) ...<Widget>[
-                  _ToolbarIconButton(
-                    tooltip: spreadMode ? '双页模式' : '单页模式',
-                    selected: spreadMode,
-                    onPressed: onToggleSpreadMode,
-                    child: _HugeToolbarIcon(
-                      icon: spreadMode
-                          ? HugeIcons.strokeRoundedBookOpenCheck
-                          : HugeIcons.strokeRoundedBookOpen01,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: aiSelectionMode ? '退出 AI 选择模式' : 'AI 选择模式',
-                    selected: aiSelectionMode,
-                    onPressed: onToggleAiSelectionMode,
+                    tooltip: '最近阅读',
+                    onPressed: onShowRecentFiles,
                     child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedAiGenerative,
+                      icon: HugeIcons.strokeRoundedTransactionHistory,
                     ),
                   ),
                   const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: '适宽',
-                    onPressed: onFitWidth,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedArrowHorizontal,
-                    ),
+                  _BackgroundThemeMenu(
+                    theme: backgroundTheme,
+                    onSelected: onSetBackgroundTheme,
                   ),
-                  const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: '缩小',
-                    onPressed: onZoomOut,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedMinusSign,
+                  if (hasDocument) const SizedBox(width: 4),
+                  if (hasDocument) ...<Widget>[
+                    _ToolbarIconButton(
+                      tooltip: spreadMode ? '双页模式' : '单页模式',
+                      selected: spreadMode,
+                      onPressed: onToggleSpreadMode,
+                      child: _HugeToolbarIcon(
+                        icon: spreadMode
+                            ? HugeIcons.strokeRoundedBookOpenCheck
+                            : HugeIcons.strokeRoundedBookOpen01,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: '放大',
-                    onPressed: onZoomIn,
-                    child: const _HugeToolbarIcon(
-                      icon: HugeIcons.strokeRoundedAdd01,
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: aiSelectionMode ? '退出 AI 选择模式' : 'AI 选择模式',
+                      selected: aiSelectionMode,
+                      onPressed: onToggleAiSelectionMode,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedAiGenerative,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarIconButton(
-                    tooltip: aiSidebarVisible ? '隐藏 AI 侧边栏' : '显示 AI 侧边栏',
-                    selected: aiSidebarVisible,
-                    onPressed: onToggleAiSidebar,
-                    child: _HugeToolbarIcon(
-                      icon: aiSidebarVisible
-                          ? HugeIcons.strokeRoundedSidebarRight
-                          : HugeIcons.strokeRoundedLayoutAlignRight,
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: '适宽',
+                      onPressed: onFitWidth,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedArrowHorizontal,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: '缩小',
+                      onPressed: onZoomOut,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedMinusSign,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: '放大',
+                      onPressed: onZoomIn,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedAdd01,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    _ToolbarIconButton(
+                      tooltip: aiSidebarVisible ? '隐藏 AI 侧边栏' : '显示 AI 侧边栏',
+                      selected: aiSidebarVisible,
+                      onPressed: onToggleAiSidebar,
+                      child: const _HugeToolbarIcon(
+                        icon: HugeIcons.strokeRoundedSidebarRight,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],
@@ -247,10 +218,7 @@ class ReaderToolbar extends StatelessWidget {
 }
 
 class _ZoomLabelButton extends StatelessWidget {
-  const _ZoomLabelButton({
-    required this.label,
-    required this.onPressed,
-  });
+  const _ZoomLabelButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;
@@ -300,9 +268,10 @@ class _ToolbarIconButton extends StatelessWidget {
         minimumSize: const Size(30, 30),
         maximumSize: const Size(30, 30),
         padding: EdgeInsets.zero,
-        foregroundColor: selected ? AppColors.textPrimary : AppColors.textSecondary,
-        backgroundColor:
-            selected ? AppColors.seed : AppColors.fillFaint,
+        foregroundColor: selected
+            ? AppColors.textPrimary
+            : AppColors.textSecondary,
+        backgroundColor: selected ? AppColors.seed : AppColors.fillFaint,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       icon: child!,
@@ -317,19 +286,12 @@ class _HugeToolbarIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HugeIcon(
-      icon: icon,
-      size: 16,
-      strokeWidth: 1.5,
-    );
+    return HugeIcon(icon: icon, size: 16, strokeWidth: 1.5);
   }
 }
 
 class _BackgroundThemeMenu extends StatelessWidget {
-  const _BackgroundThemeMenu({
-    required this.theme,
-    required this.onSelected,
-  });
+  const _BackgroundThemeMenu({required this.theme, required this.onSelected});
 
   final PdfBackgroundTheme theme;
   final ValueChanged<PdfBackgroundTheme> onSelected;
@@ -358,10 +320,7 @@ class _BackgroundThemeMenu extends StatelessWidget {
                         )
                       : const SizedBox.shrink(),
                 ),
-                Text(
-                  t.label,
-                  style: const TextStyle(fontSize: 13),
-                ),
+                Text(t.label, style: const TextStyle(fontSize: 13)),
               ],
             ),
           );
@@ -374,9 +333,7 @@ class _BackgroundThemeMenu extends StatelessWidget {
           color: AppColors.fillFaint,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Center(
-          child: _BackgroundThemeIcon(theme: theme),
-        ),
+        child: Center(child: _BackgroundThemeIcon(theme: theme)),
       ),
     );
   }
@@ -404,10 +361,6 @@ class _BackgroundThemeIcon extends StatelessWidget {
         icon = HugeIcons.strokeRoundedLeaf01;
         break;
     }
-    return HugeIcon(
-      icon: icon,
-      size: 16,
-      strokeWidth: 1.5,
-    );
+    return HugeIcon(icon: icon, size: 16, strokeWidth: 1.5);
   }
 }

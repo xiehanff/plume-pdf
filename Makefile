@@ -1,4 +1,4 @@
-.PHONY: get upgrade clean analyze run run-windows build-windows build-macos build-msix-windows build-installer-windows package-windows
+.PHONY: get upgrade clean analyze run run-windows build-windows build-macos build-msix-windows build-installer-windows package-windows package-rpm
 
 FLUTTER := fvm flutter
 DART     := fvm dart
@@ -38,3 +38,6 @@ build-installer-windows:
 
 package-windows:
 	powershell -ExecutionPolicy Bypass -File .\windows\installer\build_installer.ps1
+
+package-rpm:
+	bash scripts/build_linux_rpm.sh

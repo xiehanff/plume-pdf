@@ -9,7 +9,7 @@
 - 本地 PDF 打开与最近文件记录（田字格网格展示）
 - 支持从 Finder 双击 PDF、拖到 Dock 图标、或拖到应用窗口内直接打开文件
 - 支持 Windows "打开方式" / 双击 `.pdf` 后直接唤起并打开文件
-- 支持 Linux Debian/Ubuntu 系发行版的 `.deb` 安装包
+- 提供 Fedora 系发行版的 `.rpm` 安装包，同时保留 Debian/Ubuntu 系 `.deb` 打包说明
 - 目录侧边栏与章节跳转（同页多级目录点击时保持手动选中项）
 - 上一页 / 下一页 / 页码跳转
 - 放大 / 缩小 / 适宽 / 恢复 `100%`
@@ -29,7 +29,7 @@
 |---|---|---|
 | macOS | 可用 | 保留原生 Vision OCR，实现 PDF 默认打开方式注册、Dock/Finder 打开与窗口拖拽打开 |
 | Windows | 可用 | 已补齐原生 OCR、快捷键、窗口标题、圆角图标、`.pdf` 打开方式注册 |
-| Linux | 可用 | 提供 Debian/Ubuntu 系发行版 `.deb` 包，支持原生标题栏与图标显示 |
+| Linux | 可用 | 提供 Fedora 系发行版 `.rpm` 包，支持原生标题栏与图标显示 |
 
 ## 开发
 
@@ -66,10 +66,11 @@ fvm flutter pub upgrade            # 升级依赖
 
 ## Linux 分发
 
-- Debian 安装包：`plume-pdf_0.0.9+7_amd64.deb`
-- 适用于 Debian / Ubuntu 系发行版
-- GitHub release 里直接下载附带的 `.deb` 文件即可
-- 打包说明：[Linux Debian 包分发说明](./docs/linux-deb-distribution.md)
+- RPM 安装包：`plume-pdf-0.0.11-9.fc44.x86_64.rpm`
+- 适用于 Fedora 系发行版
+- GitHub Release `v0.0.11` 中可直接下载附带的 `.rpm` 文件
+- RPM 打包说明：[Linux RPM 包分发说明](./docs/linux-rpm-distribution.md)
+- Debian/Ubuntu 打包说明：[Linux Debian 包分发说明](./docs/linux-deb-distribution.md)
 
 ## 技术说明
 

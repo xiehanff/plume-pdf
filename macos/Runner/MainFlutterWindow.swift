@@ -9,20 +9,13 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
-    // Keep in sync with AppColors.scaffoldBg in lib/app/theme/app_colors.dart.
-    self.titlebarAppearsTransparent = true
+    // 与 lib/app/theme/app_colors.dart 中的 AppColors.scaffoldBg 保持一致
     self.backgroundColor = NSColor(
       red: 38.0 / 255.0,
       green: 42.0 / 255.0,
       blue: 55.0 / 255.0,
       alpha: 1.0
     )
-    self.isMovableByWindowBackground = true
-
-    // 初始窗口最大化
-    if let screen = NSScreen.main {
-      self.setFrame(screen.visibleFrame, display: true)
-    }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     OCRMethodChannel.register(with: flutterViewController)
