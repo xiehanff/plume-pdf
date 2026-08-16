@@ -66,10 +66,10 @@ Related document:
 
 ## Linux Distribution
 
-- RPM package: `plume-pdf-0.0.12-10.fc44.x86_64.rpm`
+- RPM package: `plume-pdf-0.0.13-11.fc44.x86_64.rpm`
 - Suitable for Fedora-based systems
-- DEB package: `plume-pdf_0.0.12+10_amd64.deb`
-- GitHub release assets: download the attached `.rpm` or `.deb` from the `v0.0.12` release
+- DEB package: `plume-pdf_0.0.13+11_amd64.deb`
+- GitHub release assets: download the attached `.rpm` or `.deb` from the `v0.0.13` release
 - Build RPM: `make package-rpm`
 - Build DEB: `make package-deb`
 - How to package: [Linux RPM package distribution](./docs/linux-rpm-distribution.md)

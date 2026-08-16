@@ -75,16 +75,14 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                 width: 72,
                 child: DragToMoveArea(child: SizedBox.expand()),
               ),
-            // Toolbar. On Linux/Windows it also serves as the window drag
-            // region. _DragToMoveArea keeps descendant button taps instant
+            // The toolbar is also a window drag region on every desktop
+            // platform. _DragToMoveArea keeps descendant button taps instant
             // while preserving drag and double-click title-bar behavior.
             Expanded(
-              child: Platform.isMacOS
-                  ? widget.child
-                  : _DragToMoveArea(
-                      onDoubleTap: _toggleMaximized,
-                      child: widget.child,
-                    ),
+              child: _DragToMoveArea(
+                onDoubleTap: _toggleMaximized,
+                child: widget.child,
+              ),
             ),
             // Window controls are siblings of the drag region, never inside
             // it, so their taps are not delayed by a double-tap recognizer.

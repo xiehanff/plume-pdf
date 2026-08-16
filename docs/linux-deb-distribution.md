@@ -24,7 +24,7 @@ make package-deb
 Debian 元数据、桌面入口和图标，并输出：
 
 ```text
-build/linux/x64/release/plume-pdf_0.0.12+10_amd64.deb
+build/linux/x64/release/plume-pdf_0.0.13+11_amd64.deb
 ```
 
 如果已经有最新的 Linux Release Bundle，可跳过 Flutter 构建：
@@ -63,7 +63,7 @@ cp -a linux/icons/hicolor "$pkg_root/usr/share/icons/"
 ```bash
 cat > "$pkg_root/DEBIAN/control" <<'EOF'
 Package: plume-pdf
-Version: 0.0.12+10
+Version: 0.0.13+11
 Section: utils
 Priority: optional
 Architecture: amd64
@@ -122,13 +122,13 @@ chmod 755 "$pkg_root/DEBIAN/postinst"
 ## 9. 生成 `.deb`
 
 ```bash
-dpkg-deb --build --root-owner-group "$pkg_root" /tmp/plume-pdf_0.0.12+10_amd64.deb
+dpkg-deb --build --root-owner-group "$pkg_root" /tmp/plume-pdf_0.0.13+11_amd64.deb
 ```
 
 ## 10. 安装测试
 
 ```bash
-sudo apt install /tmp/plume-pdf_0.0.12+10_amd64.deb
+sudo apt install /tmp/plume-pdf_0.0.13+11_amd64.deb
 # 如果缺少依赖
 sudo apt install -f
 ```
@@ -140,13 +140,13 @@ sudo apt install -f
 自动打包脚本输出到：
 
 ```text
-build/linux/x64/release/plume-pdf_0.0.12+10_amd64.deb
+build/linux/x64/release/plume-pdf_0.0.13+11_amd64.deb
 ```
 
 按手动步骤生成时，输出位置由 `dpkg-deb --build` 命令决定；本文示例为：
 
 ```text
-/tmp/plume-pdf_0.0.12+10_amd64.deb
+/tmp/plume-pdf_0.0.13+11_amd64.deb
 ```
 
 ## 12. 图标不显示的排查
@@ -163,19 +163,19 @@ build/linux/x64/release/plume-pdf_0.0.12+10_amd64.deb
 创建 Release 并同时上传 RPM/DEB：
 
 ```bash
-gh release create v0.0.12 \
-  build/linux/x64/release/plume-pdf-0.0.12-10.fc44.x86_64.rpm \
-  build/linux/x64/release/plume-pdf_0.0.12+10_amd64.deb \
-  --title "v0.0.12" \
+gh release create v0.0.13 \
+  build/linux/x64/release/plume-pdf-0.0.13-11.fc44.x86_64.rpm \
+  build/linux/x64/release/plume-pdf_0.0.13+11_amd64.deb \
+  --title "v0.0.13" \
   --notes-file CHANGELOG.md
 ```
 
 已有 Release 时使用：
 
 ```bash
-gh release upload v0.0.12 \
-  build/linux/x64/release/plume-pdf-0.0.12-10.fc44.x86_64.rpm \
-  build/linux/x64/release/plume-pdf_0.0.12+10_amd64.deb \
+gh release upload v0.0.13 \
+  build/linux/x64/release/plume-pdf-0.0.13-11.fc44.x86_64.rpm \
+  build/linux/x64/release/plume-pdf_0.0.13+11_amd64.deb \
   --clobber
 ```
 

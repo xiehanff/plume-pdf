@@ -1,5 +1,5 @@
-%{!?app_version:%global app_version 0.0.12}
-%{!?app_release:%global app_release 10}
+%{!?app_version:%global app_version 0.0.13}
+%{!?app_release:%global app_release 11}
 
 Name:           plume-pdf
 Version:        %{app_version}
@@ -70,6 +70,9 @@ fi
 /usr/share/icons/hicolor
 
 %changelog
+* Sun Aug 16 2026 xiehan <xiehan@users.noreply.github.com> - 0.0.13-11
+- Restore macOS title-bar double-click maximize/restore behavior.
+
 * Sun Aug 16 2026 xiehan <xiehan@users.noreply.github.com> - 0.0.12-10
 - Remove title-bar button click latency while preserving double-click maximize.
 - Add the Debian release packaging workflow.
