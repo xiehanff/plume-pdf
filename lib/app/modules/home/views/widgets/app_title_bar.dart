@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:window_manager/window_manager.dart';
@@ -34,6 +36,19 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
     }
   }
 
+  void _toggleMaximized() {
+    unawaited(_toggleMaximizedAsync());
+  }
+
+  Future<void> _toggleMaximizedAsync() async {
+    final bool isMaximized = await windowManager.isMaximized();
+    if (isMaximized) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
+  }
+
   @override
   void dispose() {
     windowManager.removeListener(this);
@@ -61,12 +76,15 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                 child: DragToMoveArea(child: SizedBox.expand()),
               ),
             // Toolbar. On Linux/Windows it also serves as the window drag
-            // region, but it must stay pan-only (see _DragToMoveArea) so the
-            // many buttons inside it respond instantly.
+            // region. _DragToMoveArea keeps descendant button taps instant
+            // while preserving drag and double-click title-bar behavior.
             Expanded(
               child: Platform.isMacOS
                   ? widget.child
-                  : _DragToMoveArea(child: widget.child),
+                  : _DragToMoveArea(
+                      onDoubleTap: _toggleMaximized,
+                      child: widget.child,
+                    ),
             ),
             // Window controls are siblings of the drag region, never inside
             // it, so their taps are not delayed by a double-tap recognizer.
@@ -74,6 +92,7 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
               _WindowControls(
                 isMaximized: _isMaximized,
                 foregroundColor: foregroundColor,
+                onToggleMaximized: _toggleMaximized,
               ),
           ],
         ),
@@ -96,24 +115,43 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
   }
 }
 
-/// A pan-only drag-to-move region.
+/// A drag-to-move region that also recognizes double taps without delaying
+/// descendant buttons.
 ///
 /// window_manager's [DragToMoveArea] also registers an `onDoubleTap`
 /// recognizer. A [DoubleTapGestureRecognizer] holds the gesture arena for
 /// ~300ms after every single tap (see `GestureArenaManager.hold`), which makes
 /// every button underneath it (IconButton, TextButton, PopupMenuButton, …)
-/// feel laggy. This variant only handles window dragging, leaving taps on
-/// descendant widgets to resolve immediately.
+/// feel laggy. [TapAndPanGestureRecognizer] does not eagerly win ordinary taps,
+/// so descendant buttons resolve immediately; it still wins drags and exposes
+/// the consecutive tap count needed for double-click maximize/restore.
 class _DragToMoveArea extends StatelessWidget {
-  const _DragToMoveArea({required this.child});
+  const _DragToMoveArea({required this.child, required this.onDoubleTap});
 
   final Widget child;
+  final VoidCallback onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
-      onPanStart: (_) => windowManager.startDragging(),
+      gestures: <Type, GestureRecognizerFactory>{
+        TapAndPanGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<TapAndPanGestureRecognizer>(
+              () => TapAndPanGestureRecognizer(),
+              (TapAndPanGestureRecognizer instance) {
+                instance
+                  ..onDragStart = (_) {
+                    unawaited(windowManager.startDragging());
+                  }
+                  ..onTapUp = (TapDragUpDetails details) {
+                    if (details.consecutiveTapCount == 2) {
+                      onDoubleTap();
+                    }
+                  };
+              },
+            ),
+      },
       child: child,
     );
   }
@@ -128,10 +166,12 @@ class _WindowControls extends StatelessWidget {
   const _WindowControls({
     required this.isMaximized,
     required this.foregroundColor,
+    required this.onToggleMaximized,
   });
 
   final bool isMaximized;
   final Color foregroundColor;
+  final VoidCallback onToggleMaximized;
 
   @override
   Widget build(BuildContext context) {
@@ -162,21 +202,11 @@ class _WindowControls extends StatelessWidget {
               color: foregroundColor,
             ),
             color: foregroundColor,
-            onPressed: () {
-              if (isMaximized) {
-                windowManager.unmaximize();
-              } else {
-                windowManager.maximize();
-              }
-            },
+            onPressed: onToggleMaximized,
           ),
           _WindowButton(
             tooltip: '关闭',
-            icon: Icon(
-              Icons.close_rounded,
-              size: 16,
-              color: foregroundColor,
-            ),
+            icon: Icon(Icons.close_rounded, size: 16, color: foregroundColor),
             color: foregroundColor,
             isClose: true,
             onPressed: windowManager.close,

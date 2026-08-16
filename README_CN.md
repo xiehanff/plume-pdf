@@ -9,7 +9,7 @@
 - 本地 PDF 打开与最近文件记录（田字格网格展示）
 - 支持从 Finder 双击 PDF、拖到 Dock 图标、或拖到应用窗口内直接打开文件
 - 支持 Windows "打开方式" / 双击 `.pdf` 后直接唤起并打开文件
-- 提供 Fedora 系发行版的 `.rpm` 安装包，同时保留 Debian/Ubuntu 系 `.deb` 打包说明
+- 提供 Fedora 系 `.rpm` 与 Debian/Ubuntu 系 `.deb` release 安装包
 - 目录侧边栏与章节跳转（同页多级目录点击时保持手动选中项）
 - 上一页 / 下一页 / 页码跳转
 - 放大 / 缩小 / 适宽 / 恢复 `100%`
@@ -66,11 +66,14 @@ fvm flutter pub upgrade            # 升级依赖
 
 ## Linux 分发
 
-- RPM 安装包：`plume-pdf-0.0.11-9.fc44.x86_64.rpm`
+- RPM 安装包：`plume-pdf-0.0.12-10.fc44.x86_64.rpm`
 - 适用于 Fedora 系发行版
-- GitHub Release `v0.0.11` 中可直接下载附带的 `.rpm` 文件
+- DEB 安装包：`plume-pdf_0.0.12+10_amd64.deb`
+- GitHub Release `v0.0.12` 中可直接下载附带的 `.rpm` 与 `.deb` 文件
+- 生成 RPM：`make package-rpm`
+- 生成 DEB：`make package-deb`
 - RPM 打包说明：[Linux RPM 包分发说明](./docs/linux-rpm-distribution.md)
-- Debian/Ubuntu 打包说明：[Linux Debian 包分发说明](./docs/linux-deb-distribution.md)
+- Debian/Ubuntu 分发说明：[Linux Debian 包分发说明](./docs/linux-deb-distribution.md)
 
 ## 技术说明
 

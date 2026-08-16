@@ -1,5 +1,5 @@
-%{!?app_version:%global app_version 0.0.11}
-%{!?app_release:%global app_release 9}
+%{!?app_version:%global app_version 0.0.12}
+%{!?app_release:%global app_release 10}
 
 Name:           plume-pdf
 Version:        %{app_version}
@@ -70,6 +70,6 @@ fi
 /usr/share/icons/hicolor
 
 %changelog
-* Sun Aug 02 2026 xiehan <xiehan@users.noreply.github.com> - 0.0.11-9
-- Add the Fedora RPM release package.
-- Align the cross-platform custom title bar and toolbar controls.
+* Sun Aug 16 2026 xiehan <xiehan@users.noreply.github.com> - 0.0.12-10
+- Remove title-bar button click latency while preserving double-click maximize.
+- Add the Debian release packaging workflow.
