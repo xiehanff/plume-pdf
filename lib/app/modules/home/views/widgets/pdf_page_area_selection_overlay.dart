@@ -100,12 +100,15 @@ class _PdfPageAreaSelectionOverlayState
               pageSize: widget.pageRect.size,
               onTranslate: () {
                 widget.onActionSelected(AiToolAction.translate);
+                _clearSelection();
               },
               onExplain: () {
                 widget.onActionSelected(AiToolAction.explain);
+                _clearSelection();
               },
               onDeepDive: () {
                 widget.onActionSelected(AiToolAction.deepDive);
+                _clearSelection();
               },
             ),
         ],
@@ -329,20 +332,40 @@ class _SelectionActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        minimumSize: const Size(72, 32),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-        foregroundColor: const Color(0xFF2A2A2A),
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              Color(0xFF45474D),
+              Color(0xFF232428),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: 72,
+                minHeight: 32,
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
