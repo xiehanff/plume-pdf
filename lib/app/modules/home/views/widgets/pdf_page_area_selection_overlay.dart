@@ -296,9 +296,9 @@ class _SelectionActionToolbar extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0x24FFFFFF),
+              color: const Color(0xE61F2D40),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0x2EFFFFFF)),
+              border: Border.all(color: const Color(0x38FFFFFF)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(4),
@@ -354,7 +354,7 @@ class _SelectionActionButton extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: Color(0xFF2A2A2A),
+                color: AppColors.textPrimary,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,
               ),
