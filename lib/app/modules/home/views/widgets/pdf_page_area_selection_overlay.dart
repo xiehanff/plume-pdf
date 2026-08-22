@@ -104,6 +104,9 @@ class _PdfPageAreaSelectionOverlayState
               onExplain: () {
                 widget.onActionSelected(AiToolAction.explain);
               },
+              onDeepDive: () {
+                widget.onActionSelected(AiToolAction.deepDive);
+              },
             ),
         ],
       ),
@@ -254,17 +257,19 @@ class _SelectionActionToolbar extends StatelessWidget {
     required this.pageSize,
     required this.onTranslate,
     required this.onExplain,
+    required this.onDeepDive,
   });
 
   final Rect rect;
   final Size pageSize;
   final VoidCallback onTranslate;
   final VoidCallback onExplain;
+  final VoidCallback onDeepDive;
 
   @override
   Widget build(BuildContext context) {
     const double toolbarHeight = 40;
-    const double toolbarWidth = 164;
+    const double toolbarWidth = 248;
     const double gap = 10;
     final double preferredLeft = rect.center.dx - (toolbarWidth / 2);
     final double clampedLeft = preferredLeft.clamp(
@@ -299,6 +304,11 @@ class _SelectionActionToolbar extends StatelessWidget {
               _SelectionActionButton(
                 label: '解释',
                 onPressed: onExplain,
+              ),
+              const SizedBox(width: 4),
+              _SelectionActionButton(
+                label: '深度理解',
+                onPressed: onDeepDive,
               ),
             ],
           ),

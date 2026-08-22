@@ -9,7 +9,8 @@ import 'ai_prompts.dart';
 
 enum AiToolAction {
   translate('翻译'),
-  explain('解释');
+  explain('解释'),
+  deepDive('深度理解');
 
   const AiToolAction(this.label);
 
@@ -130,7 +131,13 @@ class DeepSeekService {
       );
     }
 
-    yield* _generateStream(normalizedApiKey, messages);
+    yield* _generateStream(
+      normalizedApiKey,
+      messages,
+      config: action == AiToolAction.deepDive
+          ? OpenAIChatOptions(maxTokens: 4096)
+          : null,
+    );
   }
 
   /// 流式多轮对话，逐块 yield 增量文本。
@@ -192,13 +199,15 @@ class DeepSeekService {
 
   Stream<String> _generateStream(
     String apiKey,
-    List<Message> messages,
-  ) async* {
+    List<Message> messages, {
+    OpenAIChatOptions? config,
+  }) async* {
     final Genkit ai = _genkitFor(apiKey);
     try {
       await for (final GenerateResponseChunk<Object?> chunk in ai.generateStream(
         model: openAI.model(model),
         messages: messages,
+        config: config,
       )) {
         final String text = chunk.text;
         if (text.isNotEmpty) {
