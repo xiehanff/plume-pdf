@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:loading_indicator/loading_indicator.dart';
 
 import '../../../../theme/app_colors.dart';
 import 'chat_message.dart';
@@ -58,19 +59,11 @@ class ChatBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          SizedBox(width: 8),
-          Text(
-            '思考中…',
-            style: TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 13,
+            width: 20,
+            height: 20,
+            child: LoadingIndicator(
+              indicatorType: Indicator.ballPulse,
+              colors: <Color>[Color(0xB3FFFFFF)],
             ),
           ),
         ],
