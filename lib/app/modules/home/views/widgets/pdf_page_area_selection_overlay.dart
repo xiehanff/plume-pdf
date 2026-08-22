@@ -271,8 +271,8 @@ class _SelectionActionToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double toolbarHeight = 40;
-    const double toolbarWidth = 248;
+    const double toolbarHeight = 38;
+    const double toolbarWidth = 226;
     const double gap = 10;
     final double preferredLeft = rect.center.dx - (toolbarWidth / 2);
     final double clampedLeft = preferredLeft.clamp(
@@ -290,9 +290,23 @@ class _SelectionActionToolbar extends StatelessWidget {
       top: top,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.toolbarOverlayBg,
-          borderRadius: BorderRadius.circular(12),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              Color(0xF22E3036),
+              Color(0xF21B1C20),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.borderSoft),
+          boxShadow: const <BoxShadow>[
+            BoxShadow(
+              color: Color(0x66000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
         child: Padding(
           padding: const EdgeInsets.all(4),
@@ -303,12 +317,10 @@ class _SelectionActionToolbar extends StatelessWidget {
                 label: '翻译',
                 onPressed: onTranslate,
               ),
-              const SizedBox(width: 4),
               _SelectionActionButton(
                 label: '解释',
                 onPressed: onExplain,
               ),
-              const SizedBox(width: 4),
               _SelectionActionButton(
                 label: '深度理解',
                 onPressed: onDeepDive,
@@ -334,35 +346,24 @@ class _SelectionActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              Color(0xFF45474D),
-              Color(0xFF232428),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minWidth: 72,
-                minHeight: 32,
-              ),
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(7),
+        hoverColor: const Color(0x1FFFFFFF),
+        highlightColor: const Color(0x2EFFFFFF),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minWidth: 56,
+              minHeight: 28,
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
