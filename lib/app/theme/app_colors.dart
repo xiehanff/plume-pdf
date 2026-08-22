@@ -108,8 +108,8 @@ class AppColors {
   static const aiBadgeBg = Color(0xE64A1D7D);
 
   // ── Selection ──
-  static const selectionStroke = Color(0xFFB39DDB);
-  static const selectionFill = Color(0x33B39DDB);
+  static const selectionStroke = Color(0xFF3A6EA5);
+  static const selectionFill = Color(0x1A7EC0EE);
 
   // ── Text ──
   static const textPrimary = Colors.white;
