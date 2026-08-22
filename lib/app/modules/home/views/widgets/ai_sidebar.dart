@@ -18,6 +18,7 @@ class AiSidebar extends StatefulWidget {
     required this.onApiKeyChanged,
     required this.onSaveApiKey,
     required this.onSendChat,
+    required this.onNewSession,
     this.documentPath,
     this.leftSidebarWidth = 0,
   });
@@ -26,6 +27,7 @@ class AiSidebar extends StatefulWidget {
   final ValueChanged<String> onApiKeyChanged;
   final Future<void> Function() onSaveApiKey;
   final SendChatCallback onSendChat;
+  final VoidCallback onNewSession;
   final String? documentPath;
   final double leftSidebarWidth;
 
@@ -135,6 +137,7 @@ class _AiSidebarState extends State<AiSidebar> {
                   focusNode: _inputFocusNode,
                   isLoading: widget.state.loading,
                   onSend: _handleSend,
+                  onNewSession: widget.onNewSession,
                   onSettingsTap: () => setState(() => _showSettings = true),
                 ),
               ],

@@ -139,6 +139,8 @@ class HomeView extends GetView<HomeController> {
                                           controller.updateAiApiKey,
                                       onSaveApiKey: controller.saveAiApiKey,
                                       onSendChat: controller.sendAiChat,
+                                      onNewSession:
+                                          controller.startNewAiSession,
                                       documentPath: state.filePath,
                                       leftSidebarWidth:
                                           state.sidebarVisible ? 260 : 0,

@@ -10,6 +10,7 @@ class ChatInputBar extends StatelessWidget {
     required this.focusNode,
     required this.isLoading,
     required this.onSend,
+    required this.onNewSession,
     required this.onSettingsTap,
   });
 
@@ -17,6 +18,7 @@ class ChatInputBar extends StatelessWidget {
   final FocusNode focusNode;
   final bool isLoading;
   final VoidCallback onSend;
+  final VoidCallback onNewSession;
   final VoidCallback onSettingsTap;
 
   @override
@@ -69,6 +71,25 @@ class ChatInputBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
+              IconButton(
+                // 新建会话：任务进行中（loading）不可点击。
+                onPressed: isLoading ? null : onNewSession,
+                tooltip: '新建会话',
+                icon: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedPlusSign,
+                  size: 18,
+                  strokeWidth: 1.5,
+                ),
+                color: AppColors.textSecondary,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(32, 32),
+                  maximumSize: const Size(32, 32),
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
               IconButton(
                 onPressed: isLoading ? null : onSend,
                 tooltip: '发送',

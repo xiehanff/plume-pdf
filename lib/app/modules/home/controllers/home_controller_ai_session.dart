@@ -64,6 +64,27 @@ extension HomeControllerAiSession on HomeController {
     );
   }
 
+  /// 新建 AI 会话：清空对话历史，递增会话 ID（触发侧栏消息清空）。
+  void startNewAiSession() {
+    _aiChatHistory.clear();
+    final int nextSessionId = _aiSessionId + 1;
+    _aiSessionId = nextSessionId;
+    _applyState(
+      state.copyWith(
+        aiPanelState: state.aiPanelState.copyWith(
+          sessionId: nextSessionId,
+          loading: false,
+          actionId: null,
+          actionLabel: null,
+          actionSelectionText: null,
+          actionSelectionImage: null,
+          result: null,
+          errorMessage: null,
+        ),
+      ),
+    );
+  }
+
   Future<void> runAiAction(AiToolAction action) async {
     final PdfAiSelection? selection = state.aiSelection;
     if (selection == null) {

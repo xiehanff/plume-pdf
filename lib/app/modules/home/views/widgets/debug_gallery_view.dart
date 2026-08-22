@@ -94,6 +94,7 @@ class DebugGalleryView extends StatelessWidget {
               onApiKeyChanged: (_) {},
               onSaveApiKey: () async {},
               onSendChat: (_) async {},
+              onNewSession: () {},
               documentPath: '/path/to/sample.pdf',
             ),
           ),

@@ -19,6 +19,7 @@ void main() {
           onApiKeyChanged: (_) {},
           onSaveApiKey: () async {},
           onSendChat: (_) async {},
+          onNewSession: () {},
         ),
       ),
     ));
