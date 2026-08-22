@@ -298,10 +298,11 @@ extension HomeControllerAiSession on HomeController {
         throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
       }
 
-      final String userContent =
-          pageContext != null && pageContext.trim().isNotEmpty
-              ? '请${action.label}以下【框选内容】，页面全文仅作上下文参考：\n\n【框选内容】\n$extractedText\n\n【页面全文参考】\n$pageContext'
-              : '请${action.label}以下内容：\n\n$extractedText';
+      final String userContent = AiPrompts.userPrompt(
+        action,
+        extractedText,
+        pageContext: pageContext,
+      );
       _aiChatHistory.add(<String, String>{'role': 'user', 'content': userContent});
       _aiChatHistory.add(<String, String>{'role': 'assistant', 'content': result});
       _applyState(
