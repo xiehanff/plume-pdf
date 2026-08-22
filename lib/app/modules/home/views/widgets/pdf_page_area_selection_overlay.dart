@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -271,8 +273,8 @@ class _SelectionActionToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double toolbarHeight = 38;
-    const double toolbarWidth = 226;
+    const double toolbarHeight = 40;
+    const double toolbarWidth = 242;
     const double gap = 10;
     final double preferredLeft = rect.center.dx - (toolbarWidth / 2);
     final double clampedLeft = preferredLeft.clamp(
@@ -288,44 +290,38 @@ class _SelectionActionToolbar extends StatelessWidget {
     return Positioned(
       left: clampedLeft,
       top: top,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              Color(0xF22E3036),
-              Color(0xF21B1C20),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.borderSoft),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x66000000),
-              blurRadius: 12,
-              offset: Offset(0, 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0x24FFFFFF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0x2EFFFFFF)),
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              _SelectionActionButton(
-                label: '翻译',
-                onPressed: onTranslate,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _SelectionActionButton(
+                    label: '翻译',
+                    onPressed: onTranslate,
+                  ),
+                  const SizedBox(width: 6),
+                  _SelectionActionButton(
+                    label: '解释',
+                    onPressed: onExplain,
+                  ),
+                  const SizedBox(width: 6),
+                  _SelectionActionButton(
+                    label: '深度理解',
+                    onPressed: onDeepDive,
+                  ),
+                ],
               ),
-              _SelectionActionButton(
-                label: '解释',
-                onPressed: onExplain,
-              ),
-              _SelectionActionButton(
-                label: '深度理解',
-                onPressed: onDeepDive,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -348,20 +344,17 @@ class _SelectionActionButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(8),
         hoverColor: const Color(0x1FFFFFFF),
         highlightColor: const Color(0x2EFFFFFF),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minWidth: 56,
-              minHeight: 28,
-            ),
+        child: SizedBox(
+          width: 74,
+          height: 30,
+          child: Center(
             child: Text(
               label,
               style: const TextStyle(
-                color: AppColors.textPrimary,
+                color: Color(0xFF2A2A2A),
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,
               ),
