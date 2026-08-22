@@ -1,13 +1,6 @@
-enum AiProvider {
-  deepseek,
-  siliconFlow,
-}
-
 class PdfAiPanelState {
   const PdfAiPanelState({
     this.apiKey = '',
-    this.siliconFlowApiKey = '',
-    this.selectedProvider = AiProvider.deepseek,
     this.loading = false,
     this.sessionId = 0,
     this.actionLabel,
@@ -17,8 +10,6 @@ class PdfAiPanelState {
   });
 
   final String apiKey;
-  final String siliconFlowApiKey;
-  final AiProvider selectedProvider;
   final bool loading;
   final int sessionId;
   final String? actionLabel;
@@ -28,8 +19,6 @@ class PdfAiPanelState {
 
   PdfAiPanelState copyWith({
     String? apiKey,
-    String? siliconFlowApiKey,
-    AiProvider? selectedProvider,
     bool? loading,
     int? sessionId,
     Object? actionLabel = _sentinel,
@@ -39,8 +28,6 @@ class PdfAiPanelState {
   }) {
     return PdfAiPanelState(
       apiKey: apiKey ?? this.apiKey,
-      siliconFlowApiKey: siliconFlowApiKey ?? this.siliconFlowApiKey,
-      selectedProvider: selectedProvider ?? this.selectedProvider,
       loading: loading ?? this.loading,
       sessionId: sessionId ?? this.sessionId,
       actionLabel: identical(actionLabel, _sentinel)

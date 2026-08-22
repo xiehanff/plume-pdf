@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 
 import '../../../../theme/app_colors.dart';
-import '../../models/pdf_ai_panel_state.dart';
 import '../../services/ai_model_config.dart';
 import '../../services/deepseek_service.dart';
-import '../../services/silicon_flow_service.dart';
 
 class AiSidebarSettingsHeader extends StatelessWidget {
   const AiSidebarSettingsHeader({super.key, required this.onBack});
@@ -52,33 +50,20 @@ class AiSidebarSettingsList extends StatelessWidget {
   const AiSidebarSettingsList({
     super.key,
     required this.deepSeekController,
-    required this.siliconFlowController,
-    required this.selectedProvider,
     required this.onDeepSeekChanged,
-    required this.onSiliconFlowChanged,
-    required this.onProviderChanged,
     required this.onSaveDeepSeek,
-    required this.onSaveSiliconFlow,
   });
 
   final TextEditingController deepSeekController;
-  final TextEditingController siliconFlowController;
-  final AiProvider selectedProvider;
   final ValueChanged<String> onDeepSeekChanged;
-  final ValueChanged<String> onSiliconFlowChanged;
-  final ValueChanged<AiProvider> onProviderChanged;
   final VoidCallback onSaveDeepSeek;
-  final VoidCallback onSaveSiliconFlow;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
       children: <Widget>[
-        _ProviderSelector(
-          selectedProvider: selectedProvider,
-          onChanged: onProviderChanged,
-        ),
+        const _ModelInfoCard(),
         ApiKeyCard(
           title: 'DeepSeek',
           hintText: '输入 DeepSeek API Key',
@@ -86,29 +71,20 @@ class AiSidebarSettingsList extends StatelessWidget {
           onChanged: onDeepSeekChanged,
           onSave: onSaveDeepSeek,
         ),
-        ApiKeyCard(
-          title: '硅基流动 (SiliconFlow)',
-          hintText: '输入硅基流动 API Key',
-          controller: siliconFlowController,
-          onChanged: onSiliconFlowChanged,
-          onSave: onSaveSiliconFlow,
-        ),
       ],
     );
   }
 }
 
-class _ProviderSelector extends StatelessWidget {
-  const _ProviderSelector({
-    required this.selectedProvider,
-    required this.onChanged,
-  });
-
-  final AiProvider selectedProvider;
-  final ValueChanged<AiProvider> onChanged;
+class _ModelInfoCard extends StatelessWidget {
+  const _ModelInfoCard();
 
   @override
   Widget build(BuildContext context) {
+    final AiModelConfig? config =
+        AiModelRegistry.instance.configFor(DeepSeekService.model);
+    final String modelId = config?.modelId ?? DeepSeekService.model;
+    final String label = config?.label ?? DeepSeekService.model;
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
       padding: const EdgeInsets.all(14),
@@ -129,59 +105,25 @@ class _ProviderSelector extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<AiProvider>(
-            value: selectedProvider,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: AppColors.fieldBg,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.borderSoft),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.borderSoft),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.borderFocused),
-              ),
-            ),
+          Text(
+            label,
             style: const TextStyle(
               color: AppColors.textPrimary,
               fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
-            dropdownColor: AppColors.surfaceBg,
-            items: _buildItems(),
-            onChanged: (AiProvider? value) {
-              if (value != null) {
-                onChanged(value);
-              }
-            },
+          ),
+          const SizedBox(height: 4),
+          Text(
+            modelId,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
     );
-  }
-
-  List<DropdownMenuItem<AiProvider>> _buildItems() {
-    final List<DropdownMenuItem<AiProvider>> items = <DropdownMenuItem<AiProvider>>[];
-    for (final AiProvider provider in AiProvider.values) {
-      final String modelId = provider == AiProvider.siliconFlow
-          ? SiliconFlowService.model
-          : DeepSeekService.model;
-      final AiModelConfig? config = AiModelRegistry.instance.configFor(modelId);
-      final String label = config?.label ?? provider.name;
-      items.add(DropdownMenuItem<AiProvider>(
-        value: provider,
-        child: Text(label),
-      ));
-    }
-    return items;
   }
 }
 

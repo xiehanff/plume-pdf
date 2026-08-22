@@ -137,13 +137,7 @@ class HomeView extends GetView<HomeController> {
                                       state: state.aiPanelState,
                                       onApiKeyChanged:
                                           controller.updateAiApiKey,
-                                      onSiliconFlowApiKeyChanged:
-                                          controller.updateSiliconFlowApiKey,
                                       onSaveApiKey: controller.saveAiApiKey,
-                                      onSaveSiliconFlowApiKey:
-                                          controller.saveSiliconFlowApiKey,
-                                      onProviderChanged:
-                                          controller.updateSelectedProvider,
                                       onSendChat: controller.sendAiChat,
                                       documentPath: state.filePath,
                                       leftSidebarWidth:

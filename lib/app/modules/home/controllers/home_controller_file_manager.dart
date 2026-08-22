@@ -211,15 +211,10 @@ extension HomeControllerFileManager on HomeController {
 
   Future<void> _loadAiApiKey() async {
     final String deepSeekApiKey = await _deepSeekSettingsStore.loadApiKey();
-    final String siliconFlowApiKey = await _siliconFlowSettingsStore.loadApiKey();
-    final String? savedProvider = await _deepSeekSettingsStore.loadSelectedProvider();
-    final AiProvider provider = savedProvider == 'siliconFlow' ? AiProvider.siliconFlow : AiProvider.deepseek;
     _applyState(
       state.copyWith(
         aiPanelState: state.aiPanelState.copyWith(
           apiKey: deepSeekApiKey,
-          siliconFlowApiKey: siliconFlowApiKey,
-          selectedProvider: provider,
         ),
       ),
     );

@@ -45,36 +45,8 @@ extension HomeControllerAiSession on HomeController {
     );
   }
 
-  void updateSiliconFlowApiKey(String apiKey) {
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(siliconFlowApiKey: apiKey),
-      ),
-    );
-  }
-
-  void updateSelectedProvider(AiProvider provider) {
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(selectedProvider: provider),
-      ),
-    );
-    unawaited(_deepSeekSettingsStore.saveSelectedProvider(provider.name));
-  }
-
   Future<void> saveAiApiKey() async {
     await _deepSeekSettingsStore.saveApiKey(state.aiPanelState.apiKey);
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          errorMessage: null,
-        ),
-      ),
-    );
-  }
-
-  Future<void> saveSiliconFlowApiKey() async {
-    await _siliconFlowSettingsStore.saveApiKey(state.aiPanelState.siliconFlowApiKey);
     _applyState(
       state.copyWith(
         aiPanelState: state.aiPanelState.copyWith(
@@ -104,28 +76,22 @@ extension HomeControllerAiSession on HomeController {
       ),
     );
 
-    final bool useSiliconFlow = state.aiPanelState.selectedProvider == AiProvider.siliconFlow;
-    final String apiKey = useSiliconFlow
-        ? state.aiPanelState.siliconFlowApiKey
-        : state.aiPanelState.apiKey;
-    final String providerName = useSiliconFlow ? '硅基流动' : 'DeepSeek';
-
+    final String apiKey = state.aiPanelState.apiKey;
     if (apiKey.trim().isEmpty) {
       _applyState(
         state.copyWith(
           aiSidebarVisible: true,
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
-            errorMessage: '请先填写$providerName API Key。',
+            errorMessage: '请先填写 DeepSeek API Key。',
           ),
         ),
       );
       return;
     }
 
-    final String modelId = useSiliconFlow ? SiliconFlowService.model : DeepSeekService.model;
-    final AiModelConfig? config = AiModelRegistry.instance.configFor(modelId);
-
+    final AiModelConfig? config =
+        AiModelRegistry.instance.configFor(DeepSeekService.model);
     if (config != null && config.supportsVision) {
       return _runVisionAction(
         action: action,
@@ -138,7 +104,6 @@ extension HomeControllerAiSession on HomeController {
       action: action,
       selection: selection,
       apiKey: apiKey,
-      useSiliconFlow: useSiliconFlow,
       currentActionId: currentActionId,
     );
   }
@@ -155,14 +120,13 @@ extension HomeControllerAiSession on HomeController {
         action: action,
         selection: selection,
         apiKey: apiKey,
-        useSiliconFlow: true,
         currentActionId: currentActionId,
       );
     }
 
     try {
       final List<Map<String, String>> history = List<Map<String, String>>.from(_aiChatHistory);
-      final String result = await _siliconFlowService.perform(
+      final String result = await _deepSeekService.perform(
         action: action,
         apiKey: apiKey,
         selectionText: '',
@@ -186,12 +150,11 @@ extension HomeControllerAiSession on HomeController {
           ),
         ),
       );
-    } on SiliconFlowException catch (_) {
+    } on DeepSeekException catch (_) {
       return _runTextAction(
         action: action,
         selection: selection,
         apiKey: apiKey,
-        useSiliconFlow: true,
         currentActionId: currentActionId,
       );
     } catch (error) {
@@ -211,7 +174,6 @@ extension HomeControllerAiSession on HomeController {
     required AiToolAction action,
     required PdfAiSelection selection,
     required String apiKey,
-    required bool useSiliconFlow,
     required int currentActionId,
   }) async {
     final String extractedText = await _resolveSelectionText(selection);
@@ -253,24 +215,13 @@ extension HomeControllerAiSession on HomeController {
           : '请${action.label}以下内容：\n\n$extractedText';
       _aiChatHistory.add(<String, String>{'role': 'user', 'content': userContent});
 
-      final String result;
-      if (useSiliconFlow) {
-        result = await _siliconFlowService.perform(
-          action: action,
-          apiKey: apiKey,
-          selectionText: extractedText,
-          pageContext: pageContext,
-          history: List<Map<String, String>>.from(_aiChatHistory),
-        );
-      } else {
-        result = await _deepSeekService.perform(
-          action: action,
-          apiKey: apiKey,
-          selectionText: extractedText,
-          pageContext: pageContext,
-          history: List<Map<String, String>>.from(_aiChatHistory),
-        );
-      }
+      final String result = await _deepSeekService.perform(
+        action: action,
+        apiKey: apiKey,
+        selectionText: extractedText,
+        pageContext: pageContext,
+        history: List<Map<String, String>>.from(_aiChatHistory),
+      );
 
       _aiChatHistory.add(<String, String>{'role': 'assistant', 'content': result});
       _applyState(
@@ -283,17 +234,6 @@ extension HomeControllerAiSession on HomeController {
         ),
       );
     } on DeepSeekException catch (error) {
-      _aiChatHistory.removeLast();
-      _applyState(
-        state.copyWith(
-          aiPanelState: state.aiPanelState.copyWith(
-            loading: false,
-            result: null,
-            errorMessage: error.message,
-          ),
-        ),
-      );
-    } on SiliconFlowException catch (error) {
       _aiChatHistory.removeLast();
       _applyState(
         state.copyWith(
@@ -319,18 +259,13 @@ extension HomeControllerAiSession on HomeController {
   }
 
   Future<void> sendAiChat(String message) async {
-    final bool useSiliconFlow = state.aiPanelState.selectedProvider == AiProvider.siliconFlow;
-    final String apiKey = useSiliconFlow
-        ? state.aiPanelState.siliconFlowApiKey
-        : state.aiPanelState.apiKey;
-    final String providerName = useSiliconFlow ? '硅基流动' : 'DeepSeek';
-
+    final String apiKey = state.aiPanelState.apiKey;
     if (apiKey.trim().isEmpty) {
       _applyState(
         state.copyWith(
           aiSidebarVisible: true,
           aiPanelState: state.aiPanelState.copyWith(
-            errorMessage: '请先填写$providerName API Key。',
+            errorMessage: '请先填写 DeepSeek API Key。',
           ),
         ),
       );
@@ -357,18 +292,10 @@ extension HomeControllerAiSession on HomeController {
         'content': trimmedMessage,
       });
 
-      final String result;
-      if (useSiliconFlow) {
-        result = await _siliconFlowService.chat(
-          apiKey: apiKey,
-          history: List<Map<String, String>>.from(_aiChatHistory),
-        );
-      } else {
-        result = await _deepSeekService.chat(
-          apiKey: apiKey,
-          history: List<Map<String, String>>.from(_aiChatHistory),
-        );
-      }
+      final String result = await _deepSeekService.chat(
+        apiKey: apiKey,
+        history: List<Map<String, String>>.from(_aiChatHistory),
+      );
 
       _aiChatHistory.add(<String, String>{
         'role': 'assistant',
@@ -384,21 +311,6 @@ extension HomeControllerAiSession on HomeController {
         ),
       );
     } on DeepSeekException catch (error) {
-      if (_aiChatHistory.isNotEmpty &&
-          _aiChatHistory.last['role'] == 'user' &&
-          _aiChatHistory.last['content'] == trimmedMessage) {
-        _aiChatHistory.removeLast();
-      }
-      _applyState(
-        state.copyWith(
-          aiPanelState: state.aiPanelState.copyWith(
-            loading: false,
-            result: null,
-            errorMessage: error.message,
-          ),
-        ),
-      );
-    } on SiliconFlowException catch (error) {
       if (_aiChatHistory.isNotEmpty &&
           _aiChatHistory.last['role'] == 'user' &&
           _aiChatHistory.last['content'] == trimmedMessage) {

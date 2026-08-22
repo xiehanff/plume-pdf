@@ -50,6 +50,8 @@ dependencies:
   window_manager: ^0.4.3
   highlight: ^0.7.0
   flutter_highlight: ^0.7.0
+  genkit: ^0.15.1
+  genkit_openai: ^0.3.7
 
 dev_dependencies:
   flutter_test:

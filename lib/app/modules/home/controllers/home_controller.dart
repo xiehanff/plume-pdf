@@ -22,8 +22,6 @@ import '../services/pdf_file_picker.dart';
 import '../services/pdf_outline_mapper.dart';
 import '../services/pdf_cover_cache.dart';
 import '../services/pdf_reader_store.dart';
-import '../services/silicon_flow_service.dart';
-import '../services/silicon_flow_settings_store.dart';
 import '../services/ai_model_config.dart';
 import '../services/ai_prompts.dart';
 import '../../../services/app_launch_args.dart';
@@ -47,8 +45,6 @@ class HomeController extends GetxController {
   final PdfOutlineMapper _outlineMapper = const PdfOutlineMapper();
   final DeepSeekSettingsStore _deepSeekSettingsStore = DeepSeekSettingsStore();
   final DeepSeekService _deepSeekService = DeepSeekService();
-  final SiliconFlowSettingsStore _siliconFlowSettingsStore = SiliconFlowSettingsStore();
-  final SiliconFlowService _siliconFlowService = SiliconFlowService();
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
   final List<Map<String, String>> _aiChatHistory = <Map<String, String>>[];

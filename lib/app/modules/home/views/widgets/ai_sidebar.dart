@@ -14,10 +14,7 @@ class AiSidebar extends StatefulWidget {
     super.key,
     required this.state,
     required this.onApiKeyChanged,
-    required this.onSiliconFlowApiKeyChanged,
     required this.onSaveApiKey,
-    required this.onSaveSiliconFlowApiKey,
-    required this.onProviderChanged,
     required this.onSendChat,
     this.documentPath,
     this.leftSidebarWidth = 0,
@@ -25,10 +22,7 @@ class AiSidebar extends StatefulWidget {
 
   final PdfAiPanelState state;
   final ValueChanged<String> onApiKeyChanged;
-  final ValueChanged<String> onSiliconFlowApiKeyChanged;
   final Future<void> Function() onSaveApiKey;
-  final Future<void> Function() onSaveSiliconFlowApiKey;
-  final ValueChanged<AiProvider> onProviderChanged;
   final SendChatCallback onSendChat;
   final String? documentPath;
   final double leftSidebarWidth;
@@ -45,7 +39,6 @@ class _AiSidebarState extends State<AiSidebar> {
   static const double _kMinPdfAreaWidth = 200;
 
   late final TextEditingController _deepSeekController;
-  late final TextEditingController _siliconFlowController;
   late final TextEditingController _inputController;
   late final ScrollController _scrollController;
   late final FocusNode _inputFocusNode;
@@ -63,7 +56,6 @@ class _AiSidebarState extends State<AiSidebar> {
   void initState() {
     super.initState();
     _deepSeekController = TextEditingController(text: widget.state.apiKey);
-    _siliconFlowController = TextEditingController(text: widget.state.siliconFlowApiKey);
     _inputController = TextEditingController();
     _scrollController = ScrollController();
     _inputFocusNode = FocusNode();
@@ -77,10 +69,6 @@ class _AiSidebarState extends State<AiSidebar> {
         _deepSeekController.text != widget.state.apiKey) {
       _deepSeekController.text = widget.state.apiKey;
     }
-    if (oldWidget.state.siliconFlowApiKey != widget.state.siliconFlowApiKey &&
-        _siliconFlowController.text != widget.state.siliconFlowApiKey) {
-      _siliconFlowController.text = widget.state.siliconFlowApiKey;
-    }
     if (oldWidget.state.sessionId != widget.state.sessionId ||
         oldWidget.documentPath != widget.documentPath) {
       _resetConversation();
@@ -90,7 +78,6 @@ class _AiSidebarState extends State<AiSidebar> {
   @override
   void dispose() {
     _deepSeekController.dispose();
-    _siliconFlowController.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -126,13 +113,8 @@ class _AiSidebarState extends State<AiSidebar> {
                 Expanded(
                   child: AiSidebarSettingsList(
                     deepSeekController: _deepSeekController,
-                    siliconFlowController: _siliconFlowController,
-                    selectedProvider: widget.state.selectedProvider,
                     onDeepSeekChanged: widget.onApiKeyChanged,
-                    onSiliconFlowChanged: widget.onSiliconFlowApiKeyChanged,
-                    onProviderChanged: widget.onProviderChanged,
                     onSaveDeepSeek: widget.onSaveApiKey,
-                    onSaveSiliconFlow: widget.onSaveSiliconFlowApiKey,
                   ),
                 )
               else ...<Widget>[

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -19,7 +20,7 @@ class DeepSeekService {
   }) : _httpClient = httpClient ?? http.Client();
 
   static const String apiKeyStorageKey = 'deepseek_api_key';
-  static const String model = 'deepseek-v4-flash';
+  static const String model = 'deepseek-v4-flash-vision-exp';
   static const String _endpoint = 'https://api.deepseek.com/chat/completions';
 
   final http.Client _httpClient;
@@ -30,27 +31,55 @@ class DeepSeekService {
     required String selectionText,
     String? pageContext,
     List<Map<String, String>>? history,
+    Uint8List? imageBytes,
   }) async {
     final String normalizedApiKey = apiKey.trim();
     if (normalizedApiKey.isEmpty) {
       throw const DeepSeekException('请先填写 DeepSeek API Key。');
     }
-    if (selectionText.trim().isEmpty) {
+    final bool isVisionMode = imageBytes != null && imageBytes.isNotEmpty;
+    if (selectionText.trim().isEmpty && !isVisionMode) {
       throw const DeepSeekException('请先框选内容。');
     }
 
-    final List<Map<String, String>> messages = <Map<String, String>>[
+    final List<Map<String, dynamic>> messages = <Map<String, dynamic>>[
       <String, String>{
         'role': 'system',
         'content': AiPrompts.systemPrompt(action),
       },
-      if (history != null && history.isNotEmpty) ...history,
-      if (history == null || history.isEmpty)
-        <String, String>{
-          'role': 'user',
-          'content': AiPrompts.userPrompt(action, selectionText, pageContext: pageContext),
-        },
+      if (history != null && history.isNotEmpty)
+        ...history.map((Map<String, String> m) => <String, String>{
+              'role': m['role']!,
+              'content': m['content']!,
+            }),
     ];
+
+    if (isVisionMode) {
+      final String textContent = selectionText.trim().isEmpty
+          ? AiPrompts.visionUserPrompt(action)
+          : AiPrompts.userPrompt(action, selectionText, pageContext: pageContext);
+      final String base64Image = base64Encode(imageBytes);
+      messages.add(<String, dynamic>{
+        'role': 'user',
+        'content': <Map<String, dynamic>>[
+          <String, String>{
+            'type': 'text',
+            'text': textContent,
+          },
+          <String, dynamic>{
+            'type': 'image_url',
+            'image_url': <String, String>{
+              'url': 'data:image/png;base64,$base64Image',
+            },
+          },
+        ],
+      });
+    } else {
+      messages.add(<String, String>{
+        'role': 'user',
+        'content': AiPrompts.userPrompt(action, selectionText, pageContext: pageContext),
+      });
+    }
 
     final Map<String, Object?> payload = <String, Object?>{
       'model': model,
@@ -72,9 +101,16 @@ class DeepSeekService {
       throw const DeepSeekException('对话内容不能为空。');
     }
 
+    final List<Map<String, dynamic>> messages = history
+        .map((Map<String, String> m) => <String, String>{
+              'role': m['role']!,
+              'content': m['content']!,
+            })
+        .toList();
+
     final Map<String, Object?> payload = <String, Object?>{
       'model': model,
-      'messages': history,
+      'messages': messages,
     };
 
     return _sendRequest(normalizedApiKey, payload);
