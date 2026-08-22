@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
@@ -77,13 +79,41 @@ class ChatBubble extends StatelessWidget {
   }
 
   Widget _buildHumanContent() {
-    return Text(
+    final Widget text = Text(
       message.text,
       style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 14,
         height: 1.5,
       ),
+    );
+    final Uint8List? imageBytes = message.imageBytes;
+    if (imageBytes == null || imageBytes.isEmpty) {
+      return text;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 160,
+            maxHeight: 160,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              imageBytes,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+            ),
+          ),
+        ),
+        if (message.text.trim().isNotEmpty) ...<Widget>[
+          const SizedBox(height: 6),
+          text,
+        ],
+      ],
     );
   }
 

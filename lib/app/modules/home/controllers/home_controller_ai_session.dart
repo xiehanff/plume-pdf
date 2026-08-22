@@ -28,11 +28,19 @@ extension HomeControllerAiSession on HomeController {
             ? state.aiPanelState.copyWith(
                 actionId: null,
                 actionLabel: null,
+                actionSelectionText: null,
+                actionSelectionImage: null,
                 result: null,
                 errorMessage: null,
                 loading: false,
               )
-            : state.aiPanelState.copyWith(errorMessage: null),
+            : state.aiPanelState.copyWith(
+                actionId: null,
+                actionLabel: null,
+                actionSelectionText: null,
+                actionSelectionImage: null,
+                errorMessage: null,
+              ),
       ),
     );
   }
@@ -90,14 +98,33 @@ extension HomeControllerAiSession on HomeController {
       return;
     }
 
+    // 预提取选区截图与文本：用于用户气泡展示，避免后续重复渲染。
+    final Uint8List? imageBytes = await _extractSelectionImageBytes(selection);
+    final String selectionText =
+        await _resolveSelectionText(selection, imageBytes: imageBytes);
+    _applyState(
+      state.copyWith(
+        aiPanelState: state.aiPanelState.copyWith(
+          actionSelectionText:
+              selectionText.trim().isEmpty ? null : selectionText,
+          actionSelectionImage: imageBytes,
+        ),
+      ),
+    );
+
     final AiModelConfig? config =
         AiModelRegistry.instance.configFor(DeepSeekService.model);
-    if (config != null && config.supportsVision) {
+    if (config != null &&
+        config.supportsVision &&
+        imageBytes != null &&
+        imageBytes.isNotEmpty) {
       return _runVisionAction(
         action: action,
         selection: selection,
         apiKey: apiKey,
         currentActionId: currentActionId,
+        imageBytes: imageBytes,
+        selectionText: selectionText,
       );
     }
     return _runTextAction(
@@ -105,6 +132,7 @@ extension HomeControllerAiSession on HomeController {
       selection: selection,
       apiKey: apiKey,
       currentActionId: currentActionId,
+      extractedText: selectionText,
     );
   }
 
@@ -113,14 +141,16 @@ extension HomeControllerAiSession on HomeController {
     required PdfAiSelection selection,
     required String apiKey,
     required int currentActionId,
+    required Uint8List imageBytes,
+    required String selectionText,
   }) async {
-    final Uint8List? imageBytes = await _extractSelectionImageBytes(selection);
-    if (imageBytes == null || imageBytes.isEmpty) {
+    if (imageBytes.isEmpty) {
       return _runTextAction(
         action: action,
         selection: selection,
         apiKey: apiKey,
         currentActionId: currentActionId,
+        extractedText: selectionText,
       );
     }
 
@@ -168,6 +198,7 @@ extension HomeControllerAiSession on HomeController {
         selection: selection,
         apiKey: apiKey,
         currentActionId: currentActionId,
+        extractedText: selectionText,
       );
     } catch (error) {
       _applyState(
@@ -187,8 +218,8 @@ extension HomeControllerAiSession on HomeController {
     required PdfAiSelection selection,
     required String apiKey,
     required int currentActionId,
+    required String extractedText,
   }) async {
-    final String extractedText = await _resolveSelectionText(selection);
     if (extractedText.trim().isEmpty) {
       _applyState(
         state.copyWith(
@@ -222,11 +253,8 @@ extension HomeControllerAiSession on HomeController {
     );
 
     try {
-      final String userContent = pageContext != null && pageContext.trim().isNotEmpty
-          ? '请${action.label}以下【框选内容】，页面全文仅作上下文参考：\n\n【框选内容】\n$extractedText\n\n【页面全文参考】\n$pageContext'
-          : '请${action.label}以下内容：\n\n$extractedText';
-      _aiChatHistory.add(<String, String>{'role': 'user', 'content': userContent});
-
+      // 注意：当前用户消息由 performStream 追加，这里只传既有历史
+      // （不含本轮 user），成功后再写入会话历史，避免重复发送。
       final StringBuffer buffer = StringBuffer();
       await for (final String chunk in _deepSeekService.performStream(
         action: action,
@@ -247,6 +275,11 @@ extension HomeControllerAiSession on HomeController {
         throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
       }
 
+      final String userContent =
+          pageContext != null && pageContext.trim().isNotEmpty
+              ? '请${action.label}以下【框选内容】，页面全文仅作上下文参考：\n\n【框选内容】\n$extractedText\n\n【页面全文参考】\n$pageContext'
+              : '请${action.label}以下内容：\n\n$extractedText';
+      _aiChatHistory.add(<String, String>{'role': 'user', 'content': userContent});
       _aiChatHistory.add(<String, String>{'role': 'assistant', 'content': result});
       _applyState(
         state.copyWith(
@@ -258,7 +291,6 @@ extension HomeControllerAiSession on HomeController {
         ),
       );
     } on DeepSeekException catch (error) {
-      _aiChatHistory.removeLast();
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
@@ -269,7 +301,6 @@ extension HomeControllerAiSession on HomeController {
         ),
       );
     } catch (error) {
-      _aiChatHistory.removeLast();
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
@@ -419,17 +450,21 @@ extension HomeControllerAiSession on HomeController {
         );
   }
 
-  Future<String> _resolveSelectionText(PdfAiSelection selection) async {
+  Future<String> _resolveSelectionText(
+    PdfAiSelection selection, {
+    Uint8List? imageBytes,
+  }) async {
     final String directText = await _extractSelectionText(selection);
     if (directText.trim().isNotEmpty) {
       return directText;
     }
 
-    final Uint8List? imageBytes = await _extractSelectionImageBytes(selection);
-    if (imageBytes == null || imageBytes.isEmpty) {
+    final Uint8List? bytes =
+        imageBytes ?? await _extractSelectionImageBytes(selection);
+    if (bytes == null || bytes.isEmpty) {
       return '';
     }
-    return _macosOcrService.recognizeText(imageBytes);
+    return _macosOcrService.recognizeText(bytes);
   }
 
   Future<Uint8List?> _extractSelectionImageBytes(PdfAiSelection selection) async {

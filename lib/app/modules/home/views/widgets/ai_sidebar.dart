@@ -46,7 +46,6 @@ class _AiSidebarState extends State<AiSidebar> {
   double _sidebarWidth = 320;
 
   final List<ChatMessage> _messages = <ChatMessage>[];
-  String? _lastActionLabel;
   int? _lastActionId;
   String? _lastResult;
   int _idCounter = 0;
@@ -203,12 +202,12 @@ class _AiSidebarState extends State<AiSidebar> {
 
     if (state.actionLabel != null &&
         state.actionId != _lastActionId) {
-      _lastActionLabel = state.actionLabel;
       _lastActionId = state.actionId;
       _lastResult = null;
       _messages.add(ChatMessage(
         author: MessageAuthor.human,
-        text: _lastActionLabel!,
+        text: _buildActionUserText(state),
+        imageBytes: state.actionSelectionImage,
         id: 'msg_${_idCounter++}',
       ));
       _needsPostFrameSync = true;
@@ -246,6 +245,21 @@ class _AiSidebarState extends State<AiSidebar> {
         );
       }
     }
+  }
+
+  /// 构建动作轮次的用户气泡文本：如 "翻译 xxx" / "解释 xxx"。
+  String _buildActionUserText(PdfAiPanelState state) {
+    final String label = state.actionLabel ?? '';
+    final String selectionText = state.actionSelectionText ?? '';
+    if (selectionText.trim().isEmpty) {
+      return label;
+    }
+    final String singleLine =
+        selectionText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final String shortened = singleLine.length <= 80
+        ? singleLine
+        : '${singleLine.substring(0, 80)}…';
+    return '$label $shortened';
   }
 
   void _ensureLoadingPlaceholder() {
@@ -307,7 +321,6 @@ class _AiSidebarState extends State<AiSidebar> {
 
   void _resetConversation() {
     _messages.clear();
-    _lastActionLabel = null;
     _lastActionId = null;
     _lastResult = null;
     _inputController.clear();

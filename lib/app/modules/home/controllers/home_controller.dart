@@ -179,6 +179,8 @@ class HomeController extends GetxController {
         loading: false,
         actionId: null,
         actionLabel: null,
+        actionSelectionText: null,
+        actionSelectionImage: null,
         result: null,
         errorMessage: null,
       ),
