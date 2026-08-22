@@ -274,7 +274,7 @@ class _SelectionActionToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double toolbarHeight = 40;
-    const double toolbarWidth = 242;
+    const double toolbarWidth = 256;
     const double gap = 10;
     final double preferredLeft = rect.center.dx - (toolbarWidth / 2);
     final double clampedLeft = preferredLeft.clamp(
@@ -296,9 +296,9 @@ class _SelectionActionToolbar extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xD0182C4A),
+              color: const Color(0xD01D3F96),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0x475C87B8)),
+              border: Border.all(color: const Color(0x4D6B9BD8)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(4),
@@ -309,12 +309,12 @@ class _SelectionActionToolbar extends StatelessWidget {
                     label: '翻译',
                     onPressed: onTranslate,
                   ),
-                  const SizedBox(width: 6),
+                  const _Divider(),
                   _SelectionActionButton(
                     label: '解释',
                     onPressed: onExplain,
                   ),
-                  const SizedBox(width: 6),
+                  const _Divider(),
                   _SelectionActionButton(
                     label: '深度理解',
                     onPressed: onDeepDive,
@@ -324,6 +324,22 @@ class _SelectionActionToolbar extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 按钮之间的竖向分割线。
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 6),
+      child: SizedBox(
+        height: 16,
+        child: VerticalDivider(width: 1, color: Color(0x40FFFFFF)),
       ),
     );
   }
