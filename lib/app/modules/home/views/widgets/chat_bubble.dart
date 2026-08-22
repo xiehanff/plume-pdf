@@ -132,6 +132,9 @@ class ChatBubble extends StatelessWidget {
           child: Text(
             text,
             style: style.copyWith(
+              // 行内代码块高度收紧：否则继承正文 height 2.0 会撑破
+              // WidgetSpan 行高计算，导致相邻行粘连。
+              height: 1.2,
               fontFamily: 'JetBrainsMono',
               package: 'gpt_markdown',
               fontWeight: FontWeight.w500,
