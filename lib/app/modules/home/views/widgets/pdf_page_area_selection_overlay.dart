@@ -338,7 +338,7 @@ class _Divider extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 6),
       child: SizedBox(
-        height: 16,
+        height: 6,
         child: VerticalDivider(width: 1, color: Color(0x40FFFFFF)),
       ),
     );
