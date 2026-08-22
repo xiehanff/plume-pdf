@@ -296,9 +296,9 @@ class _SelectionActionToolbar extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xD01D3F96),
+              color: const Color(0xE61D4ED8),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0x4D6B9BD8)),
+              border: Border.all(color: const Color(0x667DA2E8)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(4),
