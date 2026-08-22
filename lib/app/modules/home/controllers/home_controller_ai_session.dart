@@ -126,13 +126,25 @@ extension HomeControllerAiSession on HomeController {
 
     try {
       final List<Map<String, String>> history = List<Map<String, String>>.from(_aiChatHistory);
-      final String result = await _deepSeekService.perform(
+      final StringBuffer buffer = StringBuffer();
+      await for (final String chunk in _deepSeekService.performStream(
         action: action,
         apiKey: apiKey,
         selectionText: '',
         history: history,
         imageBytes: imageBytes,
-      );
+      )) {
+        buffer.write(chunk);
+        _applyState(
+          state.copyWith(
+            aiPanelState: state.aiPanelState.copyWith(result: buffer.toString()),
+          ),
+        );
+      }
+      final String result = buffer.toString().trim();
+      if (result.isEmpty) {
+        throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
+      }
       _aiChatHistory.add(<String, String>{
         'role': 'user',
         'content': AiPrompts.visionUserPrompt(action),
@@ -215,13 +227,25 @@ extension HomeControllerAiSession on HomeController {
           : '请${action.label}以下内容：\n\n$extractedText';
       _aiChatHistory.add(<String, String>{'role': 'user', 'content': userContent});
 
-      final String result = await _deepSeekService.perform(
+      final StringBuffer buffer = StringBuffer();
+      await for (final String chunk in _deepSeekService.performStream(
         action: action,
         apiKey: apiKey,
         selectionText: extractedText,
         pageContext: pageContext,
         history: List<Map<String, String>>.from(_aiChatHistory),
-      );
+      )) {
+        buffer.write(chunk);
+        _applyState(
+          state.copyWith(
+            aiPanelState: state.aiPanelState.copyWith(result: buffer.toString()),
+          ),
+        );
+      }
+      final String result = buffer.toString().trim();
+      if (result.isEmpty) {
+        throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
+      }
 
       _aiChatHistory.add(<String, String>{'role': 'assistant', 'content': result});
       _applyState(
@@ -292,10 +316,22 @@ extension HomeControllerAiSession on HomeController {
         'content': trimmedMessage,
       });
 
-      final String result = await _deepSeekService.chat(
+      final StringBuffer buffer = StringBuffer();
+      await for (final String chunk in _deepSeekService.chatStream(
         apiKey: apiKey,
         history: List<Map<String, String>>.from(_aiChatHistory),
-      );
+      )) {
+        buffer.write(chunk);
+        _applyState(
+          state.copyWith(
+            aiPanelState: state.aiPanelState.copyWith(result: buffer.toString()),
+          ),
+        );
+      }
+      final String result = buffer.toString().trim();
+      if (result.isEmpty) {
+        throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
+      }
 
       _aiChatHistory.add(<String, String>{
         'role': 'assistant',

@@ -205,6 +205,7 @@ class _AiSidebarState extends State<AiSidebar> {
         state.actionId != _lastActionId) {
       _lastActionLabel = state.actionLabel;
       _lastActionId = state.actionId;
+      _lastResult = null;
       _messages.add(ChatMessage(
         author: MessageAuthor.human,
         text: _lastActionLabel!,
@@ -230,11 +231,20 @@ class _AiSidebarState extends State<AiSidebar> {
     if (state.result != null &&
         state.result != _lastResult &&
         state.result!.trim().isNotEmpty) {
-      _lastResult = state.result;
-      _replaceLoadingOrAdd(
-        author: MessageAuthor.ai,
-        text: _lastResult!,
-      );
+      final String newResult = state.result!;
+      final bool isIncremental =
+          _lastResult != null &&
+          newResult.length > _lastResult!.length &&
+          newResult.startsWith(_lastResult!);
+      _lastResult = newResult;
+      if (isIncremental) {
+        _updateLastAiMessage(newResult);
+      } else {
+        _replaceLoadingOrAdd(
+          author: MessageAuthor.ai,
+          text: newResult,
+        );
+      }
     }
   }
 
@@ -265,8 +275,24 @@ class _AiSidebarState extends State<AiSidebar> {
         isLoading: false,
       );
     } else {
+      _updateLastAiMessage(text);
+    }
+    _needsPostFrameSync = true;
+  }
+
+  /// 更新最后一条 AI 消息内容（流式增量或替换）；不存在则新增。
+  void _updateLastAiMessage(String text) {
+    final int lastIndex = _messages.length - 1;
+    if (lastIndex >= 0 &&
+        _messages[lastIndex].author == MessageAuthor.ai) {
+      _messages[lastIndex] = ChatMessage(
+        author: MessageAuthor.ai,
+        text: text,
+        id: _messages[lastIndex].id,
+      );
+    } else {
       _messages.add(ChatMessage(
-        author: author,
+        author: MessageAuthor.ai,
         text: text,
         id: 'msg_${_idCounter++}',
       ));

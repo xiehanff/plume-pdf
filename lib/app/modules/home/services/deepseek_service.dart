@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:genkit/genkit.dart';
+import 'package:genkit_openai/genkit_openai.dart';
 import 'package:http/http.dart' as http;
 
 import 'ai_prompts.dart';
@@ -14,25 +16,67 @@ enum AiToolAction {
   final String label;
 }
 
+/// DeepSeek AI 服务：基于 Google Genkit (genkit_openai 插件) 接入
+/// OpenAI 兼容的 DeepSeek API。
 class DeepSeekService {
   DeepSeekService({
     http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+  }) : _httpClient = httpClient;
 
   static const String apiKeyStorageKey = 'deepseek_api_key';
   static const String model = 'deepseek-v4-flash-vision-exp';
-  static const String _endpoint = 'https://api.deepseek.com/chat/completions';
+  static const String _endpoint = 'https://api.deepseek.com/v1';
 
-  final http.Client _httpClient;
+  final http.Client? _httpClient;
+  Genkit? _genkit;
+  String? _genkitApiKey;
 
-  Future<String> perform({
+  /// 根据 API Key 获取（并缓存）Genkit 实例。
+  ///
+  /// API Key 变化时重建插件实例，避免在构建后无法更新凭据。
+  Genkit _genkitFor(String apiKey) {
+    final Genkit? cached = _genkit;
+    if (cached != null && _genkitApiKey == apiKey) {
+      return cached;
+    }
+    final Genkit genkit = Genkit(
+      isDevEnv: false,
+      plugins: [
+        openAI(
+          apiKey: apiKey,
+          baseUrl: _endpoint,
+          models: <CustomModelDefinition>[
+            CustomModelDefinition(
+              name: model,
+              info: ModelInfo(
+                label: 'DeepSeek Flash Vision',
+                supports: <String, bool>{
+                  'multiturn': true,
+                  'tools': false,
+                  'systemRole': true,
+                  'media': true,
+                },
+              ),
+            ),
+          ],
+          httpClient: _httpClient,
+        ),
+      ],
+    );
+    _genkit = genkit;
+    _genkitApiKey = apiKey;
+    return genkit;
+  }
+
+  /// 流式执行翻译/解释动作，逐块 yield 增量文本。
+  Stream<String> performStream({
     required AiToolAction action,
     required String apiKey,
     required String selectionText,
     String? pageContext,
     List<Map<String, String>>? history,
     Uint8List? imageBytes,
-  }) async {
+  }) async* {
     final String normalizedApiKey = apiKey.trim();
     if (normalizedApiKey.isEmpty) {
       throw const DeepSeekException('请先填写 DeepSeek API Key。');
@@ -42,16 +86,12 @@ class DeepSeekService {
       throw const DeepSeekException('请先框选内容。');
     }
 
-    final List<Map<String, dynamic>> messages = <Map<String, dynamic>>[
-      <String, String>{
-        'role': 'system',
-        'content': AiPrompts.systemPrompt(action),
-      },
-      if (history != null && history.isNotEmpty)
-        ...history.map((Map<String, String> m) => <String, String>{
-              'role': m['role']!,
-              'content': m['content']!,
-            }),
+    final List<Message> messages = <Message>[
+      Message(
+        role: Role.system,
+        content: <Part>[TextPart(text: AiPrompts.systemPrompt(action))],
+      ),
+      ..._historyMessages(history),
     ];
 
     if (isVisionMode) {
@@ -59,40 +99,45 @@ class DeepSeekService {
           ? AiPrompts.visionUserPrompt(action)
           : AiPrompts.userPrompt(action, selectionText, pageContext: pageContext);
       final String base64Image = base64Encode(imageBytes);
-      messages.add(<String, dynamic>{
-        'role': 'user',
-        'content': <Map<String, dynamic>>[
-          <String, String>{
-            'type': 'text',
-            'text': textContent,
-          },
-          <String, dynamic>{
-            'type': 'image_url',
-            'image_url': <String, String>{
-              'url': 'data:image/png;base64,$base64Image',
-            },
-          },
-        ],
-      });
+      messages.add(
+        Message(
+          role: Role.user,
+          content: <Part>[
+            TextPart(text: textContent),
+            MediaPart(
+              media: Media(
+                contentType: 'image/png',
+                url: 'data:image/png;base64,$base64Image',
+              ),
+            ),
+          ],
+        ),
+      );
     } else {
-      messages.add(<String, String>{
-        'role': 'user',
-        'content': AiPrompts.userPrompt(action, selectionText, pageContext: pageContext),
-      });
+      messages.add(
+        Message(
+          role: Role.user,
+          content: <Part>[
+            TextPart(
+              text: AiPrompts.userPrompt(
+                action,
+                selectionText,
+                pageContext: pageContext,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
-    final Map<String, Object?> payload = <String, Object?>{
-      'model': model,
-      'messages': messages,
-    };
-
-    return _sendRequest(normalizedApiKey, payload);
+    yield* _generateStream(normalizedApiKey, messages);
   }
 
-  Future<String> chat({
+  /// 流式多轮对话，逐块 yield 增量文本。
+  Stream<String> chatStream({
     required String apiKey,
     required List<Map<String, String>> history,
-  }) async {
+  }) async* {
     final String normalizedApiKey = apiKey.trim();
     if (normalizedApiKey.isEmpty) {
       throw const DeepSeekException('请先填写 DeepSeek API Key。');
@@ -101,74 +146,98 @@ class DeepSeekService {
       throw const DeepSeekException('对话内容不能为空。');
     }
 
-    final List<Map<String, dynamic>> messages = history
-        .map((Map<String, String> m) => <String, String>{
-              'role': m['role']!,
-              'content': m['content']!,
-            })
-        .toList();
-
-    final Map<String, Object?> payload = <String, Object?>{
-      'model': model,
-      'messages': messages,
-    };
-
-    return _sendRequest(normalizedApiKey, payload);
-  }
-
-  Future<String> _sendRequest(String apiKey, Map<String, Object?> payload) async {
-    final http.Response response = await _httpClient.post(
-      Uri.parse(_endpoint),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode(payload),
+    yield* _generateStream(
+      normalizedApiKey,
+      _historyMessages(history),
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw DeepSeekException(_parseErrorMessage(response.body));
-    }
-
-    final Object? decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw const DeepSeekException('DeepSeek 响应格式无效。');
-    }
-    final List<dynamic>? choices = decoded['choices'] as List<dynamic>?;
-    final Map<String, dynamic>? firstChoice =
-        choices != null && choices.isNotEmpty ? choices.first as Map<String, dynamic>? : null;
-    final Map<String, dynamic>? message =
-        firstChoice?['message'] as Map<String, dynamic>?;
-    final String content = (message?['content'] as String? ?? '').trim();
-    if (content.isEmpty) {
-      throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
-    }
-    return content;
   }
 
-  String _parseErrorMessage(String body) {
+  /// 非流式执行翻译/解释动作（聚合流式结果）。
+  Future<String> perform({
+    required AiToolAction action,
+    required String apiKey,
+    required String selectionText,
+    String? pageContext,
+    List<Map<String, String>>? history,
+    Uint8List? imageBytes,
+  }) async {
+    final StringBuffer buffer = StringBuffer();
+    await for (final String chunk in performStream(
+      action: action,
+      apiKey: apiKey,
+      selectionText: selectionText,
+      pageContext: pageContext,
+      history: history,
+      imageBytes: imageBytes,
+    )) {
+      buffer.write(chunk);
+    }
+    return buffer.toString().trim();
+  }
+
+  /// 非流式多轮对话（聚合流式结果）。
+  Future<String> chat({
+    required String apiKey,
+    required List<Map<String, String>> history,
+  }) async {
+    final StringBuffer buffer = StringBuffer();
+    await for (final String chunk in chatStream(
+      apiKey: apiKey,
+      history: history,
+    )) {
+      buffer.write(chunk);
+    }
+    return buffer.toString().trim();
+  }
+
+  Stream<String> _generateStream(
+    String apiKey,
+    List<Message> messages,
+  ) async* {
+    final Genkit ai = _genkitFor(apiKey);
     try {
-      final Object? decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        final Object? error = decoded['error'];
-        if (error is Map<String, dynamic>) {
-          final String message = (error['message'] as String? ?? '').trim();
-          if (message.isNotEmpty) {
-            return _normalizeError(message);
-          }
+      await for (final GenerateResponseChunk<Object?> chunk in ai.generateStream(
+        model: openAI.model(model),
+        messages: messages,
+      )) {
+        final String text = chunk.text;
+        if (text.isNotEmpty) {
+          yield text;
         }
       }
-    } catch (_) {
-      // ignore parse errors and fallback below
+    } on DeepSeekException {
+      rethrow;
+    } catch (error) {
+      throw DeepSeekException(_normalizeError(error));
     }
-    return 'DeepSeek 请求失败。';
   }
 
-  String _normalizeError(String message) {
+  List<Message> _historyMessages(List<Map<String, String>>? history) {
+    if (history == null) {
+      return <Message>[];
+    }
+    return history
+        .map((Map<String, String> m) {
+          final String role = m['role'] ?? 'user';
+          return Message(
+            role: role == 'assistant'
+                ? Role.model
+                : role == 'system'
+                    ? Role.system
+                    : Role.user,
+            content: <Part>[TextPart(text: m['content'] ?? '')],
+          );
+        })
+        .toList();
+  }
+
+  String _normalizeError(Object error) {
+    final String message = error.toString();
     final String lowercased = message.toLowerCase();
     if (lowercased.contains('authentication') ||
         lowercased.contains('api key') ||
-        lowercased.contains('invalid')) {
+        lowercased.contains('invalid') ||
+        lowercased.contains('401')) {
       return 'DeepSeek 认证失败：API Key 无效或授权不足。';
     }
     return 'DeepSeek 请求失败：$message';
