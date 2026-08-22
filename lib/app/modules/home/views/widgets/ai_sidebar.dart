@@ -40,6 +40,14 @@ class _AiSidebarState extends State<AiSidebar> {
   static const double _kHandleWidth = 6;
   static const double _kMinPdfAreaWidth = 200;
 
+  static const List<String> _followUpSuggestions = <String>[
+    '再详细解释一下',
+    '用更简单的语言说明',
+    '总结为要点',
+    '举一个例子',
+    '文中还有哪些重点？',
+  ];
+
   late final TextEditingController _deepSeekController;
   late final TextEditingController _inputController;
   late final ScrollController _scrollController;
@@ -177,18 +185,43 @@ class _AiSidebarState extends State<AiSidebar> {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      itemCount: _messages.length,
+      itemCount: _messages.length + (_showFollowUpSuggestions ? 1 : 0),
       itemBuilder: (BuildContext context, int index) {
+        if (index == _messages.length) {
+          return _FollowUpSuggestions(onTap: _sendMessage);
+        }
         return ChatBubble(message: _messages[index]);
       },
     );
+  }
+
+  /// 模型回复完成后展示追问建议。
+  bool get _showFollowUpSuggestions {
+    final PdfAiPanelState state = widget.state;
+    if (state.loading || state.errorMessage != null) {
+      return false;
+    }
+    if (_messages.isEmpty) {
+      return false;
+    }
+    final ChatMessage last = _messages.last;
+    if (last.author != MessageAuthor.ai ||
+        last.isLoading ||
+        last.text.trim().isEmpty ||
+        last.text.startsWith('❌')) {
+      return false;
+    }
+    return true;
   }
 
   Future<void> _handleSend() async {
     final String text = _inputController.text.trim();
     if (text.isEmpty) return;
     _inputController.clear();
+    await _sendMessage(text);
+  }
 
+  Future<void> _sendMessage(String text) async {
     _messages.add(ChatMessage(
       author: MessageAuthor.human,
       text: text,
@@ -344,5 +377,43 @@ class _AiSidebarState extends State<AiSidebar> {
       _sidebarWidth =
           (_sidebarWidth - details.delta.dx).clamp(_kMinWidth, maxW);
     });
+  }
+}
+
+/// 模型回复完成后展示的追问建议（Wrap 组件）。
+class _FollowUpSuggestions extends StatelessWidget {
+  const _FollowUpSuggestions({required this.onTap});
+
+  final ValueChanged<String> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 10, 0, 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: <Widget>[
+          for (final String text in _AiSidebarState._followUpSuggestions)
+            ActionChip(
+              label: Text(
+                text,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              onPressed: () => onTap(text),
+              backgroundColor: AppColors.fillSubtle,
+              side: const BorderSide(color: AppColors.borderSoft),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              visualDensity: VisualDensity.compact,
+            ),
+        ],
+      ),
+    );
   }
 }
