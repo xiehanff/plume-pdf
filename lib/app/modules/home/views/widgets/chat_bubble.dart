@@ -84,7 +84,7 @@ class ChatBubble extends StatelessWidget {
       style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 14,
-        height: 1.5,
+        height: 1.8,
       ),
     );
     final Uint8List? imageBytes = message.imageBytes;
@@ -123,7 +123,7 @@ class ChatBubble extends StatelessWidget {
       style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 14,
-        height: 1.5,
+        height: 1.8,
       ),
       codeBuilder: (BuildContext context, String name, String code, bool closed) {
         final String language = name.isNotEmpty ? name : 'plaintext';
