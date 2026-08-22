@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../models/pdf_ai_panel_state.dart';
@@ -248,7 +250,12 @@ class _AiSidebarState extends State<AiSidebar> {
   }
 
   /// 构建动作轮次的用户气泡文本：如 "翻译 xxx" / "解释 xxx"。
+  /// 带选区截图时返回空串，仅展示图片。
   String _buildActionUserText(PdfAiPanelState state) {
+    final Uint8List? image = state.actionSelectionImage;
+    if (image != null && image.isNotEmpty) {
+      return '';
+    }
     final String label = state.actionLabel ?? '';
     final String selectionText = state.actionSelectionText ?? '';
     if (selectionText.trim().isEmpty) {
