@@ -216,7 +216,6 @@ class GptMarkdownConfig {
     final baseStyle = DefaultTextStyle.of(context).style;
     final fallbackFonts = <String>[
       ...?baseStyle.fontFamilyFallback,
-      'PingFangSC',
       'Microsoft YaHei',
       'Microsoft YaHei UI',
       '微软雅黑',

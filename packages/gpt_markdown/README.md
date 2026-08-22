@@ -15,7 +15,7 @@ A Flutter package for rendering rich Markdown and LaTeX in your app — built fo
 - **Rich Customization**: Easily apply custom styles using Flutter widgets like `TextStyle`.
 - **Selectable Content**: Pass `selectable: true` to make text highlightable and copyable on desktop and web.
 - **Seamless Integration**: Works out of the box with minimal setup.
-- Ships with `JetBrainsMono` for code blocks and `PingFangSC` for Chinese text fallback, so apps can render markdown without depending on host fonts.
+- Ships with `JetBrainsMono` for code blocks, so apps can render markdown code without depending on host fonts.
 
 ---
 

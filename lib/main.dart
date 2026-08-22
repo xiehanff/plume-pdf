@@ -39,9 +39,8 @@ class MyApp extends StatelessWidget {
       title: 'Plume PDF',
       theme: ThemeData(
         brightness: Brightness.dark,
-        fontFamily: 'PingFangSC',
+        fontFamily: 'OPPO Sans',
         fontFamilyFallback: const [
-          'PingFangSC',
           'Microsoft YaHei',
           'Microsoft YaHei UI',
           '微软雅黑',

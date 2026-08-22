@@ -136,7 +136,14 @@ class ChatBubble extends StatelessWidget {
             color: AppColors.accentSurface,
             borderRadius: BorderRadius.circular(4),
           ),
-          child: Text(text, style: style.copyWith(fontWeight: FontWeight.w500)),
+          child: Text(
+            text,
+            style: style.copyWith(
+              fontFamily: 'JetBrainsMono',
+              package: 'gpt_markdown',
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         );
       },
     );
@@ -219,7 +226,6 @@ class CodeBlock extends StatelessWidget {
                 fontFamily: 'JetBrainsMono',
                 package: 'gpt_markdown',
                 fontFamilyFallback: [
-                  'PingFangSC',
                   'Microsoft YaHei',
                   'Microsoft YaHei UI',
                   '微软雅黑',

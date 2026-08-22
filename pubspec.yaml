@@ -86,9 +86,9 @@ flutter:
   uses-material-design: true
 
   fonts:
-    - family: PingFangSC
+    - family: OPPO Sans
       fonts:
-        - asset: assets/fonts/PingFangSC-Regular.ttf
+        - asset: assets/fonts/OPPO_Sans_4.0.ttf
 
   assets:
     - assets/config/

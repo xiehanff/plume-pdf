@@ -24,9 +24,6 @@ flutter:
     - family: JetBrainsMono
       fonts:
         - asset: lib/fonts/JetBrainsMono-Regular.ttf
-    - family: PingFangSC
-      fonts:
-        - asset: lib/fonts/PingFangSC-Regular.ttf
 
 topics:
   - markdown

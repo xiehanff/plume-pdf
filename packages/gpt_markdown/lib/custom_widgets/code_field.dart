@@ -78,7 +78,6 @@ class _CodeFieldState extends State<CodeField> {
                 fontFamily: 'JetBrainsMono',
                 package: "gpt_markdown",
                 fontFamilyFallback: const [
-                  'PingFangSC',
                   'Microsoft YaHei',
                   'Microsoft YaHei UI',
                   '微软雅黑',
