@@ -76,8 +76,6 @@ extension HomeControllerAiSession on HomeController {
         aiSidebarVisible: true,
         aiPanelState: state.aiPanelState.copyWith(
           loading: true,
-          actionLabel: action.label,
-          actionId: currentActionId,
           result: null,
           errorMessage: null,
         ),
@@ -98,13 +96,17 @@ extension HomeControllerAiSession on HomeController {
       return;
     }
 
-    // 预提取选区截图与文本：用于用户气泡展示，避免后续重复渲染。
+    // 预提取选区截图与文本：先完成提取，再一次性设置 actionId 与选区
+    // 信息，确保用户气泡创建时即包含"翻译/解释 + 内容/截图"，而不是
+    // 先创建后补充（后者会因为 actionId 不变而不会更新消息）。
     final Uint8List? imageBytes = await _extractSelectionImageBytes(selection);
     final String selectionText =
         await _resolveSelectionText(selection, imageBytes: imageBytes);
     _applyState(
       state.copyWith(
         aiPanelState: state.aiPanelState.copyWith(
+          actionLabel: action.label,
+          actionId: currentActionId,
           actionSelectionText:
               selectionText.trim().isEmpty ? null : selectionText,
           actionSelectionImage: imageBytes,
