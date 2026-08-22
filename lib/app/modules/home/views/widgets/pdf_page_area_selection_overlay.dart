@@ -293,12 +293,12 @@ class _SelectionActionToolbar extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xA62C5B9E),
+              color: const Color(0xD0182C4A),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0x597FA8D8)),
+              border: Border.all(color: const Color(0x475C87B8)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(4),
