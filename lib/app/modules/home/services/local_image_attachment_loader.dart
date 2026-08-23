@@ -18,6 +18,8 @@ class LocalImageAttachmentLoader {
     '.gif',
     '.webp',
     '.bmp',
+    '.tif',
+    '.tiff',
   };
 
   static Future<AiImageAttachment?> load(String rawText) async {
@@ -88,6 +90,9 @@ class LocalImageAttachmentLoader {
         return 'image/webp';
       case '.bmp':
         return 'image/bmp';
+      case '.tif':
+      case '.tiff':
+        return 'image/tiff';
       case '.png':
       default:
         return 'image/png';

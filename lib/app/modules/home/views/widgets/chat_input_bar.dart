@@ -330,6 +330,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
     if (format == Formats.gif) return 'image/gif';
     if (format == Formats.webp) return 'image/webp';
     if (format == Formats.bmp) return 'image/bmp';
+    if (format == Formats.tiff) return 'image/tiff';
     return 'image/png';
   }
 
