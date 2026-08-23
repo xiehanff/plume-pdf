@@ -67,9 +67,9 @@ fvm flutter pub upgrade            # 升级依赖
 
 ## Linux 分发
 
-- RPM 安装包：`plume-pdf-0.0.15-15.fc44.x86_64.rpm`
+- RPM 安装包：`plume-pdf-0.0.15-16.fc44.x86_64.rpm`
 - 适用于 Fedora 系发行版
-- DEB 安装包：`plume-pdf_0.0.15+15_amd64.deb`
+- DEB 安装包：`plume-pdf_0.0.15+16_amd64.deb`
 - GitHub Release `v0.0.15` 中可直接下载附带的 `.rpm` 与 `.deb` 文件
 - 生成 RPM：`make package-rpm`
 - 生成 DEB：`make package-deb`

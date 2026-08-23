@@ -67,9 +67,9 @@ Related document:
 
 ## Linux Distribution
 
-- RPM package: `plume-pdf-0.0.15-15.fc44.x86_64.rpm`
+- RPM package: `plume-pdf-0.0.15-16.fc44.x86_64.rpm`
 - Suitable for Fedora-based systems
-- DEB package: `plume-pdf_0.0.15+15_amd64.deb`
+- DEB package: `plume-pdf_0.0.15+16_amd64.deb`
 - GitHub release assets: download the attached `.rpm` or `.deb` from the `v0.0.15` release
 - Build RPM: `make package-rpm`
 - Build DEB: `make package-deb`
