@@ -2,7 +2,7 @@
 
 [English](./README.md) | 中文
 
-基于 Flutter + PDFium 的桌面高性能 PDF 阅读器，具有 DeepSeek / SiliconFlow AI 辅助能力。
+基于 Flutter + PDFium 的桌面高性能 PDF 阅读器，具有 DeepSeek AI 辅助能力。
 
 ## 功能
 
@@ -16,7 +16,7 @@
 - 单页 / 双页阅读模式
 - AI 框选模式
 - 框选后快捷操作：`翻译`、`解释`、`深度理解`（附带整页上下文）
-- 右侧 AI 侧边栏：支持切换 DeepSeek / SiliconFlow provider，分别配置 API Key，流式输出多轮对话追问
+- 右侧 AI 侧边栏：配置 DeepSeek API Key，支持流式输出多轮对话追问
 - 模型根据当前上下文生成追问建议 chips，回复完成后动态展示
 - Markdown 渲染（gpt_markdown）+ 代码块语法高亮（atom-one-dark）
 - 普通正文 / Markdown 统一使用工程内置的 `OPPO Sans`，代码块继续使用 `JetBrainsMono`
@@ -80,8 +80,7 @@ fvm flutter pub upgrade            # 升级依赖
 
 - PDF 渲染与交互基于 `pdfrx`，底层依赖 PDFium
 - 图片型 PDF 的文字识别走原生 OCR：macOS 用 Vision，Windows 用 `Windows.Media.Ocr`
-- AI 请求通过 Google Genkit 路由：DeepSeek 流式聊天补全 + SiliconFlow 聊天接口
-- SiliconFlow 当前接入模型为 `Qwen/Qwen3-VL-30B-A3B-Instruct`
+- AI 请求通过 Google Genkit 路由：DeepSeek 流式聊天补全
 - 模型能力配置通过 `assets/config/ai_models.json` 预置，按 `supportsVision` 决定是否启用截图理解链路
 - Markdown 渲染使用 gpt_markdown（本地 fork 在 `packages/gpt_markdown`）
 - 应用本体内置 `OPPO Sans` 字体资产；代码块使用 `JetBrainsMono`
@@ -100,7 +99,7 @@ fvm flutter pub upgrade            # 升级依赖
 - `flutter_highlight` + `highlight`：代码语法高亮
 - `file_selector`：原生文件选择对话框
 - `hugeicons`：工具栏与状态图标
-- `http`：SiliconFlow API 请求
+- `http`：DeepSeek 服务使用的 HTTP 客户端
 - `genkit` + `genkit_openai`：DeepSeek 流式聊天补全
 - `loading_indicator`：加载动画（ballPulse 等）
 - `shared_preferences`：最近文件持久化

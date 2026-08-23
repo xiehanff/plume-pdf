@@ -2,7 +2,7 @@
 
 English | [中文](./README_CN.md)
 
-A high-performance desktop PDF reader built with Flutter + PDFium, featuring DeepSeek / SiliconFlow AI assistance.
+A high-performance desktop PDF reader built with Flutter + PDFium, featuring DeepSeek AI assistance.
 
 ## Features
 
@@ -16,7 +16,7 @@ A high-performance desktop PDF reader built with Flutter + PDFium, featuring Dee
 - Single-page / dual-page reading mode
 - AI selection mode
 - Quick actions on selected area: `Translate`, `Explain`, `Deep Understand` (with full-page context)
-- AI sidebar: switch between DeepSeek / SiliconFlow providers, configure API Keys independently, streaming multi-turn conversations
+- AI sidebar: configure a DeepSeek API Key and continue streaming multi-turn conversations
 - AI-generated, context-aware follow-up suggestion chips shown after model replies
 - Markdown rendering (gpt_markdown) + code syntax highlighting (atom-one-dark)
 - Unified `OPPO Sans` font for body / Markdown text; code blocks use `JetBrainsMono`
@@ -80,8 +80,7 @@ Related document:
 
 - PDF rendering and interaction powered by `pdfrx` (backed by PDFium)
 - Image-based PDF text recognition uses native OCR: macOS via Vision, Windows via `Windows.Media.Ocr`
-- AI requests routed through Google Genkit: DeepSeek streaming chat completions + SiliconFlow chat APIs
-- SiliconFlow currently uses the `Qwen/Qwen3-VL-30B-A3B-Instruct` model
+- AI requests routed through Google Genkit: DeepSeek streaming chat completions
 - Model capabilities configured via `assets/config/ai_models.json`; `supportsVision` flag controls screenshot understanding pipeline
 - Markdown rendering uses gpt_markdown (local fork at `packages/gpt_markdown`)
 - App bundle embeds `OPPO Sans` font assets; code blocks use `JetBrainsMono`
@@ -100,7 +99,7 @@ Related document:
 - `flutter_highlight` + `highlight` — Code syntax highlighting
 - `file_selector` — Native file picker dialog
 - `hugeicons` — Toolbar and status icons
-- `http` — SiliconFlow API requests
+- `http` — HTTP client used by the DeepSeek service
 - `genkit` + `genkit_openai` — DeepSeek streaming chat completions
 - `loading_indicator` — Loading animations (ballPulse etc.)
 - `shared_preferences` — Recent file persistence
