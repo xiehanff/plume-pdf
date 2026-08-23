@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
+import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
@@ -9,16 +11,45 @@ import 'package:plume_pdf/app/modules/home/views/widgets/chat_message.dart';
 
 void main() {
   Future<void> pumpSidebar(WidgetTester tester, PdfAiPanelState state) async {
+    // 模拟 HomeController：首次注册，之后通过 updateExternalState 同步新状态。
+    if (!Get.isRegistered<AiSidebarController>(
+      tag: AiSidebarController.tag,
+    )) {
+      Get.put(
+        AiSidebarController(
+          state: state,
+          onApiKeyChanged: (_) {},
+          onSaveApiKey: () async {},
+          onSendChat: (_) async {},
+          onNewSession: () {},
+        ),
+        tag: AiSidebarController.tag,
+      );
+      addTearDown(() {
+        if (Get.isRegistered<AiSidebarController>(
+          tag: AiSidebarController.tag,
+        )) {
+          Get.delete<AiSidebarController>(
+            tag: AiSidebarController.tag,
+            force: true,
+          );
+        }
+      });
+    }
+    Get.find<AiSidebarController>(tag: AiSidebarController.tag)
+        .updateExternalState(
+          state: state,
+          onApiKeyChanged: (_) {},
+          onSaveApiKey: () async {},
+          onSendChat: (_) async {},
+          onNewSession: () {},
+          documentPath: null,
+          leftSidebarWidth: 0,
+        );
     await tester.pumpWidget(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
-          body: AiSidebar(
-            state: state,
-            onApiKeyChanged: (_) {},
-            onSaveApiKey: () async {},
-            onSendChat: (_) async {},
-            onNewSession: () {},
-          ),
+          body: AiSidebar(),
         ),
       ),
     );

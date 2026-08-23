@@ -43,6 +43,10 @@ class _ConversationState {
 }
 
 class AiSidebarController extends GetxController {
+  /// 在 GetX 容器中的注册键。由 `HomeController` 负责创建与同步，
+  /// 侧栏开关期间实例常驻，会话历史不会因收起侧栏而丢失。
+  static const String tag = 'ai-sidebar';
+
   static const double _kMinWidth = 240;
   static const double _kMinPdfAreaWidth = 200;
   static const double _kBottomFollowThreshold = 80;

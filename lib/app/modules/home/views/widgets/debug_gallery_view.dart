@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
+import '../../controllers/ai_sidebar_controller.dart';
 import '../../models/pdf_ai_panel_state.dart';
 import '../../models/pdf_outline_entry.dart';
 import '../../../../theme/app_colors.dart';
@@ -9,8 +11,42 @@ import 'error_reader_view.dart';
 import 'page_status_bar.dart';
 import 'reader_sidebar.dart';
 
-class DebugGalleryView extends StatelessWidget {
+class DebugGalleryView extends StatefulWidget {
   const DebugGalleryView({super.key});
+
+  @override
+  State<DebugGalleryView> createState() => _DebugGalleryViewState();
+}
+
+class _DebugGalleryViewState extends State<DebugGalleryView> {
+  @override
+  void initState() {
+    super.initState();
+    // AiSidebar 不再接收参数，展示前需要注册示例 Controller。
+    Get.put(
+      AiSidebarController(
+        state: const PdfAiPanelState(
+          sessionId: 1,
+          actionLabel: '翻译',
+          result: '这里会展示 DeepSeek 返回的结果。',
+        ),
+        onApiKeyChanged: (_) {},
+        onSaveApiKey: () async {},
+        onSendChat: (_) async {},
+        onNewSession: () {},
+        documentPath: '/path/to/sample.pdf',
+      ),
+      tag: AiSidebarController.tag,
+    );
+  }
+
+  @override
+  void dispose() {
+    if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
+      Get.delete<AiSidebarController>(tag: AiSidebarController.tag);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,18 +121,7 @@ class DebugGalleryView extends StatelessWidget {
           _sectionTitle('AiSidebar'),
           _previewCard(
             height: 320,
-            child: AiSidebar(
-              state: const PdfAiPanelState(
-                sessionId: 1,
-                actionLabel: '翻译',
-                result: '这里会展示 DeepSeek 返回的结果。',
-              ),
-              onApiKeyChanged: (_) {},
-              onSaveApiKey: () async {},
-              onSendChat: (_) async {},
-              onNewSession: () {},
-              documentPath: '/path/to/sample.pdf',
-            ),
+            child: const AiSidebar(),
           ),
         ],
       ),

@@ -133,18 +133,7 @@ class HomeView extends GetView<HomeController> {
                                     ),
                                   ),
                                   if (state.aiSidebarVisible)
-                                    AiSidebar(
-                                      state: state.aiPanelState,
-                                      onApiKeyChanged:
-                                          controller.updateAiApiKey,
-                                      onSaveApiKey: controller.saveAiApiKey,
-                                      onSendChat: controller.sendAiChat,
-                                      onNewSession:
-                                          controller.startNewAiSession,
-                                      documentPath: state.filePath,
-                                      leftSidebarWidth:
-                                          state.sidebarVisible ? 260 : 0,
-                                    ),
+                                    const AiSidebar(),
                                 ],
                               ),
                               if (state.draggingLocalFile)

@@ -11,6 +11,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../models/pdf_outline_entry.dart';
 import '../models/pdf_ai_panel_state.dart';
+import 'ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
@@ -85,6 +86,9 @@ class HomeController extends GetxController {
     _saveDebounce?.cancel();
     pdfViewerController.removeListener(_handleViewerChanged);
     pageTextController.dispose();
+    if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
+      Get.delete<AiSidebarController>(tag: AiSidebarController.tag);
+    }
     super.onClose();
   }
 
@@ -195,7 +199,43 @@ class HomeController extends GetxController {
 
   void _applyState(PdfReaderState nextState) {
     state = nextState;
+    _syncAiSidebarController();
     update(<Object>[viewId]);
+  }
+
+  /// 侧栏可见时确保 `AiSidebarController` 已注册，并把最新面板状态同步过去。
+  ///
+  /// 不随侧栏开关销毁 —— 会话历史在收起侧栏后保留；
+  /// 参数变化（换文档、新建会话、API Key 等）由 `updateExternalState` 收敛。
+  void _syncAiSidebarController() {
+    if (!state.aiSidebarVisible) {
+      return;
+    }
+    if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
+      Get.put(
+        AiSidebarController(
+          state: state.aiPanelState,
+          onApiKeyChanged: updateAiApiKey,
+          onSaveApiKey: saveAiApiKey,
+          onSendChat: sendAiChat,
+          onNewSession: startNewAiSession,
+          documentPath: state.filePath,
+          leftSidebarWidth: state.sidebarVisible ? 260 : 0,
+        ),
+        tag: AiSidebarController.tag,
+      );
+      return;
+    }
+    Get.find<AiSidebarController>(tag: AiSidebarController.tag)
+        .updateExternalState(
+          state: state.aiPanelState,
+          onApiKeyChanged: updateAiApiKey,
+          onSaveApiKey: saveAiApiKey,
+          onSendChat: sendAiChat,
+          onNewSession: startNewAiSession,
+          documentPath: state.filePath,
+          leftSidebarWidth: state.sidebarVisible ? 260 : 0,
+        );
   }
 
   void _setPageText(String text) {

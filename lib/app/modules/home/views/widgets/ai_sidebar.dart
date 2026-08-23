@@ -3,80 +3,20 @@ import 'package:get/get.dart';
 
 import '../../../../theme/app_colors.dart';
 import '../../controllers/ai_sidebar_controller.dart';
-import '../../models/pdf_ai_panel_state.dart';
 import 'ai_sidebar_settings.dart';
 import 'chat_bubble.dart';
 import 'chat_input_bar.dart';
 import 'chat_message.dart';
 
-export '../../controllers/ai_sidebar_controller.dart' show SendChatCallback;
-
-class AiSidebar extends StatefulWidget {
-  const AiSidebar({
-    super.key,
-    required this.state,
-    required this.onApiKeyChanged,
-    required this.onSaveApiKey,
-    required this.onSendChat,
-    required this.onNewSession,
-    this.documentPath,
-    this.leftSidebarWidth = 0,
-  });
-
-  final PdfAiPanelState state;
-  final ValueChanged<String> onApiKeyChanged;
-  final Future<void> Function() onSaveApiKey;
-  final SendChatCallback onSendChat;
-  final VoidCallback onNewSession;
-  final String? documentPath;
-  final double leftSidebarWidth;
-
-  @override
-  State<AiSidebar> createState() => _AiSidebarState();
-}
-
-class _AiSidebarState extends State<AiSidebar> {
-  late final AiSidebarController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AiSidebarController(
-      state: widget.state,
-      onApiKeyChanged: widget.onApiKeyChanged,
-      onSaveApiKey: widget.onSaveApiKey,
-      onSendChat: widget.onSendChat,
-      onNewSession: widget.onNewSession,
-      documentPath: widget.documentPath,
-      leftSidebarWidth: widget.leftSidebarWidth,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant AiSidebar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _controller.updateExternalState(
-      state: widget.state,
-      onApiKeyChanged: widget.onApiKeyChanged,
-      onSaveApiKey: widget.onSaveApiKey,
-      onSendChat: widget.onSendChat,
-      onNewSession: widget.onNewSession,
-      documentPath: widget.documentPath,
-      leftSidebarWidth: widget.leftSidebarWidth,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.onDelete();
-    super.dispose();
-  }
+class AiSidebar extends StatelessWidget {
+  const AiSidebar({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Controller 由 HomeController 创建并注册（不传 init），
+    // 侧栏开关期间实例常驻，会话历史保留。
     return GetBuilder<AiSidebarController>(
-      init: _controller,
-      global: false,
+      tag: AiSidebarController.tag,
       builder: (AiSidebarController controller) {
         return _AiSidebarView(controller: controller);
       },
