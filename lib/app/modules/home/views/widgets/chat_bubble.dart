@@ -117,6 +117,14 @@ class ChatBubble extends StatelessWidget {
         color: AppColors.textPrimary,
         fontSize: 14,
         height: 2.0,
+        // 显式声明主工程中文字体，避免 gpt_markdown 本地包
+        // 在某些边界场景下回退到系统默认字体而非 OPPO Sans。
+        fontFamily: 'OPPO Sans',
+        fontFamilyFallback: <String>[
+          'Microsoft YaHei',
+          'Microsoft YaHei UI',
+          '微软雅黑',
+        ],
       ),
       codeBuilder: (BuildContext context, String name, String code, bool closed) {
         final String language = name.isNotEmpty ? name : 'plaintext';

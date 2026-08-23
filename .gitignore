@@ -48,7 +48,7 @@ app.*.symbols
 app.*.map.json
 
 # fvm
-.fvm/
+# .fvm/
 
 # Local fork: gpt_markdown non-essential files
 packages/gpt_markdown/doc/
@@ -64,3 +64,6 @@ AGENTS.md
 .claude/
 .agents/
 .codex/
+
+# FVM Version Cache
+.fvm/

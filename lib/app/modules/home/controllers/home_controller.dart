@@ -24,6 +24,7 @@ import '../services/pdf_cover_cache.dart';
 import '../services/pdf_reader_store.dart';
 import '../services/ai_model_config.dart';
 import '../services/ai_prompts.dart';
+import '../services/ai_response_parser.dart';
 import '../../../services/app_launch_args.dart';
 import '../../../theme/app_colors.dart';
 
@@ -37,8 +38,9 @@ class HomeController extends GetxController {
   static const double _kScrollbarWidth = 12; // 8px thumb + 4px margin
 
   final PdfViewerController pdfViewerController = PdfViewerController();
-  final TextEditingController pageTextController =
-      TextEditingController(text: '1');
+  final TextEditingController pageTextController = TextEditingController(
+    text: '1',
+  );
 
   final PdfReaderStore _store = PdfReaderStore();
   final PdfFilePicker _filePicker = PdfFilePicker();
@@ -64,7 +66,9 @@ class HomeController extends GetxController {
   void onInit() {
     super.onInit();
     _pendingStartupFilePath = _resolveStartupPdfPath();
-    unawaited(_loadRecentFiles().then((_) => _openPendingStartupFileIfNeeded()));
+    unawaited(
+      _loadRecentFiles().then((_) => _openPendingStartupFileIfNeeded()),
+    );
     _loadAiApiKey();
     _loadBackgroundTheme();
     unawaited(
@@ -89,10 +93,7 @@ class HomeController extends GetxController {
       return;
     }
     _applyState(
-      state.copyWith(
-        pageCount: document.pages.length,
-        errorMessage: null,
-      ),
+      state.copyWith(pageCount: document.pages.length, errorMessage: null),
     );
     unawaited(_loadOutline(document));
   }
@@ -182,18 +183,14 @@ class HomeController extends GetxController {
         actionSelectionText: null,
         actionSelectionImage: null,
         result: null,
+        followUpSuggestions: const <String>[],
         errorMessage: null,
       ),
     );
   }
 
   void _showError(String message) {
-    _applyState(
-      state.copyWith(
-        loading: false,
-        errorMessage: message,
-      ),
-    );
+    _applyState(state.copyWith(loading: false, errorMessage: message));
   }
 
   void _applyState(PdfReaderState nextState) {

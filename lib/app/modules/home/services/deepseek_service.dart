@@ -20,9 +20,7 @@ enum AiToolAction {
 /// DeepSeek AI 服务：基于 Google Genkit (genkit_openai 插件) 接入
 /// OpenAI 兼容的 DeepSeek API。
 class DeepSeekService {
-  DeepSeekService({
-    http.Client? httpClient,
-  }) : _httpClient = httpClient;
+  DeepSeekService({http.Client? httpClient}) : _httpClient = httpClient;
 
   static const String apiKeyStorageKey = 'deepseek_api_key';
   static const String model = 'deepseek-v4-flash-vision-exp';
@@ -98,7 +96,11 @@ class DeepSeekService {
     if (isVisionMode) {
       final String textContent = selectionText.trim().isEmpty
           ? AiPrompts.visionUserPrompt(action)
-          : AiPrompts.userPrompt(action, selectionText, pageContext: pageContext);
+          : AiPrompts.userPrompt(
+              action,
+              selectionText,
+              pageContext: pageContext,
+            );
       final String base64Image = base64Encode(imageBytes);
       messages.add(
         Message(
@@ -153,10 +155,13 @@ class DeepSeekService {
       throw const DeepSeekException('对话内容不能为空。');
     }
 
-    yield* _generateStream(
-      normalizedApiKey,
-      _historyMessages(history),
-    );
+    yield* _generateStream(normalizedApiKey, <Message>[
+      Message(
+        role: Role.system,
+        content: <Part>[TextPart(text: AiPrompts.chatSystemPrompt())],
+      ),
+      ..._historyMessages(history),
+    ]);
   }
 
   /// 非流式执行翻译/解释动作（聚合流式结果）。
@@ -204,11 +209,12 @@ class DeepSeekService {
   }) async* {
     final Genkit ai = _genkitFor(apiKey);
     try {
-      await for (final GenerateResponseChunk<Object?> chunk in ai.generateStream(
-        model: openAI.model(model),
-        messages: messages,
-        config: config,
-      )) {
+      await for (final GenerateResponseChunk<Object?> chunk
+          in ai.generateStream(
+            model: openAI.model(model),
+            messages: messages,
+            config: config,
+          )) {
         final String text = chunk.text;
         if (text.isNotEmpty) {
           yield text;
@@ -225,19 +231,17 @@ class DeepSeekService {
     if (history == null) {
       return <Message>[];
     }
-    return history
-        .map((Map<String, String> m) {
-          final String role = m['role'] ?? 'user';
-          return Message(
-            role: role == 'assistant'
-                ? Role.model
-                : role == 'system'
-                    ? Role.system
-                    : Role.user,
-            content: <Part>[TextPart(text: m['content'] ?? '')],
-          );
-        })
-        .toList();
+    return history.map((Map<String, String> m) {
+      final String role = m['role'] ?? 'user';
+      return Message(
+        role: role == 'assistant'
+            ? Role.model
+            : role == 'system'
+            ? Role.system
+            : Role.user,
+        content: <Part>[TextPart(text: m['content'] ?? '')],
+      );
+    }).toList();
   }
 
   String _normalizeError(Object error) {

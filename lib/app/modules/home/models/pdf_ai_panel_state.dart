@@ -10,6 +10,7 @@ class PdfAiPanelState {
     this.actionSelectionText,
     this.actionSelectionImage,
     this.result,
+    this.followUpSuggestions = const <String>[],
     this.errorMessage,
   });
 
@@ -26,6 +27,7 @@ class PdfAiPanelState {
   final Uint8List? actionSelectionImage;
 
   final String? result;
+  final List<String> followUpSuggestions;
   final String? errorMessage;
 
   PdfAiPanelState copyWith({
@@ -37,6 +39,7 @@ class PdfAiPanelState {
     Object? actionSelectionText = _sentinel,
     Object? actionSelectionImage = _sentinel,
     Object? result = _sentinel,
+    List<String>? followUpSuggestions,
     Object? errorMessage = _sentinel,
   }) {
     return PdfAiPanelState(
@@ -56,6 +59,7 @@ class PdfAiPanelState {
           ? this.actionSelectionImage
           : actionSelectionImage as Uint8List?,
       result: identical(result, _sentinel) ? this.result : result as String?,
+      followUpSuggestions: followUpSuggestions ?? this.followUpSuggestions,
       errorMessage: identical(errorMessage, _sentinel)
           ? this.errorMessage
           : errorMessage as String?,

@@ -1,4 +1,5 @@
 export 'deepseek_service.dart' show AiToolAction;
+import 'ai_response_parser.dart';
 import 'deepseek_service.dart';
 
 class AiPrompts {
@@ -9,10 +10,12 @@ class AiPrompts {
       case AiToolAction.translate:
         return '你是一个专业翻译。先输出译文本身（原文是中文则译为英文，原文是英文则译为简体中文），'
             '然后另起一行紧跟输出"**总结**："，用简体中文用 1-2 句话概括译文的主要内容。'
-            '不要解释、不要评论、不要复述原文、不要添加其他内容。';
+            '不要解释、不要评论、不要复述原文、不要添加其他内容。\n\n'
+            '${AiResponseParser.followUpInstruction}';
       case AiToolAction.explain:
         return '你是一个解释助手。请使用 Markdown 输出，先给简要解释，再用分点展开。'
-            '直接输出解释，不要复述问题或提及输入形式。';
+            '直接输出解释，不要复述问题或提及输入形式。\n\n'
+            '${AiResponseParser.followUpInstruction}';
       case AiToolAction.deepDive:
         return '你是一位严谨、耐心的技术讲师，把用户当作完全没有背景知识的新手，'
             '输出一篇结构完整、内容深入的 Markdown 长文讲稿。请深入思考后输出，'
@@ -23,11 +26,18 @@ class AiPrompts {
             '4. 与容易混淆或可替代的概念做对比，说明选择标准，并为关键差异提供具体例子。\n'
             '5. 概念建立后再扩展到其他应用场景；若有更合适的方案，说明为什么以及如何替换。\n'
             '6. API 只讲与主题和示例相关的部分；用户要求完整参考时，再系统列出方法、属性、参数和返回值。\n'
-            '7. 涉及当前模型、产品能力、版本、价格或限制时，先查官方一手资料，并区分官方事实与推断。';
+            '7. 涉及当前模型、产品能力、版本、价格或限制时，先查官方一手资料，并区分官方事实与推断。\n\n'
+            '${AiResponseParser.followUpInstruction}';
     }
   }
 
-  static String userPrompt(AiToolAction action, String selectionText, {String? pageContext}) {
+  static String chatSystemPrompt() => AiResponseParser.chatSystemPrompt();
+
+  static String userPrompt(
+    AiToolAction action,
+    String selectionText, {
+    String? pageContext,
+  }) {
     final String actionLabel = action.label;
     if (pageContext != null && pageContext.trim().isNotEmpty) {
       if (action == AiToolAction.translate) {

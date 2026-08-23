@@ -12,11 +12,15 @@ http.Response sseResponse(List<String> chunks, {int statusCode = 200}) {
   for (final String chunk in chunks) {
     buffer
       ..write('data: ')
-      ..write(jsonEncode(<String, dynamic>{
-        'choices': <Map<String, dynamic>>[
-          <String, dynamic>{'delta': <String, String>{'content': chunk}},
-        ],
-      }))
+      ..write(
+        jsonEncode(<String, dynamic>{
+          'choices': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'delta': <String, String>{'content': chunk},
+            },
+          ],
+        }),
+      )
       ..write('\n\n');
   }
   buffer.write('data: [DONE]\n\n');
@@ -78,7 +82,8 @@ void main() {
       expect(capturedAuth, 'Bearer sk-test-123');
       expect(capturedPayload['model'], DeepSeekService.model);
 
-      final List<dynamic> messages = capturedPayload['messages'] as List<dynamic>;
+      final List<dynamic> messages =
+          capturedPayload['messages'] as List<dynamic>;
       expect(messages, hasLength(2));
       expect((messages[0] as Map<String, dynamic>)['role'], 'system');
       expect((messages[1] as Map<String, dynamic>)['role'], 'user');
@@ -107,8 +112,10 @@ void main() {
           )
           .toList();
 
-      final List<dynamic> messages = capturedPayload['messages'] as List<dynamic>;
-      final Map<String, dynamic> userMessage = messages.last as Map<String, dynamic>;
+      final List<dynamic> messages =
+          capturedPayload['messages'] as List<dynamic>;
+      final Map<String, dynamic> userMessage =
+          messages.last as Map<String, dynamic>;
       final List<dynamic> content = userMessage['content'] as List<dynamic>;
       expect(content, hasLength(2));
       expect((content[0] as Map<String, dynamic>)['type'], 'text');
@@ -142,9 +149,7 @@ void main() {
       final MockClient client = MockClient((http.Request request) async {
         return http.Response(
           jsonEncode(<String, dynamic>{
-            'error': <String, dynamic>{
-              'message': 'Invalid API key provided',
-            },
+            'error': <String, dynamic>{'message': 'Invalid API key provided'},
           }),
           401,
         );
@@ -192,11 +197,13 @@ void main() {
           .toList();
 
       expect(chunks, <String>['回答']);
-      final List<dynamic> messages = capturedPayload['messages'] as List<dynamic>;
-      expect(messages, hasLength(3));
-      expect((messages[0] as Map<String, dynamic>)['role'], 'user');
-      expect((messages[1] as Map<String, dynamic>)['role'], 'assistant');
-      expect((messages[2] as Map<String, dynamic>)['role'], 'user');
+      final List<dynamic> messages =
+          capturedPayload['messages'] as List<dynamic>;
+      expect(messages, hasLength(4));
+      expect((messages[0] as Map<String, dynamic>)['role'], 'system');
+      expect((messages[1] as Map<String, dynamic>)['role'], 'user');
+      expect((messages[2] as Map<String, dynamic>)['role'], 'assistant');
+      expect((messages[3] as Map<String, dynamic>)['role'], 'user');
     });
 
     test('chat 聚合流式结果', () async {

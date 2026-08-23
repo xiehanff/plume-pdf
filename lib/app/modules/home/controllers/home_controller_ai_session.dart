@@ -12,12 +12,7 @@ extension HomeControllerAiSession on HomeController {
 
   void exitAiSelectionMode() {
     if (!state.aiSelectionMode && state.aiSelection == null) return;
-    _applyState(
-      state.copyWith(
-        aiSelectionMode: false,
-        aiSelection: null,
-      ),
-    );
+    _applyState(state.copyWith(aiSelectionMode: false, aiSelection: null));
   }
 
   void onAiSelectionChanged(PdfAiSelection? selection) {
@@ -31,6 +26,7 @@ extension HomeControllerAiSession on HomeController {
                 actionSelectionText: null,
                 actionSelectionImage: null,
                 result: null,
+                followUpSuggestions: const <String>[],
                 errorMessage: null,
                 loading: false,
               )
@@ -39,6 +35,7 @@ extension HomeControllerAiSession on HomeController {
                 actionLabel: null,
                 actionSelectionText: null,
                 actionSelectionImage: null,
+                followUpSuggestions: const <String>[],
                 errorMessage: null,
               ),
       ),
@@ -47,9 +44,7 @@ extension HomeControllerAiSession on HomeController {
 
   void updateAiApiKey(String apiKey) {
     _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(apiKey: apiKey),
-      ),
+      state.copyWith(aiPanelState: state.aiPanelState.copyWith(apiKey: apiKey)),
     );
   }
 
@@ -57,9 +52,7 @@ extension HomeControllerAiSession on HomeController {
     await _deepSeekSettingsStore.saveApiKey(state.aiPanelState.apiKey);
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(errorMessage: null),
       ),
     );
   }
@@ -79,6 +72,7 @@ extension HomeControllerAiSession on HomeController {
           actionSelectionText: null,
           actionSelectionImage: null,
           result: null,
+          followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
       ),
@@ -97,6 +91,7 @@ extension HomeControllerAiSession on HomeController {
         aiSidebarVisible: true,
         aiPanelState: state.aiPanelState.copyWith(
           result: null,
+          followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
       ),
@@ -109,6 +104,7 @@ extension HomeControllerAiSession on HomeController {
           aiSidebarVisible: true,
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
+            followUpSuggestions: const <String>[],
             errorMessage: '请先填写 DeepSeek API Key。',
           ),
         ),
@@ -120,23 +116,28 @@ extension HomeControllerAiSession on HomeController {
     // 选区信息，确保界面上先出现用户气泡（含截图/文本），再出现模型侧
     // loading，随后流式输出 —— 避免 loading 占位先于用户消息入列。
     final Uint8List? imageBytes = await _extractSelectionImageBytes(selection);
-    final String selectionText =
-        await _resolveSelectionText(selection, imageBytes: imageBytes);
+    final String selectionText = await _resolveSelectionText(
+      selection,
+      imageBytes: imageBytes,
+    );
     _applyState(
       state.copyWith(
         aiPanelState: state.aiPanelState.copyWith(
           loading: true,
           actionLabel: action.label,
           actionId: currentActionId,
-          actionSelectionText:
-              selectionText.trim().isEmpty ? null : selectionText,
+          actionSelectionText: selectionText.trim().isEmpty
+              ? null
+              : selectionText,
           actionSelectionImage: imageBytes,
+          followUpSuggestions: const <String>[],
         ),
       ),
     );
 
-    final AiModelConfig? config =
-        AiModelRegistry.instance.configFor(DeepSeekService.model);
+    final AiModelConfig? config = AiModelRegistry.instance.configFor(
+      DeepSeekService.model,
+    );
     if (config != null &&
         config.supportsVision &&
         imageBytes != null &&
@@ -178,7 +179,9 @@ extension HomeControllerAiSession on HomeController {
     }
 
     try {
-      final List<Map<String, String>> history = List<Map<String, String>>.from(_aiChatHistory);
+      final List<Map<String, String>> history = List<Map<String, String>>.from(
+        _aiChatHistory,
+      );
       final StringBuffer buffer = StringBuffer();
       await for (final String chunk in _deepSeekService.performStream(
         action: action,
@@ -188,13 +191,10 @@ extension HomeControllerAiSession on HomeController {
         imageBytes: imageBytes,
       )) {
         buffer.write(chunk);
-        _applyState(
-          state.copyWith(
-            aiPanelState: state.aiPanelState.copyWith(result: buffer.toString()),
-          ),
-        );
+        _applyAiResponsePreview(buffer.toString());
       }
-      final String result = buffer.toString().trim();
+      final AiResponse response = AiResponseParser.parse(buffer.toString());
+      final String result = response.content.trim();
       if (result.isEmpty) {
         throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
       }
@@ -211,6 +211,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: result,
+            followUpSuggestions: response.followUpSuggestions,
             errorMessage: null,
           ),
         ),
@@ -229,6 +230,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            followUpSuggestions: const <String>[],
             errorMessage: '请求失败：$error',
           ),
         ),
@@ -252,6 +254,7 @@ extension HomeControllerAiSession on HomeController {
             actionLabel: action.label,
             actionId: currentActionId,
             result: null,
+            followUpSuggestions: const <String>[],
             errorMessage: '当前框选区域没有识别到可用文本。',
           ),
         ),
@@ -270,6 +273,7 @@ extension HomeControllerAiSession on HomeController {
           actionLabel: action.label,
           actionId: currentActionId,
           result: null,
+          followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
       ),
@@ -287,13 +291,10 @@ extension HomeControllerAiSession on HomeController {
         history: List<Map<String, String>>.from(_aiChatHistory),
       )) {
         buffer.write(chunk);
-        _applyState(
-          state.copyWith(
-            aiPanelState: state.aiPanelState.copyWith(result: buffer.toString()),
-          ),
-        );
+        _applyAiResponsePreview(buffer.toString());
       }
-      final String result = buffer.toString().trim();
+      final AiResponse response = AiResponseParser.parse(buffer.toString());
+      final String result = response.content.trim();
       if (result.isEmpty) {
         throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
       }
@@ -303,13 +304,20 @@ extension HomeControllerAiSession on HomeController {
         extractedText,
         pageContext: pageContext,
       );
-      _aiChatHistory.add(<String, String>{'role': 'user', 'content': userContent});
-      _aiChatHistory.add(<String, String>{'role': 'assistant', 'content': result});
+      _aiChatHistory.add(<String, String>{
+        'role': 'user',
+        'content': userContent,
+      });
+      _aiChatHistory.add(<String, String>{
+        'role': 'assistant',
+        'content': result,
+      });
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: result,
+            followUpSuggestions: response.followUpSuggestions,
             errorMessage: null,
           ),
         ),
@@ -320,6 +328,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            followUpSuggestions: const <String>[],
             errorMessage: error.message,
           ),
         ),
@@ -330,6 +339,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            followUpSuggestions: const <String>[],
             errorMessage: '请求失败：$error',
           ),
         ),
@@ -345,6 +355,7 @@ extension HomeControllerAiSession on HomeController {
           aiSidebarVisible: true,
           aiPanelState: state.aiPanelState.copyWith(
             errorMessage: '请先填写 DeepSeek API Key。',
+            followUpSuggestions: const <String>[],
           ),
         ),
       );
@@ -360,6 +371,8 @@ extension HomeControllerAiSession on HomeController {
         aiSidebarVisible: true,
         aiPanelState: state.aiPanelState.copyWith(
           loading: true,
+          result: null,
+          followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
       ),
@@ -377,13 +390,10 @@ extension HomeControllerAiSession on HomeController {
         history: List<Map<String, String>>.from(_aiChatHistory),
       )) {
         buffer.write(chunk);
-        _applyState(
-          state.copyWith(
-            aiPanelState: state.aiPanelState.copyWith(result: buffer.toString()),
-          ),
-        );
+        _applyAiResponsePreview(buffer.toString());
       }
-      final String result = buffer.toString().trim();
+      final AiResponse response = AiResponseParser.parse(buffer.toString());
+      final String result = response.content.trim();
       if (result.isEmpty) {
         throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
       }
@@ -397,6 +407,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: result,
+            followUpSuggestions: response.followUpSuggestions,
             errorMessage: null,
           ),
         ),
@@ -412,6 +423,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            followUpSuggestions: const <String>[],
             errorMessage: error.message,
           ),
         ),
@@ -427,6 +439,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            followUpSuggestions: const <String>[],
             errorMessage: '请求失败：$error',
           ),
         ),
@@ -434,44 +447,58 @@ extension HomeControllerAiSession on HomeController {
     }
   }
 
+  void _applyAiResponsePreview(String rawResponse) {
+    final AiResponse response = AiResponseParser.parse(rawResponse);
+    _applyState(
+      state.copyWith(
+        aiPanelState: state.aiPanelState.copyWith(
+          result: response.content,
+          followUpSuggestions: response.followUpSuggestions,
+        ),
+      ),
+    );
+  }
+
   Future<String> _extractSelectionText(PdfAiSelection selection) async {
-    return await pdfViewerController.useDocument<String>(
-          (PdfDocument document) async {
-            if (selection.pageNumber < 1 ||
-                selection.pageNumber > document.pages.length) {
-              return '';
-            }
-            final PdfPageText pageText =
-                await document.pages[selection.pageNumber - 1].loadText();
-            final Iterable<String> texts = pageText.fragments
-                .where(
-                  (PdfPageTextFragment fragment) =>
-                      _intersects(selection.bounds, fragment.bounds),
-                )
-                .map((PdfPageTextFragment fragment) => fragment.text.trim())
-                .where((String text) => text.isNotEmpty);
-            return texts.join('\n');
-          },
-        ) ??
+    return await pdfViewerController.useDocument<String>((
+          PdfDocument document,
+        ) async {
+          if (selection.pageNumber < 1 ||
+              selection.pageNumber > document.pages.length) {
+            return '';
+          }
+          final PdfPageText pageText = await document
+              .pages[selection.pageNumber - 1]
+              .loadText();
+          final Iterable<String> texts = pageText.fragments
+              .where(
+                (PdfPageTextFragment fragment) =>
+                    _intersects(selection.bounds, fragment.bounds),
+              )
+              .map((PdfPageTextFragment fragment) => fragment.text.trim())
+              .where((String text) => text.isNotEmpty);
+          return texts.join('\n');
+        }) ??
         '';
   }
 
   Future<String?> _extractPageContext(PdfAiSelection selection) async {
-    return await pdfViewerController.useDocument<String?>(
-          (PdfDocument document) async {
-            if (selection.pageNumber < 1 ||
-                selection.pageNumber > document.pages.length) {
-              return null;
-            }
-            final PdfPageText pageText =
-                await document.pages[selection.pageNumber - 1].loadText();
-            final String fullText = pageText.fragments
-                .map((PdfPageTextFragment f) => f.text.trim())
-                .where((String t) => t.isNotEmpty)
-                .join('\n');
-            return fullText.trim().isEmpty ? null : fullText;
-          },
-        );
+    return await pdfViewerController.useDocument<String?>((
+      PdfDocument document,
+    ) async {
+      if (selection.pageNumber < 1 ||
+          selection.pageNumber > document.pages.length) {
+        return null;
+      }
+      final PdfPageText pageText = await document
+          .pages[selection.pageNumber - 1]
+          .loadText();
+      final String fullText = pageText.fragments
+          .map((PdfPageTextFragment f) => f.text.trim())
+          .where((String t) => t.isNotEmpty)
+          .join('\n');
+      return fullText.trim().isEmpty ? null : fullText;
+    });
   }
 
   Future<String> _resolveSelectionText(
@@ -491,56 +518,59 @@ extension HomeControllerAiSession on HomeController {
     return _macosOcrService.recognizeText(bytes);
   }
 
-  Future<Uint8List?> _extractSelectionImageBytes(PdfAiSelection selection) async {
-    return pdfViewerController.useDocument<Uint8List?>(
-      (PdfDocument document) async {
-        if (selection.pageNumber < 1 ||
-            selection.pageNumber > document.pages.length) {
-          return null;
-        }
-        final PdfPage page = document.pages[selection.pageNumber - 1];
-        const double scale = 3;
-        final double fullWidth = page.width * scale;
-        final double fullHeight = page.height * scale;
-        final int maxX = math.max(0, fullWidth.ceil() - 1);
-        final int maxY = math.max(0, fullHeight.ceil() - 1);
-        final int x = (selection.bounds.left * scale).floor().clamp(
-          0,
-          maxX,
-        );
-        final int y = ((page.height - selection.bounds.top) * scale)
-            .floor()
-            .clamp(0, maxY);
-        final int width = (selection.bounds.width * scale)
-            .ceil()
-            .clamp(1, fullWidth.ceil());
-        final int height = (selection.bounds.height * scale)
-            .ceil()
-            .clamp(1, fullHeight.ceil());
-        final int safeWidth = width.clamp(1, math.max(1, fullWidth.ceil() - x));
-        final int safeHeight =
-            height.clamp(1, math.max(1, fullHeight.ceil() - y));
-        final PdfImage? rendered = await page.render(
-          x: x,
-          y: y,
-          width: safeWidth,
-          height: safeHeight,
-          fullWidth: fullWidth,
-          fullHeight: fullHeight,
-        );
-        if (rendered == null) {
-          return null;
-        }
+  Future<Uint8List?> _extractSelectionImageBytes(
+    PdfAiSelection selection,
+  ) async {
+    return pdfViewerController.useDocument<Uint8List?>((
+      PdfDocument document,
+    ) async {
+      if (selection.pageNumber < 1 ||
+          selection.pageNumber > document.pages.length) {
+        return null;
+      }
+      final PdfPage page = document.pages[selection.pageNumber - 1];
+      const double scale = 3;
+      final double fullWidth = page.width * scale;
+      final double fullHeight = page.height * scale;
+      final int maxX = math.max(0, fullWidth.ceil() - 1);
+      final int maxY = math.max(0, fullHeight.ceil() - 1);
+      final int x = (selection.bounds.left * scale).floor().clamp(0, maxX);
+      final int y = ((page.height - selection.bounds.top) * scale)
+          .floor()
+          .clamp(0, maxY);
+      final int width = (selection.bounds.width * scale).ceil().clamp(
+        1,
+        fullWidth.ceil(),
+      );
+      final int height = (selection.bounds.height * scale).ceil().clamp(
+        1,
+        fullHeight.ceil(),
+      );
+      final int safeWidth = width.clamp(1, math.max(1, fullWidth.ceil() - x));
+      final int safeHeight = height.clamp(
+        1,
+        math.max(1, fullHeight.ceil() - y),
+      );
+      final PdfImage? rendered = await page.render(
+        x: x,
+        y: y,
+        width: safeWidth,
+        height: safeHeight,
+        fullWidth: fullWidth,
+        fullHeight: fullHeight,
+      );
+      if (rendered == null) {
+        return null;
+      }
 
-        final ui.Image image = await rendered.createImage();
-        rendered.dispose();
-        final ByteData? data = await image.toByteData(
-          format: ui.ImageByteFormat.png,
-        );
-        image.dispose();
-        return data?.buffer.asUint8List();
-      },
-    );
+      final ui.Image image = await rendered.createImage();
+      rendered.dispose();
+      final ByteData? data = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      image.dispose();
+      return data?.buffer.asUint8List();
+    });
   }
 
   bool _intersects(PdfRect a, PdfRect b) {

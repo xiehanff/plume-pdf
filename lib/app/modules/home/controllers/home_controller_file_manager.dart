@@ -62,10 +62,7 @@ extension HomeControllerFileManager on HomeController {
       }
       if (!_isPdfFile(selectedPath)) {
         _applyState(
-          state.copyWith(
-            loading: false,
-            errorMessage: '请选择 .pdf 文件。',
-          ),
+          state.copyWith(loading: false, errorMessage: '请选择 .pdf 文件。'),
         );
         return;
       }
@@ -75,10 +72,7 @@ extension HomeControllerFileManager on HomeController {
       debugPrint('[plume_pdf] openPickedFile failed: $error');
       debugPrintStack(stackTrace: stackTrace);
       _applyState(
-        state.copyWith(
-          loading: false,
-          errorMessage: '打开文件面板失败：$error',
-        ),
+        state.copyWith(loading: false, errorMessage: '打开文件面板失败：$error'),
       );
     }
   }
@@ -104,8 +98,10 @@ extension HomeControllerFileManager on HomeController {
       return;
     }
 
-    final PdfRecentFile? previousRecord =
-        _store.findByPath(state.recentFiles, filePath);
+    final PdfRecentFile? previousRecord = _store.findByPath(
+      state.recentFiles,
+      filePath,
+    );
     final int initialPage = previousRecord?.lastPage ?? 1;
 
     _applyState(_buildLoadingState(filePath, initialPage));
@@ -134,6 +130,7 @@ extension HomeControllerFileManager on HomeController {
           actionLabel: null,
           actionId: null,
           result: null,
+          followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
       ),
@@ -177,8 +174,10 @@ extension HomeControllerFileManager on HomeController {
     if (selectedPath == null || !_isPdfFile(selectedPath)) {
       return;
     }
-    final PdfRecentFile? previousRecord =
-        _store.findByPath(state.recentFiles, filePath);
+    final PdfRecentFile? previousRecord = _store.findByPath(
+      state.recentFiles,
+      filePath,
+    );
     final List<PdfRecentFile> nextFiles = <PdfRecentFile>[
       if (previousRecord != null)
         previousRecord.copyWith(
@@ -194,11 +193,10 @@ extension HomeControllerFileManager on HomeController {
     ];
     if (previousRecord != null) {
       await _store.saveRecentFiles(nextFiles);
-      final Set<String> nextUnavailablePaths = Set<String>.from(
-        state.unavailableRecentFilePaths,
-      )
-        ..remove(filePath)
-        ..remove(selectedPath);
+      final Set<String> nextUnavailablePaths =
+          Set<String>.from(state.unavailableRecentFilePaths)
+            ..remove(filePath)
+            ..remove(selectedPath);
       _applyState(
         state.copyWith(
           recentFiles: nextFiles,
@@ -213,9 +211,7 @@ extension HomeControllerFileManager on HomeController {
     final String deepSeekApiKey = await _deepSeekSettingsStore.loadApiKey();
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          apiKey: deepSeekApiKey,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(apiKey: deepSeekApiKey),
       ),
     );
   }
@@ -234,8 +230,10 @@ extension HomeControllerFileManager on HomeController {
     String filePath, {
     required int lastPage,
   }) async {
-    final PdfRecentFile? existing =
-        _store.findByPath(state.recentFiles, filePath);
+    final PdfRecentFile? existing = _store.findByPath(
+      state.recentFiles,
+      filePath,
+    );
     String? coverPath = existing?.coverPath;
     if (coverPath == null || coverPath.isEmpty) {
       try {
@@ -265,9 +263,7 @@ extension HomeControllerFileManager on HomeController {
       return;
     }
     _applyState(
-      state.copyWith(
-        unavailableRecentFilePaths: unavailablePaths.toSet(),
-      ),
+      state.copyWith(unavailableRecentFilePaths: unavailablePaths.toSet()),
     );
   }
 
@@ -275,7 +271,9 @@ extension HomeControllerFileManager on HomeController {
     final Set<String> nextUnavailablePaths = Set<String>.from(
       state.unavailableRecentFilePaths,
     )..add(filePath);
-    _applyState(state.copyWith(unavailableRecentFilePaths: nextUnavailablePaths));
+    _applyState(
+      state.copyWith(unavailableRecentFilePaths: nextUnavailablePaths),
+    );
   }
 
   Future<void> _markRecentFileAvailable(String filePath) async {
@@ -285,7 +283,9 @@ extension HomeControllerFileManager on HomeController {
     final Set<String> nextUnavailablePaths = Set<String>.from(
       state.unavailableRecentFilePaths,
     )..remove(filePath);
-    _applyState(state.copyWith(unavailableRecentFilePaths: nextUnavailablePaths));
+    _applyState(
+      state.copyWith(unavailableRecentFilePaths: nextUnavailablePaths),
+    );
   }
 
   void _scheduleProgressSave() {

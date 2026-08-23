@@ -15,10 +15,11 @@
 - 放大 / 缩小 / 适宽 / 恢复 `100%`
 - 单页 / 双页阅读模式
 - AI 框选模式
-- 框选后快捷操作：`翻译`、`解释`（附带整页上下文）
-- 右侧 AI 侧边栏：支持切换 DeepSeek / SiliconFlow provider，分别配置 API Key，展示返回内容并支持多轮对话追问
+- 框选后快捷操作：`翻译`、`解释`、`深度理解`（附带整页上下文）
+- 右侧 AI 侧边栏：支持切换 DeepSeek / SiliconFlow provider，分别配置 API Key，流式输出多轮对话追问
+- 模型根据当前上下文生成追问建议 chips，回复完成后动态展示
 - Markdown 渲染（gpt_markdown）+ 代码块语法高亮（atom-one-dark）
-- Windows / Markdown / 普通正文统一回退到工程内置的 `PingFangSC`，代码块继续使用 `JetBrainsMono`
+- 普通正文 / Markdown 统一使用工程内置的 `OPPO Sans`，代码块继续使用 `JetBrainsMono`
 - 支持视觉理解模型时，AI 框选优先走截图发云端模型理解；失败后再回退到本地 OCR / 文本提取
 - 不支持视觉理解的模型不会走截图链路，避免无意义渲染
 - 阅读背景主题切换：`默认` / `阴天` / `羊皮纸` / `护眼绿`
@@ -66,10 +67,10 @@ fvm flutter pub upgrade            # 升级依赖
 
 ## Linux 分发
 
-- RPM 安装包：`plume-pdf-0.0.13-11.fc44.x86_64.rpm`
+- RPM 安装包：`plume-pdf-0.0.15-15.fc44.x86_64.rpm`
 - 适用于 Fedora 系发行版
-- DEB 安装包：`plume-pdf_0.0.13+11_amd64.deb`
-- GitHub Release `v0.0.13` 中可直接下载附带的 `.rpm` 与 `.deb` 文件
+- DEB 安装包：`plume-pdf_0.0.15+15_amd64.deb`
+- GitHub Release `v0.0.15` 中可直接下载附带的 `.rpm` 与 `.deb` 文件
 - 生成 RPM：`make package-rpm`
 - 生成 DEB：`make package-deb`
 - RPM 打包说明：[Linux RPM 包分发说明](./docs/linux-rpm-distribution.md)
@@ -79,11 +80,11 @@ fvm flutter pub upgrade            # 升级依赖
 
 - PDF 渲染与交互基于 `pdfrx`，底层依赖 PDFium
 - 图片型 PDF 的文字识别走原生 OCR：macOS 用 Vision，Windows 用 `Windows.Media.Ocr`
-- AI 请求支持 DeepSeek 与 SiliconFlow 聊天补全接口
+- AI 请求通过 Google Genkit 路由：DeepSeek 流式聊天补全 + SiliconFlow 聊天接口
 - SiliconFlow 当前接入模型为 `Qwen/Qwen3-VL-30B-A3B-Instruct`
 - 模型能力配置通过 `assets/config/ai_models.json` 预置，按 `supportsVision` 决定是否启用截图理解链路
 - Markdown 渲染使用 gpt_markdown（本地 fork 在 `packages/gpt_markdown`）
-- `gpt_markdown` 和应用本体都内置了 `PingFangSC` 字体资产，避免依赖本机外部字体路径
+- 应用本体内置 `OPPO Sans` 字体资产；代码块使用 `JetBrainsMono`
 - 代码高亮使用 flutter_highlight（atom-one-dark 主题）
 - macOS 文件打开链路额外接入原生 openFiles 回调，用于接收 Finder / Dock 传入的 PDF 路径
 - Windows 构建额外使用 [`Directory.Build.props`](./Directory.Build.props) 关闭 `TrackFileAccess`，防止 `MSBuild/Tracker.exe` 卡住
@@ -99,5 +100,7 @@ fvm flutter pub upgrade            # 升级依赖
 - `flutter_highlight` + `highlight`：代码语法高亮
 - `file_selector`：原生文件选择对话框
 - `hugeicons`：工具栏与状态图标
-- `http`：DeepSeek API 请求
+- `http`：SiliconFlow API 请求
+- `genkit` + `genkit_openai`：DeepSeek 流式聊天补全
+- `loading_indicator`：加载动画（ballPulse 等）
 - `shared_preferences`：最近文件持久化

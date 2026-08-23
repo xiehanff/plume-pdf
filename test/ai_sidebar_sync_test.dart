@@ -8,21 +8,20 @@ import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/chat_message.dart';
 
 void main() {
-  Future<void> pumpSidebar(
-    WidgetTester tester,
-    PdfAiPanelState state,
-  ) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: AiSidebar(
-          state: state,
-          onApiKeyChanged: (_) {},
-          onSaveApiKey: () async {},
-          onSendChat: (_) async {},
-          onNewSession: () {},
+  Future<void> pumpSidebar(WidgetTester tester, PdfAiPanelState state) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiSidebar(
+            state: state,
+            onApiKeyChanged: (_) {},
+            onSaveApiKey: () async {},
+            onSendChat: (_) async {},
+            onNewSession: () {},
+          ),
         ),
       ),
-    ));
+    );
   }
 
   testWidgets('runAiAction 时序：用户气泡先出现，loading 在其后', (tester) async {
@@ -48,8 +47,9 @@ void main() {
     await pumpSidebar(tester, ready);
     await tester.pump(const Duration(milliseconds: 100));
 
-    final List<ChatBubble> bubbles =
-        tester.widgetList<ChatBubble>(find.byType(ChatBubble)).toList();
+    final List<ChatBubble> bubbles = tester
+        .widgetList<ChatBubble>(find.byType(ChatBubble))
+        .toList();
     expect(bubbles, hasLength(2));
     // 第一条：用户气泡（human，带图片）
     final ChatMessage first = bubbles[0].message;
@@ -72,32 +72,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     // 首 chunk
-    state = state.copyWith(
-      result: '这是一个',
-      loading: true,
-    );
+    state = state.copyWith(result: '这是一个', loading: true);
     await pumpSidebar(tester, state);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('这是一个'), findsOneWidget);
 
     // 增量 chunk
-    state = state.copyWith(
-      result: '这是一个最基础的 C 语言示例',
-      loading: true,
-    );
+    state = state.copyWith(result: '这是一个最基础的 C 语言示例', loading: true);
     await pumpSidebar(tester, state);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('这是一个最基础的 C 语言示例'), findsOneWidget);
     // 增量不新增消息
-    final List<ChatBubble> bubbles =
-        tester.widgetList<ChatBubble>(find.byType(ChatBubble)).toList();
+    final List<ChatBubble> bubbles = tester
+        .widgetList<ChatBubble>(find.byType(ChatBubble))
+        .toList();
     expect(bubbles, hasLength(2));
 
     // 完成
-    state = state.copyWith(loading: false);
+    state = state.copyWith(
+      loading: false,
+      followUpSuggestions: const <String>['根据这段代码再举一个例子', '解释它的运行过程'],
+    );
     await pumpSidebar(tester, state);
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('再详细解释一下'), findsOneWidget);
-    expect(find.text('总结为要点'), findsOneWidget);
+    expect(find.text('根据这段代码再举一个例子'), findsOneWidget);
+    expect(find.text('解释它的运行过程'), findsOneWidget);
   });
 }

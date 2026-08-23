@@ -15,10 +15,11 @@ A high-performance desktop PDF reader built with Flutter + PDFium, featuring Dee
 - Zoom in / out / fit width / reset to `100%`
 - Single-page / dual-page reading mode
 - AI selection mode
-- Quick actions on selected area: `Translate`, `Explain` (with full-page context)
-- AI sidebar: switch between DeepSeek / SiliconFlow providers, configure API Keys independently, multi-turn follow-up conversations
+- Quick actions on selected area: `Translate`, `Explain`, `Deep Understand` (with full-page context)
+- AI sidebar: switch between DeepSeek / SiliconFlow providers, configure API Keys independently, streaming multi-turn conversations
+- AI-generated, context-aware follow-up suggestion chips shown after model replies
 - Markdown rendering (gpt_markdown) + code syntax highlighting (atom-one-dark)
-- Unified `PingFangSC` font fallback for Windows / Markdown / body text; code blocks use `JetBrainsMono`
+- Unified `OPPO Sans` font for body / Markdown text; code blocks use `JetBrainsMono`
 - Vision-capable models: AI selection prioritizes screenshot-based cloud understanding; falls back to local OCR / text extraction
 - Non-vision models skip screenshot path entirely, avoiding unnecessary rendering
 - Reading background themes: `Default` / `Cloudy` / `Parchment` / `Eye Green`
@@ -66,10 +67,10 @@ Related document:
 
 ## Linux Distribution
 
-- RPM package: `plume-pdf-0.0.13-11.fc44.x86_64.rpm`
+- RPM package: `plume-pdf-0.0.15-15.fc44.x86_64.rpm`
 - Suitable for Fedora-based systems
-- DEB package: `plume-pdf_0.0.13+11_amd64.deb`
-- GitHub release assets: download the attached `.rpm` or `.deb` from the `v0.0.13` release
+- DEB package: `plume-pdf_0.0.15+15_amd64.deb`
+- GitHub release assets: download the attached `.rpm` or `.deb` from the `v0.0.15` release
 - Build RPM: `make package-rpm`
 - Build DEB: `make package-deb`
 - How to package: [Linux RPM package distribution](./docs/linux-rpm-distribution.md)
@@ -79,11 +80,11 @@ Related document:
 
 - PDF rendering and interaction powered by `pdfrx` (backed by PDFium)
 - Image-based PDF text recognition uses native OCR: macOS via Vision, Windows via `Windows.Media.Ocr`
-- AI requests support both DeepSeek and SiliconFlow chat completion APIs
+- AI requests routed through Google Genkit: DeepSeek streaming chat completions + SiliconFlow chat APIs
 - SiliconFlow currently uses the `Qwen/Qwen3-VL-30B-A3B-Instruct` model
 - Model capabilities configured via `assets/config/ai_models.json`; `supportsVision` flag controls screenshot understanding pipeline
 - Markdown rendering uses gpt_markdown (local fork at `packages/gpt_markdown`)
-- Both `gpt_markdown` and the app bundle embed `PingFangSC` font assets, avoiding external font dependencies
+- App bundle embeds `OPPO Sans` font assets; code blocks use `JetBrainsMono`
 - Code highlighting uses flutter_highlight (atom-one-dark theme)
 - macOS file opening integrates native `openFiles` callback for receiving PDF paths from Finder / Dock
 - Windows builds use [`Directory.Build.props`](./Directory.Build.props) to disable `TrackFileAccess`, preventing `MSBuild/Tracker.exe` from hanging
@@ -99,5 +100,7 @@ Related document:
 - `flutter_highlight` + `highlight` — Code syntax highlighting
 - `file_selector` — Native file picker dialog
 - `hugeicons` — Toolbar and status icons
-- `http` — DeepSeek API requests
+- `http` — SiliconFlow API requests
+- `genkit` + `genkit_openai` — DeepSeek streaming chat completions
+- `loading_indicator` — Loading animations (ballPulse etc.)
 - `shared_preferences` — Recent file persistence
