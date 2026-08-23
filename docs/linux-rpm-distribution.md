@@ -22,10 +22,10 @@ make package-rpm
 脚本会先执行 `fvm flutter build linux --release`，再使用
 `packaging/plume-pdf.spec` 生成 RPM。
 
-本次 `0.0.13+11` 的输出文件为：
+本次 `0.0.16+17` 的输出文件为：
 
 ```text
-build/linux/x64/release/plume-pdf-0.0.13-11.fc44.x86_64.rpm
+build/linux/x64/release/plume-pdf-0.0.16-17.fc44.x86_64.rpm
 ```
 
 文件名中的 `.fc44` 是 Fedora 发行版标识；在其他 Fedora 版本上构建时，该后缀会随系统 RPM 配置变化。
@@ -39,7 +39,7 @@ build/linux/x64/release/plume-pdf-0.0.13-11.fc44.x86_64.rpm
 ## 3. 安装测试
 
 ```bash
-sudo dnf install ./build/linux/x64/release/plume-pdf-0.0.13-11.fc44.x86_64.rpm
+sudo dnf install ./build/linux/x64/release/plume-pdf-0.0.16-17.fc44.x86_64.rpm
 ```
 
 升级同一应用的后续版本时仍使用 `dnf install`；卸载时执行：
@@ -59,10 +59,10 @@ sudo dnf remove plume-pdf
 
 ## 5. GitHub Release
 
-将生成的 `.rpm` 作为 `v0.0.13` Release asset 上传：
+将生成的 `.rpm` 作为 `v0.0.16` Release asset 上传：
 
 ```bash
-gh release upload v0.0.13 \
-  build/linux/x64/release/plume-pdf-0.0.13-11.fc44.x86_64.rpm \
+gh release upload v0.0.16 \
+  build/linux/x64/release/plume-pdf-0.0.16-17.fc44.x86_64.rpm \
   --clobber
 ```

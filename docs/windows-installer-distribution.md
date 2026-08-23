@@ -1,6 +1,6 @@
 # Windows 安装包生成与分发
 
-项目路径：`D:\xiehan\github\mint_pdf`
+项目路径：`D:\xiehan\github\plume-pdf`
 
 这份文档只记录两件事：
 
@@ -61,7 +61,7 @@ make package-windows
 生成后的安装包在：
 
 ```text
-windows/installer/dist/PlumePDF_Setup_0.0.13.exe
+windows/installer/dist/PlumePDF_Setup_0.0.16.exe
 ```
 
 如果后面版本号变化，文件名会跟随 `pubspec.yaml` 的版本号更新。
@@ -82,7 +82,7 @@ windows/installer/dist/PlumePDF_Setup_0.0.13.exe
 直接把这个文件发给用户：
 
 ```text
-PlumePDF_Setup_0.0.13.exe
+PlumePDF_Setup_0.0.16.exe
 ```
 
 附一句最小说明就够了：

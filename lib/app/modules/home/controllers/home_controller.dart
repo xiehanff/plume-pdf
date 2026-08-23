@@ -9,8 +9,11 @@ import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
 
+import '../models/ai_chat_history_message.dart';
 import '../models/pdf_outline_entry.dart';
+import '../models/ai_chat_input.dart';
 import '../models/pdf_ai_panel_state.dart';
+import '../models/pdf_ai_context.dart';
 import 'ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
 import '../models/pdf_reader_state.dart';
@@ -50,7 +53,7 @@ class HomeController extends GetxController {
   final DeepSeekService _deepSeekService = DeepSeekService();
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
-  final List<Map<String, String>> _aiChatHistory = <Map<String, String>>[];
+  final List<AiChatHistoryMessage> _aiChatHistory = <AiChatHistoryMessage>[];
   int _aiSessionId = 0;
   int _aiActionId = 0;
   String? _pinnedOutlineId;

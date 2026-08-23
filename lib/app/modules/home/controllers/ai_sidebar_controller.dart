@@ -6,10 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:get/get.dart';
 
+import '../models/ai_chat_input.dart';
 import '../models/pdf_ai_panel_state.dart';
 import '../views/widgets/chat_message.dart';
 
-typedef SendChatCallback = Future<void> Function(String message);
+typedef SendChatCallback = Future<void> Function(AiChatInput input);
 
 enum AiSidebarMode { conversation, settings }
 
@@ -26,6 +27,7 @@ class _ConversationState {
   _MessageLayoutState layoutState = _MessageLayoutState.needsPostFrameSync;
   int? lastActionId;
   String? lastResult;
+  String? lastReasoning;
   int _nextMessageId = 0;
 
   String nextMessageId() => 'msg_${_nextMessageId++}';
@@ -39,6 +41,7 @@ class _ConversationState {
     layoutState = _MessageLayoutState.clean;
     lastActionId = null;
     lastResult = null;
+    lastReasoning = null;
   }
 }
 
@@ -257,19 +260,24 @@ class AiSidebarController extends GetxController {
     });
   }
 
-  Future<void> handleSend() async {
-    final String text = _inputController.text.trim();
-    if (text.isEmpty) return;
-    _inputController.clear();
-    await sendMessage(text);
+  Future<void> handleSend(AiChatInput input) async {
+    if (input.isEmpty) return;
+    await sendMessage(input.text, image: input.image);
   }
 
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(String text, {AiImageAttachment? image}) async {
+    final String trimmedText = text.trim();
+    if (trimmedText.isEmpty && (image?.bytes.isEmpty ?? true)) {
+      return;
+    }
+    _conversation.lastResult = null;
+    _conversation.lastReasoning = null;
     _conversation.messages.add(
       ChatMessage(
         author: MessageAuthor.human,
-        text: text,
+        text: trimmedText,
         id: _conversation.nextMessageId(),
+        imageBytes: image?.bytes,
       ),
     );
     _conversation.markLayoutNeedsSync();
@@ -278,7 +286,7 @@ class AiSidebarController extends GetxController {
     update();
     // 流式首个 chunk 直接 jumpTo 跟随，避免动画被后续更新打断。
     _scheduleScrollToBottom();
-    await _onSendChat(text);
+    await _onSendChat(AiChatInput(text: trimmedText, image: image));
   }
 
   void handleResize(DragUpdateDetails details, double screenWidth) {
@@ -293,7 +301,7 @@ class AiSidebarController extends GetxController {
   void _syncConversationWithPanelState() {
     _syncAction(_panelState);
 
-    if (_panelState.loading && _conversation.lastResult == null) {
+    if (_panelState.loading) {
       _ensureLoadingPlaceholder();
       _scheduleScrollToBottom();
     }
@@ -301,6 +309,7 @@ class AiSidebarController extends GetxController {
     if (_panelState.errorMessage != null &&
         _panelState.errorMessage != _conversation.lastResult) {
       _conversation.lastResult = _panelState.errorMessage;
+      _conversation.lastReasoning = null;
       _replaceLoadingOrAdd(
         author: MessageAuthor.ai,
         text: '❌ ${_panelState.errorMessage}',
@@ -308,10 +317,20 @@ class AiSidebarController extends GetxController {
       return;
     }
 
-    if (_panelState.result != null &&
-        _panelState.result != _conversation.lastResult &&
-        _panelState.result!.trim().isNotEmpty) {
-      _syncResult(_panelState.result!);
+    final String? result = _panelState.result;
+    if (result != null && result.trim().isNotEmpty) {
+      if (result != _conversation.lastResult) {
+        _syncResult(result);
+      } else if (!_panelState.loading) {
+        _finishLastAiMessage();
+      }
+    }
+
+    final String? reasoning = _panelState.reasoning;
+    if (reasoning != null &&
+        reasoning.trim().isNotEmpty &&
+        reasoning != _conversation.lastReasoning) {
+      _syncReasoning(reasoning);
     }
   }
 
@@ -323,6 +342,7 @@ class AiSidebarController extends GetxController {
 
     _conversation.lastActionId = state.actionId;
     _conversation.lastResult = null;
+    _conversation.lastReasoning = null;
     _conversation.messages.add(
       ChatMessage(
         author: MessageAuthor.human,
@@ -342,11 +362,83 @@ class AiSidebarController extends GetxController {
     _conversation.lastResult = result;
     switch (updateMode) {
       case _ResultUpdateMode.replace:
-        _replaceLoadingOrAdd(author: MessageAuthor.ai, text: result);
+        _replaceLoadingOrAdd(
+          author: MessageAuthor.ai,
+          text: result,
+          reasoning: _panelState.reasoning,
+          isLoading: _panelState.loading,
+        );
       case _ResultUpdateMode.incremental:
-        _updateLastAiMessage(result);
+        _updateLastAiMessage(
+          result,
+          reasoning: _panelState.reasoning,
+          isLoading: _panelState.loading,
+        );
         _scheduleScrollToBottom();
     }
+  }
+
+  void _syncReasoning(String reasoning) {
+    _conversation.lastReasoning = reasoning;
+    final int loadingIndex = _conversation.messages.indexWhere(
+      (ChatMessage message) =>
+          message.author == MessageAuthor.ai && message.isLoading,
+    );
+    if (loadingIndex >= 0) {
+      final ChatMessage previousMessage = _conversation.messages[loadingIndex];
+      _conversation.messages[loadingIndex] = ChatMessage(
+        author: MessageAuthor.ai,
+        text: previousMessage.text,
+        id: previousMessage.id,
+        isLoading: _panelState.loading,
+        reasoning: reasoning,
+      );
+    } else {
+      final int lastIndex = _conversation.messages.length - 1;
+      if (lastIndex >= 0 &&
+          _conversation.messages[lastIndex].author == MessageAuthor.ai) {
+        final ChatMessage previousMessage = _conversation.messages[lastIndex];
+        _conversation.messages[lastIndex] = ChatMessage(
+          author: MessageAuthor.ai,
+          text: previousMessage.text,
+          id: previousMessage.id,
+          isLoading: previousMessage.isLoading,
+          reasoning: reasoning,
+        );
+      } else {
+        _conversation.messages.add(
+          ChatMessage(
+            author: MessageAuthor.ai,
+            text: '',
+            id: _conversation.nextMessageId(),
+            isLoading: _panelState.loading,
+            reasoning: reasoning,
+          ),
+        );
+      }
+    }
+    _conversation.markLayoutNeedsSync();
+    _scheduleMessageLayoutSync();
+    _scheduleScrollToBottom();
+  }
+
+  void _finishLastAiMessage() {
+    final int lastIndex = _conversation.messages.length - 1;
+    if (lastIndex < 0 ||
+        _conversation.messages[lastIndex].author != MessageAuthor.ai ||
+        !_conversation.messages[lastIndex].isLoading) {
+      return;
+    }
+    final ChatMessage previousMessage = _conversation.messages[lastIndex];
+    _conversation.messages[lastIndex] = ChatMessage(
+      author: MessageAuthor.ai,
+      text: previousMessage.text,
+      id: previousMessage.id,
+      isLoading: false,
+      reasoning: previousMessage.reasoning,
+    );
+    _conversation.markLayoutNeedsSync();
+    _scheduleMessageLayoutSync();
   }
 
   _ResultUpdateMode _resultUpdateMode(String result) {
@@ -403,6 +495,8 @@ class AiSidebarController extends GetxController {
   void _replaceLoadingOrAdd({
     required MessageAuthor author,
     required String text,
+    String? reasoning,
+    bool isLoading = false,
   }) {
     final int loadingIndex = _conversation.messages.indexWhere(
       (ChatMessage message) =>
@@ -414,10 +508,11 @@ class AiSidebarController extends GetxController {
         author: author,
         text: text,
         id: loadingMessage.id,
-        isLoading: false,
+        isLoading: isLoading,
+        reasoning: reasoning,
       );
     } else {
-      _updateLastAiMessage(text);
+      _updateLastAiMessage(text, reasoning: reasoning, isLoading: isLoading);
     }
     _conversation.markLayoutNeedsSync();
     _scheduleMessageLayoutSync();
@@ -426,7 +521,7 @@ class AiSidebarController extends GetxController {
 
   /// 更新最后一条 AI 消息内容（流式增量或替换）；不存在则新增。
   /// 仅负责消息更新，滚动调度由调用方控制。
-  void _updateLastAiMessage(String text) {
+  void _updateLastAiMessage(String text, {String? reasoning, bool? isLoading}) {
     final int lastIndex = _conversation.messages.length - 1;
     if (lastIndex >= 0 &&
         _conversation.messages[lastIndex].author == MessageAuthor.ai) {
@@ -435,6 +530,8 @@ class AiSidebarController extends GetxController {
         author: MessageAuthor.ai,
         text: text,
         id: previousMessage.id,
+        isLoading: isLoading ?? previousMessage.isLoading,
+        reasoning: reasoning ?? previousMessage.reasoning,
       );
     } else {
       _conversation.messages.add(
@@ -442,6 +539,8 @@ class AiSidebarController extends GetxController {
           author: MessageAuthor.ai,
           text: text,
           id: _conversation.nextMessageId(),
+          isLoading: isLoading ?? false,
+          reasoning: reasoning,
         ),
       );
     }

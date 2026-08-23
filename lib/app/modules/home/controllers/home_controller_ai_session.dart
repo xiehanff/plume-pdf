@@ -26,6 +26,7 @@ extension HomeControllerAiSession on HomeController {
                 actionSelectionText: null,
                 actionSelectionImage: null,
                 result: null,
+                reasoning: null,
                 followUpSuggestions: const <String>[],
                 errorMessage: null,
                 loading: false,
@@ -72,6 +73,7 @@ extension HomeControllerAiSession on HomeController {
           actionSelectionText: null,
           actionSelectionImage: null,
           result: null,
+          reasoning: null,
           followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
@@ -91,6 +93,7 @@ extension HomeControllerAiSession on HomeController {
         aiSidebarVisible: true,
         aiPanelState: state.aiPanelState.copyWith(
           result: null,
+          reasoning: null,
           followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
@@ -104,6 +107,7 @@ extension HomeControllerAiSession on HomeController {
           aiSidebarVisible: true,
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
+            reasoning: null,
             followUpSuggestions: const <String>[],
             errorMessage: '请先填写 DeepSeek API Key。',
           ),
@@ -130,6 +134,7 @@ extension HomeControllerAiSession on HomeController {
               ? null
               : selectionText,
           actionSelectionImage: imageBytes,
+          reasoning: null,
           followUpSuggestions: const <String>[],
         ),
       ),
@@ -179,38 +184,43 @@ extension HomeControllerAiSession on HomeController {
     }
 
     try {
-      final List<Map<String, String>> history = List<Map<String, String>>.from(
-        _aiChatHistory,
-      );
+      final List<AiChatHistoryMessage> history =
+          List<AiChatHistoryMessage>.from(_aiChatHistory);
       final StringBuffer buffer = StringBuffer();
-      await for (final String chunk in _deepSeekService.performStream(
-        action: action,
-        apiKey: apiKey,
-        selectionText: '',
-        history: history,
-        imageBytes: imageBytes,
-      )) {
-        buffer.write(chunk);
-        _applyAiResponsePreview(buffer.toString());
+      final StringBuffer reasoningBuffer = StringBuffer();
+      await for (final DeepSeekStreamChunk chunk
+          in _deepSeekService.performStreamWithReasoning(
+            action: action,
+            apiKey: apiKey,
+            selectionText: '',
+            history: history,
+            imageBytes: imageBytes,
+          )) {
+        buffer.write(chunk.text);
+        reasoningBuffer.write(chunk.reasoning);
+        _applyAiResponsePreview(
+          buffer.toString(),
+          reasoning: reasoningBuffer.toString(),
+        );
       }
       final AiResponse response = AiResponseParser.parse(buffer.toString());
       final String result = response.content.trim();
       if (result.isEmpty) {
         throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
       }
-      _aiChatHistory.add(<String, String>{
-        'role': 'user',
-        'content': AiPrompts.visionUserPrompt(action),
-      });
-      _aiChatHistory.add(<String, String>{
-        'role': 'assistant',
-        'content': result,
-      });
+      _aiChatHistory.add(
+        AiChatHistoryMessage.user(
+          content: AiPrompts.visionUserPrompt(action),
+          image: AiImageAttachment(bytes: imageBytes, mimeType: 'image/png'),
+        ),
+      );
+      _aiChatHistory.add(AiChatHistoryMessage.assistant(content: result));
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: result,
+            reasoning: _nullableText(reasoningBuffer.toString()),
             followUpSuggestions: response.followUpSuggestions,
             errorMessage: null,
           ),
@@ -230,6 +240,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            reasoning: null,
             followUpSuggestions: const <String>[],
             errorMessage: '请求失败：$error',
           ),
@@ -254,6 +265,7 @@ extension HomeControllerAiSession on HomeController {
             actionLabel: action.label,
             actionId: currentActionId,
             result: null,
+            reasoning: null,
             followUpSuggestions: const <String>[],
             errorMessage: '当前框选区域没有识别到可用文本。',
           ),
@@ -273,6 +285,7 @@ extension HomeControllerAiSession on HomeController {
           actionLabel: action.label,
           actionId: currentActionId,
           result: null,
+          reasoning: null,
           followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
@@ -283,15 +296,21 @@ extension HomeControllerAiSession on HomeController {
       // 注意：当前用户消息由 performStream 追加，这里只传既有历史
       // （不含本轮 user），成功后再写入会话历史，避免重复发送。
       final StringBuffer buffer = StringBuffer();
-      await for (final String chunk in _deepSeekService.performStream(
-        action: action,
-        apiKey: apiKey,
-        selectionText: extractedText,
-        pageContext: pageContext,
-        history: List<Map<String, String>>.from(_aiChatHistory),
-      )) {
-        buffer.write(chunk);
-        _applyAiResponsePreview(buffer.toString());
+      final StringBuffer reasoningBuffer = StringBuffer();
+      await for (final DeepSeekStreamChunk chunk
+          in _deepSeekService.performStreamWithReasoning(
+            action: action,
+            apiKey: apiKey,
+            selectionText: extractedText,
+            pageContext: pageContext,
+            history: List<AiChatHistoryMessage>.from(_aiChatHistory),
+          )) {
+        buffer.write(chunk.text);
+        reasoningBuffer.write(chunk.reasoning);
+        _applyAiResponsePreview(
+          buffer.toString(),
+          reasoning: reasoningBuffer.toString(),
+        );
       }
       final AiResponse response = AiResponseParser.parse(buffer.toString());
       final String result = response.content.trim();
@@ -304,19 +323,14 @@ extension HomeControllerAiSession on HomeController {
         extractedText,
         pageContext: pageContext,
       );
-      _aiChatHistory.add(<String, String>{
-        'role': 'user',
-        'content': userContent,
-      });
-      _aiChatHistory.add(<String, String>{
-        'role': 'assistant',
-        'content': result,
-      });
+      _aiChatHistory.add(AiChatHistoryMessage.user(content: userContent));
+      _aiChatHistory.add(AiChatHistoryMessage.assistant(content: result));
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: result,
+            reasoning: _nullableText(reasoningBuffer.toString()),
             followUpSuggestions: response.followUpSuggestions,
             errorMessage: null,
           ),
@@ -328,6 +342,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            reasoning: null,
             followUpSuggestions: const <String>[],
             errorMessage: error.message,
           ),
@@ -339,6 +354,7 @@ extension HomeControllerAiSession on HomeController {
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            reasoning: null,
             followUpSuggestions: const <String>[],
             errorMessage: '请求失败：$error',
           ),
@@ -347,7 +363,10 @@ extension HomeControllerAiSession on HomeController {
     }
   }
 
-  Future<void> sendAiChat(String message) async {
+  Future<void> sendAiChat(AiChatInput input) async {
+    if (input.isEmpty) {
+      return;
+    }
     final String apiKey = state.aiPanelState.apiKey;
     if (apiKey.trim().isEmpty) {
       _applyState(
@@ -361,10 +380,15 @@ extension HomeControllerAiSession on HomeController {
       );
       return;
     }
-    final String trimmedMessage = message.trim();
-    if (trimmedMessage.isEmpty) {
-      return;
-    }
+    final String trimmedMessage = input.text.trim();
+    final AiImageAttachment? image = input.image;
+    final String historyMessage = trimmedMessage.isEmpty && image != null
+        ? '请分析这张图片。'
+        : trimmedMessage;
+    final AiChatHistoryMessage userHistoryMessage = AiChatHistoryMessage.user(
+      content: historyMessage,
+      image: image,
+    );
 
     _applyState(
       state.copyWith(
@@ -372,6 +396,7 @@ extension HomeControllerAiSession on HomeController {
         aiPanelState: state.aiPanelState.copyWith(
           loading: true,
           result: null,
+          reasoning: null,
           followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
@@ -379,18 +404,25 @@ extension HomeControllerAiSession on HomeController {
     );
 
     try {
-      _aiChatHistory.add(<String, String>{
-        'role': 'user',
-        'content': trimmedMessage,
-      });
+      final PdfAiContext? documentContext = await _buildPdfAiContext(
+        trimmedMessage,
+      );
+      _aiChatHistory.add(userHistoryMessage);
 
       final StringBuffer buffer = StringBuffer();
-      await for (final String chunk in _deepSeekService.chatStream(
-        apiKey: apiKey,
-        history: List<Map<String, String>>.from(_aiChatHistory),
-      )) {
-        buffer.write(chunk);
-        _applyAiResponsePreview(buffer.toString());
+      final StringBuffer reasoningBuffer = StringBuffer();
+      await for (final DeepSeekStreamChunk chunk
+          in _deepSeekService.chatStreamWithReasoning(
+            apiKey: apiKey,
+            history: List<AiChatHistoryMessage>.from(_aiChatHistory),
+            documentContext: documentContext,
+          )) {
+        buffer.write(chunk.text);
+        reasoningBuffer.write(chunk.reasoning);
+        _applyAiResponsePreview(
+          buffer.toString(),
+          reasoning: reasoningBuffer.toString(),
+        );
       }
       final AiResponse response = AiResponseParser.parse(buffer.toString());
       final String result = response.content.trim();
@@ -398,47 +430,39 @@ extension HomeControllerAiSession on HomeController {
         throw const DeepSeekException('DeepSeek 没有返回可展示的内容。');
       }
 
-      _aiChatHistory.add(<String, String>{
-        'role': 'assistant',
-        'content': result,
-      });
+      _aiChatHistory.add(AiChatHistoryMessage.assistant(content: result));
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: result,
+            reasoning: _nullableText(reasoningBuffer.toString()),
             followUpSuggestions: response.followUpSuggestions,
             errorMessage: null,
           ),
         ),
       );
     } on DeepSeekException catch (error) {
-      if (_aiChatHistory.isNotEmpty &&
-          _aiChatHistory.last['role'] == 'user' &&
-          _aiChatHistory.last['content'] == trimmedMessage) {
-        _aiChatHistory.removeLast();
-      }
+      _removePendingAiChatMessage(userHistoryMessage);
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            reasoning: null,
             followUpSuggestions: const <String>[],
             errorMessage: error.message,
           ),
         ),
       );
     } catch (error) {
-      if (_aiChatHistory.isNotEmpty &&
-          _aiChatHistory.last['role'] == 'user' &&
-          _aiChatHistory.last['content'] == trimmedMessage) {
-        _aiChatHistory.removeLast();
-      }
+      _removePendingAiChatMessage(userHistoryMessage);
       _applyState(
         state.copyWith(
           aiPanelState: state.aiPanelState.copyWith(
             loading: false,
             result: null,
+            reasoning: null,
             followUpSuggestions: const <String>[],
             errorMessage: '请求失败：$error',
           ),
@@ -447,16 +471,113 @@ extension HomeControllerAiSession on HomeController {
     }
   }
 
-  void _applyAiResponsePreview(String rawResponse) {
+  /// 在每次对话请求前读取当前打开 PDF 的元数据、目录和页面正文。
+  ///
+  /// 文档上下文不写入 `_aiChatHistory`，而是作为本次请求的 system prompt
+  /// 附加内容传给模型，避免同一份页面全文在多轮历史中不断复制。
+  Future<PdfAiContext?> _buildPdfAiContext(String message) async {
+    final String? filePath = state.filePath;
+    if (filePath == null || filePath.trim().isEmpty) {
+      return null;
+    }
+
+    int? fileSizeBytes;
+    try {
+      fileSizeBytes = await File(filePath).length();
+    } catch (_) {
+      fileSizeBytes = null;
+    }
+
+    final int? requestedPage = PdfAiContext.requestedPageFromMessage(message);
+    final List<PdfOutlineEntry> outline = List<PdfOutlineEntry>.unmodifiable(
+      state.outline,
+    );
+    final String title = state.fileName?.trim().isNotEmpty == true
+        ? state.fileName!.trim()
+        : path.basename(filePath);
+
+    return pdfViewerController.useDocument<PdfAiContext?>((
+      PdfDocument document,
+    ) async {
+      final int pageCount = document.pages.length;
+      if (pageCount <= 0) {
+        return null;
+      }
+      final int currentPage = _safePdfPage(state.currentPage, pageCount);
+      final String currentPageText = await _loadPdfPageText(
+        document,
+        currentPage,
+      );
+
+      String? requestedPageText;
+      if (requestedPage != null &&
+          requestedPage >= 1 &&
+          requestedPage <= pageCount) {
+        requestedPageText = requestedPage == currentPage
+            ? currentPageText
+            : await _loadPdfPageText(document, requestedPage);
+      }
+
+      return PdfAiContext(
+        title: title,
+        fileSizeBytes: fileSizeBytes,
+        directory: path.dirname(filePath),
+        currentPage: currentPage,
+        pageCount: pageCount,
+        outline: outline,
+        currentPageText: currentPageText,
+        requestedPage: requestedPage,
+        requestedPageText: requestedPageText,
+      );
+    });
+  }
+
+  int _safePdfPage(int pageNumber, int pageCount) {
+    if (pageNumber < 1) {
+      return 1;
+    }
+    if (pageNumber > pageCount) {
+      return pageCount;
+    }
+    return pageNumber;
+  }
+
+  Future<String> _loadPdfPageText(PdfDocument document, int pageNumber) async {
+    try {
+      final PdfPageText pageText = await document.pages[pageNumber - 1]
+          .loadText();
+      return pageText.fragments
+          .map((PdfPageTextFragment fragment) => fragment.text.trim())
+          .where((String text) => text.isNotEmpty)
+          .join('\n')
+          .trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  void _applyAiResponsePreview(String rawResponse, {String? reasoning}) {
     final AiResponse response = AiResponseParser.parse(rawResponse);
     _applyState(
       state.copyWith(
         aiPanelState: state.aiPanelState.copyWith(
           result: response.content,
+          reasoning: _nullableText(reasoning),
           followUpSuggestions: response.followUpSuggestions,
         ),
       ),
     );
+  }
+
+  String? _nullableText(String? value) {
+    final String text = value?.trim() ?? '';
+    return text.isEmpty ? null : value;
+  }
+
+  void _removePendingAiChatMessage(AiChatHistoryMessage message) {
+    if (_aiChatHistory.isNotEmpty && identical(_aiChatHistory.last, message)) {
+      _aiChatHistory.removeLast();
+    }
   }
 
   Future<String> _extractSelectionText(PdfAiSelection selection) async {

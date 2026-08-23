@@ -117,10 +117,13 @@ class _AiSidebarView extends StatelessWidget {
                 index == messages.length) {
               return _FollowUpSuggestions(
                 suggestions: followUpSuggestions,
-                onTap: controller.sendMessage,
+                onTap: (String text) => controller.sendMessage(text),
               );
             }
-            return ChatBubble(message: messages[index]);
+            return ChatBubble(
+              key: ValueKey<String>(messages[index].id),
+              message: messages[index],
+            );
           },
         ),
       ),

@@ -1,9 +1,19 @@
+import 'dart:math' as math;
+
 export 'deepseek_service.dart' show AiToolAction;
+
+import '../models/pdf_ai_context.dart';
+import '../models/pdf_outline_entry.dart';
 import 'ai_response_parser.dart';
 import 'deepseek_service.dart';
 
 class AiPrompts {
   const AiPrompts._();
+
+  static const int _maxOutlineEntries = 20;
+  static const int _maxOutlineCharacters = 4000;
+  static const int _maxOutlineTitleCharacters = 160;
+  static const int _maxOutlineDepth = 6;
 
   static String systemPrompt(AiToolAction action) {
     switch (action) {
@@ -31,7 +41,109 @@ class AiPrompts {
     }
   }
 
-  static String chatSystemPrompt() => AiResponseParser.chatSystemPrompt();
+  static String chatSystemPrompt({PdfAiContext? documentContext}) {
+    final String prompt = AiResponseParser.chatSystemPrompt();
+    return _appendDocumentContext(prompt, documentContext);
+  }
+
+  static String _appendDocumentContext(
+    String prompt,
+    PdfAiContext? documentContext,
+  ) {
+    if (documentContext == null) {
+      return prompt;
+    }
+    return '$prompt\n\n${documentContextPrompt(documentContext)}';
+  }
+
+  static String documentContextPrompt(PdfAiContext context) {
+    final StringBuffer buffer = StringBuffer()
+      ..writeln('【当前打开 PDF 上下文】')
+      ..writeln('标题：${context.title}')
+      ..writeln('文件大小：${context.fileSizeLabel}')
+      ..writeln('文件目录：${context.directory}')
+      ..writeln('当前页码：第 ${context.currentPage} 页')
+      ..writeln('总页数：${context.pageCount} 页');
+
+    final currentChapter = context.currentChapter;
+    if (currentChapter == null) {
+      buffer.writeln('当前章节：未从 PDF 目录中识别');
+    } else {
+      buffer.writeln(
+        '当前章节：${_outlineTitle(currentChapter.title)}'
+        '（目录页码 ${currentChapter.pageNumber}）',
+      );
+    }
+
+    if (context.outline.isEmpty) {
+      buffer.writeln('目录/章节：未读取到 PDF 目录');
+    } else {
+      buffer.writeln('目录/章节：');
+      int shownEntries = 0;
+      int usedCharacters = 0;
+      for (final entry in _outlineEntriesForContext(context)) {
+        final int depth = math.min(entry.depth, _maxOutlineDepth);
+        final String indent = List<String>.filled(depth * 2, ' ').join();
+        final String line =
+            '$indent- ${_outlineTitle(entry.title)}（第 ${entry.pageNumber} 页）';
+        if (usedCharacters + line.length + 1 > _maxOutlineCharacters) {
+          break;
+        }
+        buffer.writeln(line);
+        usedCharacters += line.length + 1;
+        shownEntries++;
+      }
+      if (shownEntries < context.outline.length) {
+        buffer.writeln(
+          '（目录已按当前页附近截取，展示 $shownEntries/${context.outline.length} 项。）',
+        );
+      }
+    }
+
+    buffer
+      ..writeln()
+      ..writeln('【当前页全文】')
+      ..writeln(_pageTextOrFallback(context.currentPageText));
+
+    if (context.requestedPage != null) {
+      buffer
+        ..writeln()
+        ..writeln('【用户明确指定的第 ${context.requestedPage} 页全文】')
+        ..writeln(_pageTextOrFallback(context.requestedPageText));
+    }
+    return buffer.toString().trimRight();
+  }
+
+  static String _pageTextOrFallback(String? text) {
+    if (text == null || text.trim().isEmpty) {
+      return '（该页没有可提取的文本，或页码超出文档范围。）';
+    }
+    return text;
+  }
+
+  static List<PdfOutlineEntry> _outlineEntriesForContext(PdfAiContext context) {
+    final List<PdfOutlineEntry> outline = context.outline;
+    if (outline.length <= _maxOutlineEntries) {
+      return outline;
+    }
+
+    final PdfOutlineEntry? currentChapter = context.currentChapter;
+    final int currentIndex = currentChapter == null
+        ? 0
+        : math.max(0, outline.indexOf(currentChapter));
+    int start = math.max(0, currentIndex - _maxOutlineEntries ~/ 2);
+    final int end = math.min(outline.length, start + _maxOutlineEntries);
+    start = math.max(0, end - _maxOutlineEntries);
+    return outline.sublist(start, end);
+  }
+
+  static String _outlineTitle(String title) {
+    final String normalized = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= _maxOutlineTitleCharacters) {
+      return normalized;
+    }
+    return '${normalized.substring(0, _maxOutlineTitleCharacters)}…';
+  }
 
   static String userPrompt(
     AiToolAction action,

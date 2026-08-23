@@ -9,6 +9,7 @@ class ChatMessage {
     required this.id,
     this.isLoading = false,
     this.imageBytes,
+    this.reasoning,
   });
 
   final MessageAuthor author;
@@ -18,4 +19,7 @@ class ChatMessage {
 
   /// 用户消息附带的截图（如有）。
   final Uint8List? imageBytes;
+
+  /// AI 消息附带的流式推理过程（如有）。
+  final String? reasoning;
 }

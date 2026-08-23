@@ -60,6 +60,8 @@ fvm flutter pub upgrade            # Upgrade dependencies
 
 - MSIX package: `powershell -File .\make.ps1 build-msix-windows`
 - Inno Setup installer: `.\make.cmd package-windows`
+- Windows installer for `v0.0.16`: `PlumePDF_Setup_0.0.16.exe`
+- GitHub release assets are attached to the `v0.0.16` release
 
 Related document:
 
@@ -67,10 +69,10 @@ Related document:
 
 ## Linux Distribution
 
-- RPM package: `plume-pdf-0.0.15-16.fc44.x86_64.rpm`
+- RPM package: `plume-pdf-0.0.16-17.fc44.x86_64.rpm`
 - Suitable for Fedora-based systems
-- DEB package: `plume-pdf_0.0.15+16_amd64.deb`
-- GitHub release assets: download the attached `.rpm` or `.deb` from the `v0.0.15` release
+- DEB package: `plume-pdf_0.0.16+17_amd64.deb`
+- GitHub release assets: download the attached packages from the `v0.0.16` release
 - Build RPM: `make package-rpm`
 - Build DEB: `make package-deb`
 - How to package: [Linux RPM package distribution](./docs/linux-rpm-distribution.md)

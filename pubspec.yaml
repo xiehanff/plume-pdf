@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.0.15+16
+version: 0.0.16+17
 
 environment:
   sdk: ^3.8.0
@@ -53,6 +53,7 @@ dependencies:
   genkit: ^0.15.1
   genkit_openai: ^0.3.7
   loading_indicator: ^3.1.1
+  super_clipboard: ^0.8.24
 
 dev_dependencies:
   flutter_test:
@@ -70,7 +71,7 @@ msix_config:
   display_name: Plume PDF
   publisher_display_name: xiehan
   identity_name: com.xiehan.plumepdf
-  msix_version: 0.0.15.1
+  msix_version: 0.0.16.0
   logo_path: assets/windows_app_icon_1024.png
   capabilities: internetClient
   file_extension: .pdf

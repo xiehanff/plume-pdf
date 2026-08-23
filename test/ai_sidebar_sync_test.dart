@@ -12,9 +12,7 @@ import 'package:plume_pdf/app/modules/home/views/widgets/chat_message.dart';
 void main() {
   Future<void> pumpSidebar(WidgetTester tester, PdfAiPanelState state) async {
     // 模拟 HomeController：首次注册，之后通过 updateExternalState 同步新状态。
-    if (!Get.isRegistered<AiSidebarController>(
-      tag: AiSidebarController.tag,
-    )) {
+    if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       Get.put(
         AiSidebarController(
           state: state,
@@ -36,22 +34,19 @@ void main() {
         }
       });
     }
-    Get.find<AiSidebarController>(tag: AiSidebarController.tag)
-        .updateExternalState(
-          state: state,
-          onApiKeyChanged: (_) {},
-          onSaveApiKey: () async {},
-          onSendChat: (_) async {},
-          onNewSession: () {},
-          documentPath: null,
-          leftSidebarWidth: 0,
-        );
+    Get.find<AiSidebarController>(
+      tag: AiSidebarController.tag,
+    ).updateExternalState(
+      state: state,
+      onApiKeyChanged: (_) {},
+      onSaveApiKey: () async {},
+      onSendChat: (_) async {},
+      onNewSession: () {},
+      documentPath: null,
+      leftSidebarWidth: 0,
+    );
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: AiSidebar(),
-        ),
-      ),
+      const MaterialApp(home: Scaffold(body: AiSidebar())),
     );
   }
 
@@ -128,5 +123,33 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('根据这段代码再举一个例子'), findsOneWidget);
     expect(find.text('解释它的运行过程'), findsOneWidget);
+  });
+
+  testWidgets('推理过程独立展示，超过八行可手动展开', (tester) async {
+    final String reasoning = List<String>.generate(
+      9,
+      (int index) => '推理第 ${index + 1} 行',
+    ).join('\n');
+    final PdfAiPanelState state = PdfAiPanelState(
+      sessionId: 2,
+      loading: true,
+      actionLabel: '解释',
+      actionId: 1,
+      reasoning: reasoning,
+    );
+
+    await pumpSidebar(tester, state);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byType(ReasoningPanel), findsOneWidget);
+    expect(find.text('展开全部'), findsOneWidget);
+    Text reasoningText = tester.widget<Text>(find.text(reasoning));
+    expect(reasoningText.maxLines, 8);
+
+    await tester.tap(find.text('展开全部'));
+    await tester.pump();
+    expect(find.text('收起'), findsOneWidget);
+    reasoningText = tester.widget<Text>(find.text(reasoning));
+    expect(reasoningText.maxLines, isNull);
   });
 }

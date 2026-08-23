@@ -1,5 +1,5 @@
-%{!?app_version:%global app_version 0.0.13}
-%{!?app_release:%global app_release 11}
+%{!?app_version:%global app_version 0.0.16}
+%{!?app_release:%global app_release 17}
 
 Name:           plume-pdf
 Version:        %{app_version}
