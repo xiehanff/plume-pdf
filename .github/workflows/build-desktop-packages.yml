@@ -1,0 +1,142 @@
+name: Build Desktop Packages
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.41.9'
+
+jobs:
+  linux:
+    name: Linux (.deb + .rpm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgtk-3-dev \
+            liblzma-dev \
+            rpm
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Linux release
+        run: flutter build linux --release
+
+      - name: Package DEB
+        run: bash scripts/build_linux_deb.sh --skip-build
+
+      - name: Package RPM
+        run: bash scripts/build_linux_rpm.sh --skip-build
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: plume-pdf-linux-${{ github.run_number }}
+          path: |
+            build/linux/x64/release/*.deb
+            build/linux/x64/release/*.rpm
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows (.exe)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package Windows installer
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File .\windows\installer\build_installer.ps1 -SkipBuild
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: plume-pdf-windows-${{ github.run_number }}
+          path: windows/installer/dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    name: macOS (.dmg)
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build macOS release
+        run: flutter build macos --release
+
+      - name: Package DMG
+        run: bash scripts/build_macos_dmg.sh --skip-build
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: plume-pdf-macos-${{ github.run_number }}
+          path: build/macos/release/*.dmg
+          if-no-files-found: error
+          retention-days: 30
