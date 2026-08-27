@@ -35,6 +35,16 @@ if [[ ! -x "$bundle_dir/plume_pdf" ]]; then
   exit 1
 fi
 
+if ! command -v rpmbuild >/dev/null 2>&1; then
+  printf 'rpmbuild is required to build the RPM package\n' >&2
+  exit 1
+fi
+
+if ! command -v patchelf >/dev/null 2>&1; then
+  printf 'patchelf is required to build the RPM package\n' >&2
+  exit 1
+fi
+
 rpm_top="$(mktemp -d)"
 trap 'rm -rf "$rpm_top"' EXIT
 mkdir -p "$rpm_top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
@@ -46,7 +56,12 @@ tar -C "$repo_root/linux/icons" \
 cp "$repo_root/linux/com.example.plume_pdf.desktop" \
   "$rpm_top/SOURCES/com.example.plume_pdf.desktop"
 
+# When packaging on Debian/Ubuntu, patchelf may be installed by dpkg rather
+# than RPM, so rpmbuild cannot see it in the RPM package database. We verify
+# the required executable above and skip only rpmbuild's package-database
+# dependency check here.
 rpmbuild \
+  --nodeps \
   --define "_topdir $rpm_top" \
   --define "app_version $app_version" \
   --define "app_release $app_release" \
