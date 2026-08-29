@@ -5,6 +5,10 @@ part of 'home_controller.dart';
 /// 流式累积/历史写入在 [AiAgentSession]（会话层），
 /// PDF 选区与文档上下文提取在 [PdfAiContextService]（提取层）。
 extension HomeControllerAiSession on HomeController {
+  /// 请求发起时捕获的 actionId 是否仍是最新一次：失效的旧请求
+  /// 不得再写入面板状态，避免覆盖新请求或新会话的结果。
+  bool _isCurrentAiAction(int actionId) => actionId == _aiActionId;
+
   void toggleAiSelectionMode() {
     _applyState(
       state.copyWith(
@@ -64,6 +68,8 @@ extension HomeControllerAiSession on HomeController {
 
   /// 新建 AI 会话：清空对话历史，递增会话 ID（触发侧栏消息清空）。
   void startNewAiSession() {
+    // 先使进行中的旧请求失效，防止其流式回调与终态写入新会话。
+    _aiActionId++;
     _aiAgentSession.clear();
     final int nextSessionId = _aiSessionId + 1;
     _aiSessionId = nextSessionId;
@@ -127,6 +133,9 @@ extension HomeControllerAiSession on HomeController {
         .extractSelectionImageBytes(selection);
     final String selectionText = await _pdfAiContextService
         .resolveSelectionText(selection, imageBytes: imageBytes);
+    if (!_isCurrentAiAction(currentActionId)) {
+      return;
+    }
     _applyState(
       state.copyWith(
         aiPanelState: state.aiPanelState.copyWith(
@@ -194,11 +203,15 @@ extension HomeControllerAiSession on HomeController {
         apiKey: apiKey,
         selectionText: '',
         imageBytes: imageBytes,
-        onPreview: (String text, String reasoning) =>
-            _applyAiResponsePreview(text, reasoning: reasoning),
+        onPreview: (String text, String reasoning) {
+          if (!_isCurrentAiAction(currentActionId)) return;
+          _applyAiResponsePreview(text, reasoning: reasoning);
+        },
       );
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
     } on DeepSeekException catch (_) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       return _runTextAction(
         action: action,
         selection: selection,
@@ -207,6 +220,7 @@ extension HomeControllerAiSession on HomeController {
         extractedText: selectionText,
       );
     } catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState('请求失败：$error');
     }
   }
@@ -239,6 +253,9 @@ extension HomeControllerAiSession on HomeController {
     final String? pageContext = await _pdfAiContextService.extractPageContext(
       selection,
     );
+    if (!_isCurrentAiAction(currentActionId)) {
+      return;
+    }
 
     _applyState(
       state.copyWith(
@@ -262,13 +279,18 @@ extension HomeControllerAiSession on HomeController {
         apiKey: apiKey,
         selectionText: extractedText,
         pageContext: pageContext,
-        onPreview: (String text, String reasoning) =>
-            _applyAiResponsePreview(text, reasoning: reasoning),
+        onPreview: (String text, String reasoning) {
+          if (!_isCurrentAiAction(currentActionId)) return;
+          _applyAiResponsePreview(text, reasoning: reasoning);
+        },
       );
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
     } on DeepSeekException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState('请求失败：$error');
     }
   }
@@ -299,6 +321,7 @@ extension HomeControllerAiSession on HomeController {
       content: historyMessage,
       image: image,
     );
+    final int currentActionId = ++_aiActionId;
 
     _applyState(
       state.copyWith(
@@ -322,17 +345,25 @@ extension HomeControllerAiSession on HomeController {
             outline: state.outline,
             message: trimmedMessage,
           );
+      if (!_isCurrentAiAction(currentActionId)) {
+        return;
+      }
       final AiStreamResult result = await _aiAgentSession.sendChat(
         apiKey: apiKey,
         userMessage: userHistoryMessage,
         documentContext: documentContext,
-        onPreview: (String text, String reasoning) =>
-            _applyAiResponsePreview(text, reasoning: reasoning),
+        onPreview: (String text, String reasoning) {
+          if (!_isCurrentAiAction(currentActionId)) return;
+          _applyAiResponsePreview(text, reasoning: reasoning);
+        },
       );
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
     } on DeepSeekException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState('请求失败：$error');
     }
   }

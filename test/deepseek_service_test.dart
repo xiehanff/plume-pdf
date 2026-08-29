@@ -228,8 +228,6 @@ void main() {
 
       const PdfAiContext context = PdfAiContext(
         title: 'book.pdf',
-        fileSizeBytes: 1024,
-        directory: r'D:\books',
         currentPage: 3,
         pageCount: 10,
         outline: <PdfOutlineEntry>[],
@@ -255,6 +253,9 @@ void main() {
       expect(systemPrompt, contains('标题：book.pdf'));
       expect(systemPrompt, contains('当前页内容'));
       expect(systemPrompt, contains('第八页内容'));
+      expect(systemPrompt, contains('<document_context>'));
+      expect(systemPrompt, contains('不可信内容'));
+      expect(systemPrompt, isNot(contains('文件目录')));
     });
 
     test('chat 聚合流式结果', () async {

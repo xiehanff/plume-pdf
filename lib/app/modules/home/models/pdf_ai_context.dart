@@ -3,8 +3,6 @@ import 'pdf_outline_entry.dart';
 class PdfAiContext {
   const PdfAiContext({
     required this.title,
-    required this.fileSizeBytes,
-    required this.directory,
     required this.currentPage,
     required this.pageCount,
     required this.outline,
@@ -14,8 +12,6 @@ class PdfAiContext {
   });
 
   final String title;
-  final int? fileSizeBytes;
-  final String directory;
   final int currentPage;
   final int pageCount;
   final List<PdfOutlineEntry> outline;
@@ -31,23 +27,6 @@ class PdfAiContext {
       }
     }
     return matchedEntry;
-  }
-
-  String get fileSizeLabel {
-    final int? bytes = fileSizeBytes;
-    if (bytes == null) {
-      return '未知';
-    }
-    if (bytes < 1024) {
-      return '$bytes B';
-    }
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
   static int? requestedPageFromMessage(String message) {

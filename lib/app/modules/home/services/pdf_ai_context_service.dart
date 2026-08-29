@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -38,13 +37,6 @@ class PdfAiContextService {
       return null;
     }
 
-    int? fileSizeBytes;
-    try {
-      fileSizeBytes = await File(filePath).length();
-    } catch (_) {
-      fileSizeBytes = null;
-    }
-
     final int? requestedPage = PdfAiContext.requestedPageFromMessage(message);
     final List<PdfOutlineEntry> outlineEntries =
         List<PdfOutlineEntry>.unmodifiable(outline);
@@ -76,8 +68,6 @@ class PdfAiContextService {
 
       return PdfAiContext(
         title: title,
-        fileSizeBytes: fileSizeBytes,
-        directory: path.dirname(filePath),
         currentPage: safeCurrentPage,
         pageCount: pageCount,
         outline: outlineEntries,

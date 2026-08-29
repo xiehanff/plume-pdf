@@ -25,16 +25,23 @@ class AiStreamResult {
 /// 流式期间通过 onPreview 回调累积中的正文与推理过程，供 UI 做预览
 /// 渲染；动作类请求成功后才把本轮 user/assistant 消息写入历史，
 /// 对话类请求失败时回滚已入列的 user 消息。
+///
+/// [clear] 会递增会话代数：清空后仍在进行的旧流将停止消费增量，
+/// 也不会把结果写进新会话的历史。
 class AiAgentSession {
   AiAgentSession({DeepSeekService? deepSeekService})
     : _deepSeekService = deepSeekService ?? DeepSeekService();
 
   final DeepSeekService _deepSeekService;
   final List<AiChatHistoryMessage> _history = <AiChatHistoryMessage>[];
+  int _generation = 0;
 
   List<AiChatHistoryMessage> get history => _history;
 
-  void clear() => _history.clear();
+  void clear() {
+    _history.clear();
+    _generation++;
+  }
 
   /// 流式执行翻译/解释/深度理解动作。
   ///
@@ -48,6 +55,7 @@ class AiAgentSession {
     Uint8List? imageBytes,
     required void Function(String text, String reasoning) onPreview,
   }) async {
+    final int requestGeneration = _generation;
     final AiStreamResult result = await _runStream(
       () => _deepSeekService.performStreamWithReasoning(
         action: action,
@@ -58,7 +66,12 @@ class AiAgentSession {
         imageBytes: imageBytes,
       ),
       onPreview: onPreview,
+      isStale: () => _generation != requestGeneration,
     );
+
+    if (_generation != requestGeneration) {
+      return result;
+    }
 
     final bool isVisionMode = imageBytes != null && imageBytes.isNotEmpty;
     if (isVisionMode) {
@@ -90,6 +103,7 @@ class AiAgentSession {
     PdfAiContext? documentContext,
     required void Function(String text, String reasoning) onPreview,
   }) async {
+    final int requestGeneration = _generation;
     _history.add(userMessage);
     try {
       final AiStreamResult result = await _runStream(
@@ -99,7 +113,11 @@ class AiAgentSession {
           documentContext: documentContext,
         ),
         onPreview: onPreview,
+        isStale: () => _generation != requestGeneration,
       );
+      if (_generation != requestGeneration) {
+        return result;
+      }
       _history.add(AiChatHistoryMessage.assistant(content: result.content));
       return result;
     } catch (_) {
@@ -110,14 +128,19 @@ class AiAgentSession {
 
   /// 累积一段流式响应：逐块回调预览，结束后解析正文与追问建议。
   ///
+  /// [isStale] 返回 true 时停止消费流（取消底层订阅）并提前结束；
   /// 正文为空视为失败，抛出 [DeepSeekException] 由调用方处理。
   Future<AiStreamResult> _runStream(
     Stream<DeepSeekStreamChunk> Function() stream, {
     required void Function(String text, String reasoning) onPreview,
+    bool Function()? isStale,
   }) async {
     final StringBuffer textBuffer = StringBuffer();
     final StringBuffer reasoningBuffer = StringBuffer();
     await for (final DeepSeekStreamChunk chunk in stream()) {
+      if (isStale != null && isStale()) {
+        break;
+      }
       textBuffer.write(chunk.text);
       reasoningBuffer.write(chunk.reasoning);
       onPreview(textBuffer.toString(), reasoningBuffer.toString());

@@ -53,4 +53,50 @@ void main() {
     expect(session.history, hasLength(2));
     expect(session.history.last.role, AiChatHistoryRole.assistant);
   });
+
+  test('动作流式中途新建会话：旧请求完成后不写入历史', () async {
+    final _FakeDeepSeekService fake = _FakeDeepSeekService();
+    final AiAgentSession session = AiAgentSession(deepSeekService: fake);
+
+    final Future<AiStreamResult> running = session.runToolAction(
+      action: AiToolAction.translate,
+      apiKey: 'k',
+      selectionText: 'hello',
+      onPreview: (_, _) {},
+    );
+    await Future<void>.delayed(Duration.zero);
+    fake.chunks.add(const DeepSeekStreamChunk(text: '部分'));
+    await Future<void>.delayed(Duration.zero);
+
+    session.clear();
+
+    fake.chunks.add(const DeepSeekStreamChunk(text: '回答'));
+    await fake.chunks.close();
+    await running;
+
+    expect(session.history, isEmpty);
+  });
+
+  test('对话流式中途新建会话：旧请求不写入 assistant 历史', () async {
+    final _FakeDeepSeekService fake = _FakeDeepSeekService();
+    final AiAgentSession session = AiAgentSession(deepSeekService: fake);
+
+    final Future<AiStreamResult> running = session.sendChat(
+      apiKey: 'k',
+      userMessage: const AiChatHistoryMessage.user(content: '你好'),
+      onPreview: (_, _) {},
+    );
+    await Future<void>.delayed(Duration.zero);
+    fake.chunks.add(const DeepSeekStreamChunk(text: '部分'));
+    await Future<void>.delayed(Duration.zero);
+    expect(session.history, hasLength(1));
+
+    session.clear();
+
+    fake.chunks.add(const DeepSeekStreamChunk(text: '回答'));
+    await fake.chunks.close();
+    await running;
+
+    expect(session.history, isEmpty);
+  });
 }
