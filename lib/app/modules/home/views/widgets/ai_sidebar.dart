@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderProxyBox;
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:get/get.dart';
 
 import '../../../../theme/app_colors.dart';
@@ -110,41 +108,22 @@ class _AiSidebarView extends StatelessWidget {
         onPointerSignal: controller.handlePointerSignal,
         child: ListView.builder(
           controller: controller.scrollController,
-          // reverse 布局把最新消息锚定在底部：流式输出时内容向上生长，
-          // 贴底跟随无需逐帧 jumpTo 修正，消除滚动位置抖动。
-          reverse: true,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
           itemCount:
               messages.length +
               (followUpState == AiSidebarFollowUpState.visible ? 1 : 0),
           itemBuilder: (BuildContext context, int index) {
-            final bool hasFollowUp =
-                followUpState == AiSidebarFollowUpState.visible;
-            // reverse 布局：index 0 位于视觉最底部（最新内容）。
-            if (hasFollowUp && index == 0) {
+            if (followUpState == AiSidebarFollowUpState.visible &&
+                index == messages.length) {
               return _FollowUpSuggestions(
                 suggestions: followUpSuggestions,
                 onTap: (String text) => controller.sendMessage(text),
               );
             }
-            final int messageIndex = hasFollowUp
-                ? messages.length - index
-                : messages.length - 1 - index;
-            final ChatMessage message = messages[messageIndex];
-            final Widget bubble = ChatBubble(
-              key: ValueKey<String>(message.id),
-              message: message,
+            return ChatBubble(
+              key: ValueKey<String>(messages[index].id),
+              message: messages[index],
             );
-            // 最新气泡在流式输出中不断增高，会持续上推历史内容；
-            // 包一层高度监听，由控制器在用户阅读历史时补偿滚动位置。
-            if (messageIndex == messages.length - 1) {
-              return _StreamTailSizeObserver(
-                key: ValueKey<String>('size_${message.id}'),
-                onHeightChanged: controller.compensateStreamGrowth,
-                child: bubble,
-              );
-            }
-            return bubble;
           },
         ),
       ),
@@ -188,65 +167,5 @@ class _FollowUpSuggestions extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-/// 监听最新消息气泡的高度变化，向控制器报告增量。
-///
-/// reverse 布局中该气泡位于视觉最底部，流式输出使其增高时会把
-/// 历史内容整体上推；控制器据此在用户阅读历史时补偿滚动位置。
-/// 高度在 layout 阶段得出，而滚动补偿不能在 layout 中执行，
-/// 因此把增量攒到帧末统一回调。
-class _StreamTailSizeObserver extends SingleChildRenderObjectWidget {
-  const _StreamTailSizeObserver({
-    super.key,
-    required this.onHeightChanged,
-    super.child,
-  });
-
-  final void Function(double delta) onHeightChanged;
-
-  @override
-  RenderStreamTailSizeObserver createRenderObject(BuildContext context) =>
-      RenderStreamTailSizeObserver(onHeightChanged);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    covariant RenderStreamTailSizeObserver renderObject,
-  ) {
-    renderObject.onHeightChanged = onHeightChanged;
-  }
-}
-
-class RenderStreamTailSizeObserver extends RenderProxyBox {
-  RenderStreamTailSizeObserver(this.onHeightChanged);
-
-  void Function(double delta) onHeightChanged;
-  double? _lastHeight;
-  double _pendingDelta = 0;
-  bool _deltaScheduled = false;
-
-  @override
-  void performLayout() {
-    super.performLayout();
-    final double? lastHeight = _lastHeight;
-    _lastHeight = size.height;
-    if (lastHeight == null || size.height == lastHeight) {
-      return;
-    }
-    _pendingDelta += size.height - lastHeight;
-    if (_deltaScheduled) {
-      return;
-    }
-    _deltaScheduled = true;
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      _deltaScheduled = false;
-      final double delta = _pendingDelta;
-      _pendingDelta = 0;
-      if (delta != 0) {
-        onHeightChanged(delta);
-      }
-    });
   }
 }

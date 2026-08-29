@@ -1,16 +1,20 @@
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show RenderBox, RenderObject, ScrollDirection;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
+import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
 
 /// 贴底流式输出的滚动稳定性回归测试。
 ///
-/// reverse 布局下跟随态应保持 pixels == 0（视觉最底部），
-/// 任何 chunk 更新（含高度非单调的 markdown 渐进闭合）都不得
-/// 使滚动位置偏离底部——这正是流式输出上下跳动/闪烁的根因指标。
+/// 普通列表 + FollowTailScrollController：跟随态下每个 chunk 更新
+/// （含高度非单调的 markdown 渐进闭合）后 pixels 必须等于
+/// maxScrollExtent（帧内贴底，无 post-frame 补偿）；用户阅读历史时
+/// 内容增长不得移动滚动位置——这两点正是流式输出上下闪动的根因指标。
 void main() {
   Future<void> pumpSidebar(WidgetTester tester, PdfAiPanelState state) async {
     if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
@@ -55,15 +59,46 @@ void main() {
       Get.find<AiSidebarController>(tag: AiSidebarController.tag);
 
   void expectPinnedToBottom(String stage) {
+    final ScrollPosition position = controller().scrollController.position;
     expect(
       controller().scrollController.hasClients,
       isTrue,
       reason: '$stage：列表应已挂载',
     );
     expect(
-      controller().scrollController.position.pixels,
-      0.0,
-      reason: '$stage：reverse 布局跟随态应保持 pixels == 0（贴底）',
+      position.pixels,
+      position.maxScrollExtent,
+      reason: '$stage：跟随态应保持贴底（pixels == maxScrollExtent）',
+    );
+  }
+
+  /// 渲染层验证：最新气泡必须画在视口内。
+  ///
+  /// 仅断言 pixels 数值无法发现"值已修正但画面晚一帧渲染"的错误
+  /// （correction 未触发同帧重排时，气泡底部会超出视口一段增量），
+  /// 因此以最新气泡的渲染位置为准。容差覆盖列表 padding 与气泡
+  /// margin（12 + 12）。
+  void expectLatestBubbleVisible(WidgetTester tester, String stage) {
+    final RenderBox viewportBox = tester.renderObject<RenderBox>(
+      find.byType(ListView),
+    );
+    final List<Element> bubbles = find.byType(ChatBubble).evaluate().toList();
+    if (bubbles.isEmpty) {
+      return;
+    }
+    final RenderObject? renderObject = bubbles.last.findRenderObject();
+    if (renderObject is! RenderBox) {
+      return;
+    }
+    final RenderBox bubbleBox = renderObject;
+    final double bubbleBottom = bubbleBox
+        .localToGlobal(Offset(0, bubbleBox.size.height), ancestor: viewportBox)
+        .dy;
+    expect(
+      bubbleBottom,
+      lessThanOrEqualTo(viewportBox.size.height + 24.5),
+      reason: '$stage：最新内容应渲染在视口内（实际底部 $bubbleBottom，'
+          '视口高 ${viewportBox.size.height}）',
     );
   }
 
@@ -109,8 +144,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
 
       expectPinnedToBottom('chunk $i');
-      // 增量不新增消息。注意 reverse + 虚拟化下历史消息被滚出视口后
-      // 不会 build，消息数以控制器数据层为准。
+      expectLatestBubbleVisible(tester, 'chunk $i');
+      // 增量不新增消息。
       expect(
         controller().messages,
         hasLength(2),
@@ -124,7 +159,7 @@ void main() {
     }
     expect(overflowed, isTrue, reason: '内容应超出视口，否则贴底断言无意义');
 
-    // 完成：追问建议插入视觉最底部，滚动位置仍应贴底。
+    // 完成：追问建议插入列表尾部，滚动位置仍应贴底。
     state = state.copyWith(
       loading: false,
       followUpSuggestions: const <String>['什么是位置编码', '对比 RNN 的差异'],
@@ -169,9 +204,15 @@ void main() {
       '多头注意力将向量空间切分为多个子空间，各自独立计算注意力权重，'
       '再拼接回统一的表示。\n\n';
 
-  /// 模拟用户滚离底部：跳到中间位置并用滚轮事件进入用户控制态。
+  /// 模拟用户滚离底部：跳到距底 300px 处并用滚轮事件进入用户控制态。
   void moveAwayFromBottom(AiSidebarController sidebarController) {
-    sidebarController.scrollController.jumpTo(300);
+    final ScrollPosition position = sidebarController.scrollController.position;
+    sidebarController.scrollController.jumpTo(
+      (position.maxScrollExtent - 300).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+    );
     sidebarController.handlePointerSignal(
       const PointerScrollEvent(
         timeStamp: Duration.zero,
@@ -192,20 +233,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     final AiSidebarController sidebarController = controller();
-    final ScrollController scroll = sidebarController.scrollController;
-    expect(scroll.position.maxScrollExtent, greaterThan(300));
+    final ScrollPosition position = sidebarController.scrollController.position;
+    expect(position.maxScrollExtent, greaterThan(300));
 
     moveAwayFromBottom(sidebarController);
 
-    // 模拟用户向底部方向滚动并进入阈值（pixels 下降到 80 以内）。
+    // 模拟用户向底部方向滚动并进入阈值（extentAfter <= 80）。
     sidebarController.handleScrollNotification(
-      ScrollUpdateNotification(
+      UserScrollNotification(
+        direction: ScrollDirection.reverse,
         metrics: FixedScrollMetrics(
-          pixels: 40,
+          pixels: position.maxScrollExtent - 40,
           minScrollExtent: 0,
-          maxScrollExtent: scroll.position.maxScrollExtent,
-          viewportDimension: scroll.position.viewportDimension,
-          axisDirection: AxisDirection.up,
+          maxScrollExtent: position.maxScrollExtent,
+          viewportDimension: position.viewportDimension,
+          axisDirection: AxisDirection.down,
           devicePixelRatio: 3,
         ),
         context: tester.element(find.byType(ListView)),
@@ -213,7 +255,11 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
-    expect(scroll.position.pixels, 0, reason: '恢复跟随后应贴底，否则后续流式输出不可见');
+    expect(
+      position.pixels,
+      position.maxScrollExtent,
+      reason: '恢复跟随后应贴底，否则后续流式输出不可见',
+    );
   });
 
   testWidgets('流式增长时用户阅读的历史位置保持稳定', (tester) async {
@@ -228,21 +274,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     final AiSidebarController sidebarController = controller();
-    final ScrollController scroll = sidebarController.scrollController;
+    final ScrollPosition position = sidebarController.scrollController.position;
     moveAwayFromBottom(sidebarController);
-    final double pixelsBefore = scroll.position.pixels;
+    final double pixelsBefore = position.pixels;
 
-    // 流式输出使最新气泡增高：reverse 布局会整体上推历史内容，
-    // 需要对增量做滚动补偿以保持阅读锚点。
+    // 流式输出使最新气泡增高：普通列表中增长发生在滚动范围的
+    // 底端之外，阅读位置的 pixels 不应移动。
     state = state.copyWith(result: List<String>.filled(12, longText).join());
     await pumpSidebar(tester, state);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(
-      scroll.position.pixels,
-      greaterThan(pixelsBefore),
-      reason: '气泡增高时应补偿 offset，否则用户阅读的历史内容被推走',
-    );
+    expect(position.pixels, pixelsBefore, reason: '用户阅读历史时，流式内容增长不得移动滚动位置');
   });
 }

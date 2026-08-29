@@ -22,6 +22,58 @@ enum _ScrollFollowState { followingTail, userControlled }
 
 enum _ResultUpdateMode { replace, incremental }
 
+/// 贴底跟随的滚动控制器：跟随态下内容尺寸变化时，在 layout 期间
+/// 同帧把 offset 修正到新的底部（correction pass），渲染前已经贴底，
+/// 消除 post-frame 补偿产生的一帧漂移（高频流式下表现为上下闪动）。
+class FollowTailScrollController extends ScrollController {
+  FollowTailScrollController({required this.isFollowingTail});
+
+  /// 当前是否处于贴底跟随态，由侧栏控制器的跟随状态机提供。
+  final ValueGetter<bool> isFollowingTail;
+
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics? physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) {
+    return _FollowTailScrollPosition(
+      physics: physics ?? const ClampingScrollPhysics(),
+      context: context,
+      oldPosition: oldPosition,
+      isFollowingTail: isFollowingTail,
+    );
+  }
+}
+
+class _FollowTailScrollPosition extends ScrollPositionWithSingleContext {
+  _FollowTailScrollPosition({
+    required super.physics,
+    required super.context,
+    super.oldPosition,
+    required this.isFollowingTail,
+  });
+
+  final ValueGetter<bool> isFollowingTail;
+
+  @override
+  bool correctForNewDimensions(
+    ScrollMetrics oldDimensions,
+    ScrollMetrics newDimensions,
+  ) {
+    if (isFollowingTail() &&
+        newDimensions.maxScrollExtent - pixels > 0.5) {
+      // 跟随态下内容增长后落后于底部：修正 offset 并返回 false，
+      // viewport 会在同一帧内用新 offset 重新布局（correction pass），
+      // 渲染前已经贴底，不产生跨帧跳动。内容收缩导致的越界仍由
+      // 基类边界修正处理。
+      correctPixels(newDimensions.maxScrollExtent);
+      return false;
+    }
+    return super.correctForNewDimensions(oldDimensions, newDimensions);
+  }
+}
+
 class _ConversationState {
   final List<ChatMessage> messages = <ChatMessage>[];
   _MessageLayoutState layoutState = _MessageLayoutState.needsPostFrameSync;
@@ -71,14 +123,17 @@ class AiSidebarController extends GetxController {
        _onNewSession = onNewSession {
     _deepSeekController = TextEditingController(text: state.apiKey);
     _inputController = TextEditingController();
-    _scrollController = ScrollController();
+    _scrollController = FollowTailScrollController(
+      isFollowingTail: () =>
+          _scrollFollowState == _ScrollFollowState.followingTail,
+    );
     _inputFocusNode = FocusNode();
     _syncConversationWithPanelState();
   }
 
   late final TextEditingController _deepSeekController;
   late final TextEditingController _inputController;
-  late final ScrollController _scrollController;
+  late final FollowTailScrollController _scrollController;
   late final FocusNode _inputFocusNode;
 
   PdfAiPanelState _panelState;
@@ -94,7 +149,7 @@ class AiSidebarController extends GetxController {
   final _ConversationState _conversation = _ConversationState();
 
   _ScrollFollowState _scrollFollowState = _ScrollFollowState.followingTail;
-  double? _lastUserScrollPixels;
+  ScrollDirection _userScrollDirection = ScrollDirection.idle;
   int _scrollRequestId = 0;
 
   PdfAiPanelState get state => _panelState;
@@ -199,38 +254,38 @@ class AiSidebarController extends GetxController {
 
   /// 处理 ListView 滚动通知。
   ///
-  /// 列表为 reverse 布局：pixels == 0 是底部（最新消息），pixels 增大表示
-  /// 用户向历史方向滚动。只在用户向底部方向滚动并进入底部阈值时恢复
-  /// 自动跟随；滚动方向通过相邻两次滚动更新的 pixels 差值判断，
-  /// 不依赖 UserScrollNotification 的方向语义（reverse 布局下易混淆）。
+  /// 不能在 ScrollEndNotification 中仅按距离恢复跟随：鼠标滚轮的每个
+  /// PointerScrollEvent 都会同步产生 ScrollEndNotification，从底部附近
+  /// 上滚时会因此立刻重新开启自动跟随。只有用户向底部滚动并进入阈值，
+  /// 才恢复跟随；恢复后由 [FollowTailScrollController] 保持帧内贴底。
   bool handleScrollNotification(ScrollNotification notification) {
     if (notification.depth != 0) return false;
 
     if (notification is UserScrollNotification) {
+      _userScrollDirection = notification.direction;
       if (notification.direction == ScrollDirection.idle) {
-        _lastUserScrollPixels = null;
         return false;
       }
+
       _markUserScrolled();
-    } else if (notification is ScrollUpdateNotification) {
-      final double pixels = notification.metrics.pixels;
-      final double? previousPixels = _lastUserScrollPixels;
-      _lastUserScrollPixels = pixels;
-      if (previousPixels != null &&
-          pixels < previousPixels &&
-          pixels <= _kBottomFollowThreshold) {
+      if (notification.direction == ScrollDirection.reverse &&
+          notification.metrics.extentAfter <= _kBottomFollowThreshold) {
         _resumeScrollFollowing();
-        // 恢复跟随时可能停在阈值内而非底部，调度一次贴底，
-        // 让后续流式输出重新出现在视口内。
         _scheduleScrollToBottom();
       }
+    } else if (notification is ScrollUpdateNotification &&
+        _userScrollDirection == ScrollDirection.reverse &&
+        notification.metrics.extentAfter <= _kBottomFollowThreshold) {
+      // UserScrollNotification 只在方向变化时发送；持续向下滚动时，
+      // 需要在后续更新中捕获进入底部阈值的时刻。
+      _resumeScrollFollowing();
+      _scheduleScrollToBottom();
     }
     return false;
   }
 
   /// 在 Scrollable 处理鼠标滚轮之前取消自动跟随，避免同一帧中已经排队
   /// 的 post-frame 回调抢先把用户刚开始的滚动跳回底部。
-  /// reverse 布局：pixels == min 是底部，pixels == max 是历史方向顶端。
   void handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent || !_scrollController.hasClients) {
       return;
@@ -238,40 +293,18 @@ class AiSidebarController extends GetxController {
     final double delta = event.scrollDelta.dy;
     final ScrollPosition position = _scrollController.position;
     if (delta == 0 ||
-        (delta > 0 && position.pixels <= position.minScrollExtent) ||
-        (delta < 0 && position.pixels >= position.maxScrollExtent)) {
+        (delta < 0 && position.pixels <= position.minScrollExtent) ||
+        (delta > 0 && position.pixels >= position.maxScrollExtent)) {
       return;
     }
     _markUserScrolled();
   }
 
   /// 仅当用户仍在跟随尾部时滚动到底部，避免打断用户阅读。
-  /// reverse 布局下 minScrollExtent（pixels == 0）即视觉最底部。
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
     if (_scrollFollowState != _ScrollFollowState.followingTail) return;
-    _scrollController.jumpTo(_scrollController.position.minScrollExtent);
-  }
-
-  /// reverse 布局下，流式气泡（视觉最底部）增高会把历史内容整体上推。
-  ///
-  /// 用户停留在历史位置阅读（非跟随态）时，对该增量做滚动补偿，
-  /// 保持阅读锚点稳定；由消息列表对最新气泡的高度监听回调。
-  void compensateStreamGrowth(double delta) {
-    if (delta <= 0 || !_scrollController.hasClients) {
-      return;
-    }
-    if (_scrollFollowState != _ScrollFollowState.userControlled) {
-      return;
-    }
-    final ScrollPosition position = _scrollController.position;
-    if (position.pixels <= position.minScrollExtent) {
-      return;
-    }
-    final double target = (position.pixels + delta)
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
-    _scrollController.jumpTo(target);
+    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
   /// 下一帧滚动到底部（仅在用户已停留底部时生效）。
@@ -326,7 +359,8 @@ class AiSidebarController extends GetxController {
     _syncAction(_panelState);
 
     if (_panelState.loading) {
-      // reverse 布局下贴底由列表自身保持，无需逐次调度滚动。
+      // 贴底由 FollowTailScrollController 在 layout 内保持，
+      // 无需逐次调度滚动。
       _ensureLoadingPlaceholder();
     }
 
@@ -586,7 +620,7 @@ class AiSidebarController extends GetxController {
     _conversation.reset();
     _inputController.clear();
     _resumeScrollFollowing();
-    _lastUserScrollPixels = null;
+    _userScrollDirection = ScrollDirection.idle;
     _scrollRequestId++;
     if (notify) {
       update();
