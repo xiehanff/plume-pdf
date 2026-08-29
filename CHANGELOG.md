@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.18 - 2026-08-30
+
+### 修复
+
+- 修复流式输出贴底跟随时的底部闪烁：`FollowTailScrollController` 的同帧贴底修正此前未触发 viewport 重排（`applyContentDimensions` 返回值语义用反），导致滚动位置数值正确但画面晚一帧跳动；改用 `correctForNewDimensions` 契约（修正后返回 false 触发同帧重排），渲染前已经贴底。
+- 滚动回归测试新增渲染层断言（最新气泡必须画在视口内），可捕获"数值正确但画面晚一帧"类缺陷。
+
+### 字体
+
+- 聊天框 markdown 文本回调为 `OPPO Sans`；行内代码与代码块保持 `Google Sans Mono`。
+- 移除不再使用的 `MapleMono` 字体资产（约 20.5MB）。
+
 ## 0.0.17 - 2026-08-30
 
 ### AI 架构分层

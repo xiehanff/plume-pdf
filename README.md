@@ -20,7 +20,7 @@ A high-performance desktop PDF reader built with Flutter + PDFium, featuring Dee
 - AI-generated, context-aware follow-up suggestion chips shown after model replies
 - Markdown rendering (gpt_markdown) + code syntax highlighting (atom-one-dark)
 - AI sidebar streaming is bottom-anchored: follow-tail without jitter, and scrolling up to read history is never pushed away by incoming tokens
-- UI text uses `OPPO Sans`; Markdown text uses `MapleMono` (Maple Mono NF CN); inline code and code blocks use `Google Sans Mono`
+- Unified `OPPO Sans` font for UI and Markdown text; inline code and code blocks use `Google Sans Mono`
 - Vision-capable models: AI selection prioritizes screenshot-based cloud understanding; falls back to local OCR / text extraction
 - Non-vision models skip screenshot path entirely, avoiding unnecessary rendering
 - Reading background themes: `Default` / `Cloudy` / `Parchment` / `Eye Green`
@@ -86,7 +86,7 @@ Related document:
 - AI requests routed through Google Genkit: DeepSeek streaming chat completions
 - Model capabilities configured via `assets/config/ai_models.json`; `supportsVision` flag controls screenshot understanding pipeline
 - Markdown rendering uses gpt_markdown (local fork at `packages/gpt_markdown`)
-- App bundle embeds `OPPO Sans`, `MapleMono` and `GoogleSansMono` font assets: UI uses OPPO Sans, Markdown text uses MapleMono, code uses GoogleSansMono
+- App bundle embeds `OPPO Sans` and `GoogleSansMono` font assets: text uses OPPO Sans, code uses GoogleSansMono
 - Code highlighting uses flutter_highlight (atom-one-dark theme)
 - macOS file opening integrates native `openFiles` callback for receiving PDF paths from Finder / Dock
 - Windows builds use [`Directory.Build.props`](./Directory.Build.props) to disable `TrackFileAccess`, preventing `MSBuild/Tracker.exe` from hanging

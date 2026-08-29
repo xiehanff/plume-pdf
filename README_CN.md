@@ -20,7 +20,7 @@
 - 模型根据当前上下文生成追问建议 chips，回复完成后动态展示
 - Markdown 渲染（gpt_markdown）+ 代码块语法高亮（atom-one-dark）
 - AI 侧边栏流式输出底部锚定：贴底跟随无抖动，上滚阅读历史不会被新内容推走
-- 界面文本使用 `OPPO Sans`；Markdown 文本统一使用 `MapleMono`（Maple Mono NF CN）；行内代码与代码块使用 `Google Sans Mono`
+- 界面与 Markdown 文本统一使用 `OPPO Sans`；行内代码与代码块使用 `Google Sans Mono`
 - 支持视觉理解模型时，AI 框选优先走截图发云端模型理解；失败后再回退到本地 OCR / 文本提取
 - 不支持视觉理解的模型不会走截图链路，避免无意义渲染
 - 阅读背景主题切换：`默认` / `阴天` / `羊皮纸` / `护眼绿`
@@ -86,7 +86,7 @@ fvm flutter pub upgrade            # 升级依赖
 - AI 请求通过 Google Genkit 路由：DeepSeek 流式聊天补全
 - 模型能力配置通过 `assets/config/ai_models.json` 预置，按 `supportsVision` 决定是否启用截图理解链路
 - Markdown 渲染使用 gpt_markdown（本地 fork 在 `packages/gpt_markdown`）
-- 应用本体内置 `OPPO Sans`、`MapleMono`、`GoogleSansMono` 字体资产：界面用 OPPO Sans，Markdown 文本用 MapleMono，代码用 GoogleSansMono
+- 应用本体内置 `OPPO Sans`、`GoogleSansMono` 字体资产：文本用 OPPO Sans，代码用 GoogleSansMono
 - 代码高亮使用 flutter_highlight（atom-one-dark 主题）
 - macOS 文件打开链路额外接入原生 openFiles 回调，用于接收 Finder / Dock 传入的 PDF 路径
 - Windows 构建额外使用 [`Directory.Build.props`](./Directory.Build.props) 关闭 `TrackFileAccess`，防止 `MSBuild/Tracker.exe` 卡住

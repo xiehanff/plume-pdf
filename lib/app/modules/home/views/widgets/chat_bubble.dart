@@ -11,9 +11,9 @@ import 'package:loading_indicator/loading_indicator.dart';
 import '../../../../theme/app_colors.dart';
 import 'chat_message.dart';
 
-/// 聊天 markdown 统一字体：正文（含标题、思考面板）使用 MapleMono，
+/// 聊天 markdown 统一字体：正文（含标题、思考面板）使用 OPPO Sans，
 /// 代码（行内与代码块）使用 GoogleSansMono。
-const String kMarkdownFontFamily = 'MapleMono';
+const String kMarkdownFontFamily = 'OPPO Sans';
 const String kCodeFontFamily = 'GoogleSansMono';
 
 const List<String> kMarkdownFontFallback = <String>[
@@ -101,8 +101,7 @@ Widget _buildChatMarkdown(
       data,
       components: _chatMarkdownComponents,
       style: style.copyWith(
-        // markdown 文本统一使用 MapleMono（自带中文字形），
-        // 缺字时回退系统中文字体。
+        // markdown 文本统一使用 OPPO Sans，缺字时回退系统中文字体。
         fontFamily: kMarkdownFontFamily,
         fontFamilyFallback: kMarkdownFontFallback,
       ),

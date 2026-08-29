@@ -67,3 +67,4 @@ AGENTS.md
 
 # FVM Version Cache
 .fvm/
+.zcode/
