@@ -3,11 +3,136 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
+import 'package:gpt_markdown/custom_widgets/markdown_config.dart'
+    show GptMarkdownConfig;
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 
 import '../../../../theme/app_colors.dart';
 import 'chat_message.dart';
+
+/// 聊天 markdown 统一字体：正文（含标题、思考面板）使用 MapleMono，
+/// 代码（行内与代码块）使用 GoogleSansMono。
+const String kMarkdownFontFamily = 'MapleMono';
+const String kCodeFontFamily = 'GoogleSansMono';
+
+const List<String> kMarkdownFontFallback = <String>[
+  'Microsoft YaHei',
+  'Microsoft YaHei UI',
+  '微软雅黑',
+];
+
+/// 聊天正文 markdown 主题：保持应用默认标题样式，关闭 h1 后自动
+/// 附加的分割线（流式回答中大量标题会带出满屏分割线），并把模型
+/// 输出的 `---` 水平线弱化为细淡线。
+GptMarkdownThemeData _chatMarkdownThemeData(BuildContext context) {
+  final ThemeData theme = Theme.of(context);
+  final TextTheme textTheme = theme.textTheme;
+  return GptMarkdownThemeData(brightness: theme.brightness).copyWith(
+    highlightColor: theme.colorScheme.onSurfaceVariant.withAlpha(50),
+    h1: textTheme.headlineLarge?.copyWith(fontFamily: kMarkdownFontFamily),
+    h2: textTheme.headlineMedium?.copyWith(fontFamily: kMarkdownFontFamily),
+    h3: textTheme.headlineSmall?.copyWith(fontFamily: kMarkdownFontFamily),
+    h4: textTheme.titleLarge?.copyWith(fontFamily: kMarkdownFontFamily),
+    h5: textTheme.titleMedium?.copyWith(fontFamily: kMarkdownFontFamily),
+    h6: textTheme.titleSmall?.copyWith(fontFamily: kMarkdownFontFamily),
+    autoAddDividerLineAfterH1: false,
+    hrLineThickness: 1,
+    hrLineColor: AppColors.borderVisible,
+    hrLinePadding: const EdgeInsets.symmetric(vertical: 6),
+  );
+}
+
+/// 思考面板 markdown 主题：在正文主题基础上把标题收敛为小字号，
+/// 避免推理文本中的标题撑破 12px 的紧凑面板。
+GptMarkdownThemeData _reasoningMarkdownThemeData(BuildContext context) {
+  const Color textColor = Color(0xFFD0D5DD);
+  const TextStyle heading = TextStyle(
+    color: textColor,
+    fontSize: 13,
+    height: 1.5,
+    fontWeight: FontWeight.w600,
+    fontFamily: kMarkdownFontFamily,
+  );
+  return _chatMarkdownThemeData(context).copyWith(
+    h1: heading.copyWith(fontSize: 13.5, fontWeight: FontWeight.w700),
+    h2: heading,
+    h3: heading.copyWith(fontSize: 12.5),
+    h4: heading.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500),
+    h5: heading.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500),
+    h6: heading.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500),
+  );
+}
+
+/// 渲染为空的水平线组件：替换 gpt_markdown 默认组件集中的 [HrLine]，
+/// 让模型输出的 `---` 不产生分割线。
+///
+/// 在组件层隐藏而非预处理文本：块级解析按组件列表顺序匹配，
+/// [CodeBlockMd] 优先级更高，代码块内的 `---`（如 YAML 分隔符）
+/// 属于代码块内容，不会进入本组件，展示与原文一致。
+class _HiddenHrLine extends BlockMd {
+  @override
+  String get expString => HrLine().expString;
+
+  @override
+  Widget build(BuildContext context, String text, GptMarkdownConfig config) =>
+      const SizedBox.shrink();
+}
+
+/// 聊天 markdown 的组件集：默认组件中的水平线替换为空渲染。
+final List<MarkdownComponent> _chatMarkdownComponents = MarkdownComponent
+    .globalComponents
+    .map(
+      (MarkdownComponent component) =>
+          component is HrLine ? _HiddenHrLine() : component,
+    )
+    .toList();
+
+/// 聊天 markdown 的共享渲染：统一字体、代码块与行内代码样式。
+Widget _buildChatMarkdown(
+  BuildContext context,
+  String data, {
+  required TextStyle style,
+  required GptMarkdownThemeData themeData,
+}) {
+  return GptMarkdownTheme(
+    gptThemeData: themeData,
+    child: GptMarkdown(
+      data,
+      components: _chatMarkdownComponents,
+      style: style.copyWith(
+        // markdown 文本统一使用 MapleMono（自带中文字形），
+        // 缺字时回退系统中文字体。
+        fontFamily: kMarkdownFontFamily,
+        fontFamilyFallback: kMarkdownFontFallback,
+      ),
+      codeBuilder:
+          (BuildContext context, String name, String code, bool closed) {
+            final String language = name.isNotEmpty ? name : 'plaintext';
+            return CodeBlock(language: language, code: code);
+          },
+      highlightBuilder: (BuildContext context, String text, TextStyle style) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: AppColors.accentSurface,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            text,
+            style: style.copyWith(
+              // 行内代码块高度收紧：否则继承正文 height 2.0 会撑破
+              // WidgetSpan 行高计算，导致相邻行粘连。
+              height: 1.2,
+              fontFamily: kCodeFontFamily,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
 
 class ChatBubble extends StatelessWidget {
   const ChatBubble({super.key, required this.message});
@@ -42,7 +167,7 @@ class ChatBubble extends StatelessWidget {
                     )
                   : BorderRadius.circular(12),
             ),
-            child: isHuman ? _buildHumanContent() : _buildAiContent(),
+            child: isHuman ? _buildHumanContent() : _buildAiContent(context),
           ),
         ],
       ),
@@ -104,7 +229,7 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildAiContent() {
+  Widget _buildAiContent(BuildContext context) {
     final String reasoning = message.reasoning?.trim() ?? '';
     final String text = message.text.trim();
     final List<Widget> children = <Widget>[];
@@ -114,7 +239,7 @@ class ChatBubble extends StatelessWidget {
       );
     }
     if (text.isNotEmpty) {
-      children.add(_buildAiMarkdown());
+      children.add(_buildAiMarkdown(context));
     } else if (message.isLoading && reasoning.isEmpty) {
       children.add(_buildLoading());
     }
@@ -125,55 +250,25 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildAiMarkdown() {
-    return GptMarkdown(
+  Widget _buildAiMarkdown(BuildContext context) {
+    return _buildChatMarkdown(
+      context,
       message.text,
       style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 14,
         height: 2.0,
-        // 显式声明主工程中文字体，避免 gpt_markdown 本地包
-        // 在某些边界场景下回退到系统默认字体而非 OPPO Sans。
-        fontFamily: 'OPPO Sans',
-        fontFamilyFallback: <String>[
-          'Microsoft YaHei',
-          'Microsoft YaHei UI',
-          '微软雅黑',
-        ],
       ),
-      codeBuilder:
-          (BuildContext context, String name, String code, bool closed) {
-            final String language = name.isNotEmpty ? name : 'plaintext';
-            return CodeBlock(language: language, code: code);
-          },
-      highlightBuilder: (BuildContext context, String text, TextStyle style) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: BoxDecoration(
-            color: AppColors.accentSurface,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            text,
-            style: style.copyWith(
-              // 行内代码块高度收紧：否则继承正文 height 2.0 会撑破
-              // WidgetSpan 行高计算，导致相邻行粘连。
-              height: 1.2,
-              fontFamily: 'JetBrainsMono',
-              package: 'gpt_markdown',
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        );
-      },
+      themeData: _chatMarkdownThemeData(context),
     );
   }
 }
 
 /// 流式推理过程的独立深色容器。
 ///
-/// 默认只展示最多八行；内容超出后必须由用户点击按钮展开，避免复杂
-/// 思考时侧栏只剩一个 loading 占位，也避免推理文本撑满整个对话区。
+/// 内容按 markdown 渲染。默认折叠为最多八行并渐隐截断；内容超出后
+/// 由用户点击按钮展开，避免复杂思考时侧栏只剩一个 loading 占位，
+/// 也避免推理文本撑满整个对话区。
 class ReasoningPanel extends StatefulWidget {
   const ReasoningPanel({super.key, required this.text, this.isLoading = false});
 
@@ -190,6 +285,8 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
     color: Color(0xFFD0D5DD),
     fontSize: 12,
     height: 1.5,
+    fontFamily: kMarkdownFontFamily,
+    fontFamilyFallback: kMarkdownFontFallback,
   );
 
   bool _expanded = false;
@@ -207,6 +304,7 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
           maxLines: _maxLines,
           ellipsis: '…',
         )..layout(maxWidth: maxTextWidth);
+        // 以源文本行数估算是否超出折叠上限，决定按钮显隐与截断渲染。
         final bool hasOverflow = painter.didExceedMaxLines;
 
         return Container(
@@ -247,14 +345,7 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
                 ],
               ),
               const SizedBox(height: 6),
-              Text(
-                widget.text,
-                style: _textStyle,
-                maxLines: _expanded ? null : _maxLines,
-                overflow: _expanded
-                    ? TextOverflow.visible
-                    : TextOverflow.ellipsis,
-              ),
+              _buildReasoningBody(context, hasOverflow),
               if (hasOverflow) ...<Widget>[
                 const SizedBox(height: 2),
                 Align(
@@ -275,6 +366,36 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
           ),
         );
       },
+    );
+  }
+
+  /// 折叠且内容超限时截断为八行高度并渐隐；展开或未超限时完整渲染。
+  Widget _buildReasoningBody(BuildContext context, bool hasOverflow) {
+    final Widget markdown = _buildChatMarkdown(
+      context,
+      widget.text,
+      style: _textStyle,
+      themeData: _reasoningMarkdownThemeData(context),
+    );
+    if (_expanded || !hasOverflow) {
+      return markdown;
+    }
+    final double maxCollapsedHeight =
+        _maxLines * _textStyle.fontSize! * _textStyle.height!;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (Rect bounds) => const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: <Color>[Colors.white, Colors.white, Color(0x00FFFFFF)],
+        stops: <double>[0, 0.85, 1],
+      ).createShader(bounds),
+      child: ClipRect(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxCollapsedHeight),
+          child: markdown,
+        ),
+      ),
     );
   }
 }
@@ -353,13 +474,8 @@ class CodeBlock extends StatelessWidget {
               textStyle: const TextStyle(
                 fontSize: 13,
                 height: 1.5,
-                fontFamily: 'JetBrainsMono',
-                package: 'gpt_markdown',
-                fontFamilyFallback: [
-                  'Microsoft YaHei',
-                  'Microsoft YaHei UI',
-                  '微软雅黑',
-                ],
+                fontFamily: kCodeFontFamily,
+                fontFamilyFallback: kMarkdownFontFallback,
               ),
             ),
           ),

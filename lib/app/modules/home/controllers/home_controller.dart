@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,16 +16,17 @@ import 'ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
+import '../services/ai_agent_session.dart';
 import '../services/deepseek_service.dart';
 import '../services/deepseek_settings_store.dart';
 import '../services/macos_file_open_service.dart';
 import '../services/macos_ocr_service.dart';
+import '../services/pdf_ai_context_service.dart';
 import '../services/pdf_file_picker.dart';
 import '../services/pdf_outline_mapper.dart';
 import '../services/pdf_cover_cache.dart';
 import '../services/pdf_reader_store.dart';
 import '../services/ai_model_config.dart';
-import '../services/ai_prompts.dart';
 import '../services/ai_response_parser.dart';
 import '../../../services/app_launch_args.dart';
 import '../../../theme/app_colors.dart';
@@ -50,10 +49,15 @@ class HomeController extends GetxController {
   final PdfFilePicker _filePicker = PdfFilePicker();
   final PdfOutlineMapper _outlineMapper = const PdfOutlineMapper();
   final DeepSeekSettingsStore _deepSeekSettingsStore = DeepSeekSettingsStore();
-  final DeepSeekService _deepSeekService = DeepSeekService();
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
-  final List<AiChatHistoryMessage> _aiChatHistory = <AiChatHistoryMessage>[];
+  final AiAgentSession _aiAgentSession = AiAgentSession();
+  // 历史与流式请求由会话层持有；PDF 提取依赖 viewerController，
+  // 因此在字段初始化时绑定。
+  late final PdfAiContextService _pdfAiContextService = PdfAiContextService(
+    viewerController: pdfViewerController,
+    ocrService: _macosOcrService,
+  );
   int _aiSessionId = 0;
   int _aiActionId = 0;
   String? _pinnedOutlineId;
@@ -229,16 +233,17 @@ class HomeController extends GetxController {
       );
       return;
     }
-    Get.find<AiSidebarController>(tag: AiSidebarController.tag)
-        .updateExternalState(
-          state: state.aiPanelState,
-          onApiKeyChanged: updateAiApiKey,
-          onSaveApiKey: saveAiApiKey,
-          onSendChat: sendAiChat,
-          onNewSession: startNewAiSession,
-          documentPath: state.filePath,
-          leftSidebarWidth: state.sidebarVisible ? 260 : 0,
-        );
+    Get.find<AiSidebarController>(
+      tag: AiSidebarController.tag,
+    ).updateExternalState(
+      state: state.aiPanelState,
+      onApiKeyChanged: updateAiApiKey,
+      onSaveApiKey: saveAiApiKey,
+      onSendChat: sendAiChat,
+      onNewSession: startNewAiSession,
+      documentPath: state.filePath,
+      leftSidebarWidth: state.sidebarVisible ? 260 : 0,
+    );
   }
 
   void _setPageText(String text) {

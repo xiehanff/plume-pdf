@@ -363,5 +363,52 @@ void main() {
 
       expect(capturedPayload['max_tokens'], 32768);
     });
+
+    test('翻译/解释降低推理深度，深度理解保持默认档位', () async {
+      late Map<String, dynamic> capturedPayload;
+      final MockClient client = MockClient((http.Request request) async {
+        capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
+        return sseResponse(<String>['回答']);
+      });
+
+      final DeepSeekService service = DeepSeekService(httpClient: client);
+      await service
+          .performStreamWithReasoning(
+            action: AiToolAction.translate,
+            apiKey: 'sk-test-123',
+            selectionText: 'Hello',
+          )
+          .toList();
+      expect(capturedPayload['reasoning_effort'], 'low');
+
+      await service
+          .performStreamWithReasoning(
+            action: AiToolAction.deepDive,
+            apiKey: 'sk-test-123',
+            selectionText: '解释状态机',
+          )
+          .toList();
+      expect(capturedPayload.containsKey('reasoning_effort'), isFalse);
+    });
+
+    test('多轮对话降低推理深度（reasoning_effort=low）', () async {
+      late Map<String, dynamic> capturedPayload;
+      final MockClient client = MockClient((http.Request request) async {
+        capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
+        return sseResponse(<String>['回答']);
+      });
+
+      final DeepSeekService service = DeepSeekService(httpClient: client);
+      await service
+          .chatStreamWithReasoning(
+            apiKey: 'sk-test-123',
+            history: <AiChatHistoryMessage>[
+              const AiChatHistoryMessage.user(content: '你好'),
+            ],
+          )
+          .toList();
+
+      expect(capturedPayload['reasoning_effort'], 'low');
+    });
   });
 }

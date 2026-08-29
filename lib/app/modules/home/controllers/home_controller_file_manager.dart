@@ -87,7 +87,7 @@ extension HomeControllerFileManager on HomeController {
       return;
     }
     _aiSessionId++;
-    _aiChatHistory.clear();
+    _aiAgentSession.clear();
     _pinnedOutlineId = null;
     _pinnedOutlinePage = null;
     _pendingOutlineTargetPage = null;
@@ -135,7 +135,7 @@ extension HomeControllerFileManager on HomeController {
         ),
       ),
     );
-    _aiChatHistory.clear();
+    _aiAgentSession.clear();
     unawaited(_refreshRecentFileAvailability(state.recentFiles));
   }
 

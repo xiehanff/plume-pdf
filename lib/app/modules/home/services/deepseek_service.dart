@@ -44,6 +44,11 @@ class DeepSeekService {
   // 4K 容易在长推理后只剩标题，因此为深度理解预留 32K。
   static const int _deepDiveMaxTokens = 32768;
 
+  /// DeepSeek V4 思考模式默认档位为 high，日常动作推理过长；
+  /// 翻译/解释/对话降到 low 缩短思考（reasoning token 计入
+  /// max_tokens 预算），深度理解保留默认 high。
+  static const String _lightReasoningEffort = 'low';
+
   final http.Client? _httpClient;
   Genkit? _genkit;
   String? _genkitApiKey;
@@ -178,6 +183,9 @@ class DeepSeekService {
         imageBytes: imageBytes,
       ),
       maxTokens: action == AiToolAction.deepDive ? _deepDiveMaxTokens : null,
+      reasoningEffort: action == AiToolAction.deepDive
+          ? null
+          : _lightReasoningEffort,
     );
   }
 
@@ -198,6 +206,7 @@ class DeepSeekService {
     yield* _generateHttpStream(
       normalizedApiKey,
       _chatMessages(history, documentContext: documentContext),
+      reasoningEffort: _lightReasoningEffort,
     );
   }
 
@@ -270,6 +279,7 @@ class DeepSeekService {
     String apiKey,
     List<Message> messages, {
     int? maxTokens,
+    String? reasoningEffort,
   }) async* {
     final http.Client client = _httpClient ?? http.Client();
     final bool closeClient = _httpClient == null;
@@ -286,6 +296,7 @@ class DeepSeekService {
               'messages': messages.map(_messageToOpenAiJson).toList(),
               'stream': true,
               if (maxTokens != null) 'max_tokens': maxTokens,
+              if (reasoningEffort != null) 'reasoning_effort': reasoningEffort,
             });
 
       final http.StreamedResponse response = await client.send(request);

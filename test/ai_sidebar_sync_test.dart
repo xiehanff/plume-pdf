@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:gpt_markdown/custom_widgets/custom_divider.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
@@ -77,12 +79,17 @@ void main() {
         .widgetList<ChatBubble>(find.byType(ChatBubble))
         .toList();
     expect(bubbles, hasLength(2));
-    // 第一条：用户气泡（human，带图片）
-    final ChatMessage first = bubbles[0].message;
+    // reverse 布局只影响视觉顺序（index 0 在最底部）；数据层仍是
+    // 用户消息在前、loading 占位在后，据此断言时序。
+    final AiSidebarController controller = Get.find<AiSidebarController>(
+      tag: AiSidebarController.tag,
+    );
+    expect(controller.messages, hasLength(2));
+    final ChatMessage first = controller.messages[0];
     expect(first.author, MessageAuthor.human);
     expect(first.imageBytes, isNotNull);
     // 第二条：模型侧 loading
-    final ChatMessage second = bubbles[1].message;
+    final ChatMessage second = controller.messages[1];
     expect(second.author, MessageAuthor.ai);
     expect(second.isLoading, isTrue);
   });
@@ -125,7 +132,40 @@ void main() {
     expect(find.text('解释它的运行过程'), findsOneWidget);
   });
 
-  testWidgets('推理过程独立展示，超过八行可手动展开', (tester) async {
+  testWidgets('正文渲染不产生分割线（--- 水平线与 h1 自动线）', (tester) async {
+    const PdfAiPanelState state = PdfAiPanelState(
+      sessionId: 3,
+      loading: false,
+      actionLabel: '解释',
+      actionId: 1,
+      result:
+          '# 概念\n\n第一段内容。\n\n---\n\n第二段内容。\n\n'
+          '```yaml\n---\nname: config\n```',
+    );
+    await pumpSidebar(tester, state);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // HrLine（---）与 h1 后自动分割线都渲染为 CustomDivider。
+    expect(find.byType(CustomDivider), findsNothing);
+    // 分割线被隐藏，正文内容保留。
+    expect(find.textContaining('第一段内容'), findsOneWidget);
+    expect(find.textContaining('第二段内容'), findsOneWidget);
+    // 代码块内的 `---`（YAML 分隔符）不属于分割线，必须原样保留。
+    // HighlightView 将代码渲染为 RichText，需要 findRichText 匹配。
+    expect(
+      find.textContaining('name: config', findRichText: true),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        RegExp(r'^---$', multiLine: true),
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('推理过程按 markdown 渲染，超限折叠渐隐并可展开', (tester) async {
     final String reasoning = List<String>.generate(
       9,
       (int index) => '推理第 ${index + 1} 行',
@@ -142,14 +182,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(ReasoningPanel), findsOneWidget);
+    expect(find.byType(GptMarkdown), findsOneWidget);
     expect(find.text('展开全部'), findsOneWidget);
-    Text reasoningText = tester.widget<Text>(find.text(reasoning));
-    expect(reasoningText.maxLines, 8);
+    // 折叠态：八行高度截断 + 渐隐遮罩。
+    expect(find.byType(ShaderMask), findsOneWidget);
 
     await tester.tap(find.text('展开全部'));
     await tester.pump();
     expect(find.text('收起'), findsOneWidget);
-    reasoningText = tester.widget<Text>(find.text(reasoning));
-    expect(reasoningText.maxLines, isNull);
+    // 展开态：解除截断与遮罩，完整渲染。
+    expect(find.byType(ShaderMask), findsNothing);
   });
 }

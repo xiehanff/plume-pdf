@@ -74,10 +74,8 @@ class _CodeFieldState extends State<CodeField> {
             padding: const EdgeInsets.all(16),
             child: Text(
               widget.codes,
-              style: TextStyle(
-                fontFamily: 'JetBrainsMono',
-                package: "gpt_markdown",
-                fontFamilyFallback: const [
+              style: const TextStyle(
+                fontFamilyFallback: [
                   'Microsoft YaHei',
                   'Microsoft YaHei UI',
                   '微软雅黑',
