@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -25,6 +26,7 @@ class AiSelectablePdfViewer extends StatefulWidget {
     required this.onLoadError,
     required this.onSelectionChanged,
     required this.onActionSelected,
+    this.onExitAiSelection,
     this.pageMargin = 24,
     this.showScrollThumb = true,
   });
@@ -42,6 +44,11 @@ class AiSelectablePdfViewer extends StatefulWidget {
   final void Function(Object, StackTrace?) onLoadError;
   final ValueChanged<PdfAiSelection?> onSelectionChanged;
   final ValueChanged<AiToolAction> onActionSelected;
+
+  /// AI 选择模式标签右侧圆形关闭按钮的回调；为 null 时不显示按钮
+  /// （桌面端使用 Esc 退出，移动端传入退出逻辑）。
+  final VoidCallback? onExitAiSelection;
+
   final double pageMargin;
   final bool showScrollThumb;
 
@@ -68,10 +75,20 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
         children: <Widget>[
           _buildPdfViewer(),
           if (widget.aiSelectionEnabled)
-            const Positioned(
+            Positioned(
               right: 20,
               top: 20,
-              child: IgnorePointer(child: AiSelectionModeBadge()),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  const IgnorePointer(child: AiSelectionModeBadge()),
+                  if (widget.onExitAiSelection != null) ...<Widget>[
+                    const SizedBox(width: 8),
+                    _AiModeCloseButton(onTap: widget.onExitAiSelection!),
+                  ],
+                ],
+              ),
             ),
         ],
       ),
@@ -243,6 +260,42 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
       documentSize: Size(
         outerMargin + maxWidth + innerGap + maxWidth + outerMargin,
         y,
+      ),
+    );
+  }
+}
+
+/// AI 选择模式标签右侧的圆形退出按钮，
+/// 与悬浮工具栏同款毛玻璃背景。
+class _AiModeCloseButton extends StatelessWidget {
+  const _AiModeCloseButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Material(
+          color: AppColors.scaffoldBg.withValues(alpha: 0.65),
+          shape: const CircleBorder(
+            side: BorderSide(color: AppColors.borderSubtle),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: const SizedBox(
+              width: 36,
+              height: 36,
+              child: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -8,7 +8,7 @@ import 'package:plume_pdf/app/modules/home/services/wifi_transfer_service.dart';
 
 void main() {
   group('WifiTransferService', () {
-    test('requires session token and stores sanitized PDF', () async {
+    test('serves upload page at root and stores sanitized PDF', () async {
       final Directory uploadDirectory = await Directory.systemTemp.createTemp(
         'plume_wifi_transfer_',
       );
@@ -17,7 +17,6 @@ void main() {
       final WifiTransferService service = WifiTransferService(
         bindAddressOverride: InternetAddress.loopbackIPv4,
         uploadDirectoryOverride: uploadDirectory,
-        sessionTokenOverride: 'test-token',
       );
       addTearDown(() async {
         client.close(force: true);
@@ -36,24 +35,19 @@ void main() {
           },
         ),
       );
-      expect(address.path, '/test-token');
+      expect(address.path, anyOf(isEmpty, '/'));
 
-      final HttpClientRequest rootRequest = await client.getUrl(
+      final HttpClientRequest pageRequest = await client.getUrl(
         address.replace(path: '/'),
       );
-      final HttpClientResponse rootResponse = await rootRequest.close();
-      expect(rootResponse.statusCode, HttpStatus.notFound);
-      await rootResponse.drain<void>();
-
-      final HttpClientRequest pageRequest = await client.getUrl(address);
       final HttpClientResponse pageResponse = await pageRequest.close();
       expect(pageResponse.statusCode, HttpStatus.ok);
       final String page = await utf8.decoder.bind(pageResponse).join();
-      expect(page, contains('/test-token/upload'));
+      expect(page, contains('/upload'));
 
       final List<int> pdfBytes = utf8.encode('%PDF-1.7\nminimal test');
       final HttpClientRequest uploadRequest = await client.postUrl(
-        address.replace(path: '${address.path}/upload'),
+        address.replace(path: '/upload'),
       );
       uploadRequest.headers.set(
         'x-file-name',
@@ -82,7 +76,6 @@ void main() {
       final WifiTransferService service = WifiTransferService(
         bindAddressOverride: InternetAddress.loopbackIPv4,
         uploadDirectoryOverride: uploadDirectory,
-        sessionTokenOverride: 'test-token',
       );
       addTearDown(() async {
         client.close(force: true);
@@ -101,7 +94,7 @@ void main() {
       );
       final List<int> bytes = utf8.encode('definitely not a PDF');
       final HttpClientRequest request = await client.postUrl(
-        address.replace(path: '${address.path}/upload'),
+        address.replace(path: '/upload'),
       );
       request.headers.set('x-file-name', Uri.encodeComponent('fake.pdf'));
       request.contentLength = bytes.length;
@@ -128,7 +121,6 @@ void main() {
       final WifiTransferService service = WifiTransferService(
         bindAddressOverride: InternetAddress.loopbackIPv4,
         uploadDirectoryOverride: uploadDirectory,
-        sessionTokenOverride: 'test-token',
         beforeBind: () async {
           if (!beforeBindEntered.isCompleted) {
             beforeBindEntered.complete();

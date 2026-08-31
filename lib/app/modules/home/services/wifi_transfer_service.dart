@@ -12,18 +12,18 @@ class WifiTransferService {
   WifiTransferService({
     InternetAddress? bindAddressOverride,
     Directory? uploadDirectoryOverride,
-    String? sessionTokenOverride,
     Future<void> Function()? beforeBind,
   }) : _bindAddressOverride = bindAddressOverride,
        _uploadDirectoryOverride = uploadDirectoryOverride,
-       _sessionTokenOverride = sessionTokenOverride,
        _beforeBind = beforeBind;
 
   static const int _maxUploadBytes = 512 * 1024 * 1024;
 
+  // 固定端口让地址可以手动输入；被占用时降级为系统分配的随机端口。
+  static const int _preferredPort = 8080;
+
   final InternetAddress? _bindAddressOverride;
   final Directory? _uploadDirectoryOverride;
-  final String? _sessionTokenOverride;
   final Future<void> Function()? _beforeBind;
 
   HttpServer? _server;
@@ -31,7 +31,6 @@ class WifiTransferService {
   Directory? _uploadDirectory;
   WifiUploadedFileCallback? _onUploaded;
   String? _address;
-  String? _sessionToken;
   Future<String>? _startFuture;
   int _generation = 0;
 
@@ -78,19 +77,21 @@ class WifiTransferService {
 
     final InternetAddress bindAddress =
         _bindAddressOverride ?? InternetAddress(ipAddress);
-    final HttpServer server = await HttpServer.bind(bindAddress, 0);
+    HttpServer server;
+    try {
+      server = await HttpServer.bind(bindAddress, _preferredPort);
+    } on SocketException {
+      server = await HttpServer.bind(bindAddress, 0);
+    }
     if (generation != _generation) {
       await server.close(force: true);
       throw StateError('传书服务启动已取消。');
     }
 
-    final String sessionToken =
-        _sessionTokenOverride ?? _generateSessionToken();
     _server = server;
     _uploadDirectory = uploadDirectory;
     _onUploaded = onUploaded;
-    _sessionToken = sessionToken;
-    _address = 'http://$ipAddress:${server.port}/$sessionToken';
+    _address = 'http://$ipAddress:${server.port}';
     _subscription = server.listen(_handleRequest);
     return _address!;
   }
@@ -106,7 +107,6 @@ class WifiTransferService {
     _uploadDirectory = null;
     _onUploaded = null;
     _address = null;
-    _sessionToken = null;
 
     await subscription?.cancel();
     await server?.close(force: true);
@@ -166,39 +166,22 @@ class WifiTransferService {
     return 1;
   }
 
-  String _generateSessionToken() {
-    final Random random = Random.secure();
-    final List<int> bytes = List<int>.generate(
-      24,
-      (_) => random.nextInt(256),
-      growable: false,
-    );
-    return base64UrlEncode(bytes).replaceAll('=', '');
-  }
-
   Future<void> _handleRequest(HttpRequest request) async {
     try {
-      final String? sessionToken = _sessionToken;
-      if (sessionToken == null) {
-        await _writeNotFound(request.response);
-        return;
-      }
-
-      final String basePath = '/$sessionToken';
       final String requestPath = request.uri.path;
       if (request.method == 'GET' &&
-          (requestPath == basePath || requestPath == '$basePath/')) {
+          (requestPath == '/' || requestPath == '/index.html')) {
         await _writeHtml(
           request.response,
-          _uploadPage.replaceAll('__UPLOAD_PATH__', '$basePath/upload'),
+          _uploadPage.replaceAll('__UPLOAD_PATH__', '/upload'),
         );
         return;
       }
-      if (request.method == 'GET' && requestPath == '$basePath/health') {
+      if (request.method == 'GET' && requestPath == '/health') {
         await _writeJson(request.response, 200, <String, Object>{'ok': true});
         return;
       }
-      if (request.method == 'POST' && requestPath == '$basePath/upload') {
+      if (request.method == 'POST' && requestPath == '/upload') {
         await _handleUpload(request);
         return;
       }

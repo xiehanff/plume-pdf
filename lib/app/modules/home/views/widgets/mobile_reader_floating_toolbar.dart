@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -19,9 +21,9 @@ class MobileReaderFloatingToolbar extends StatelessWidget {
     required this.state,
   });
 
-  static const double width = 52;
+  static const double width = 44;
   static const double horizontalInset = 20;
-  static const double _buttonExtent = 44;
+  static const double _buttonExtent = 40;
 
   final HomeController controller;
   final PdfReaderState state;
@@ -30,70 +32,76 @@ class MobileReaderFloatingToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: Container(
-        width: width,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.scaffoldBg.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(width / 2),
-          border: Border.all(color: AppColors.borderSubtle),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 18,
-              spreadRadius: 1,
-              offset: Offset(0, 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(width / 2),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            width: width,
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.scaffoldBg.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(width / 2),
+              border: Border.all(color: AppColors.borderSubtle),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                  offset: Offset(0, 8),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _ToolbarButton(
-              tooltip: '大纲',
-              onPressed: () => Get.toNamed<void>(Routes.readerOutline),
-              materialIcon: Icons.menu_rounded,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _ToolbarButton(
+                  tooltip: '大纲',
+                  onPressed: () => Get.toNamed<void>(Routes.readerOutline),
+                  hugeIcon: HugeIcons.strokeRoundedDatabase01,
+                ),
+                _ToolbarButton(
+                  tooltip: 'AI 对话',
+                  onPressed: () => Get.toNamed<void>(Routes.readerAi),
+                  hugeIcon: HugeIcons.strokeRoundedAiChat02,
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Divider(height: 1, color: AppColors.borderSubtle),
+                ),
+                _ToolbarButton(
+                  tooltip: '打开文件',
+                  onPressed: controller.handleOpenFile,
+                  hugeIcon: HugeIcons.strokeRoundedFolderOpen,
+                ),
+                _ToolbarButton(
+                  tooltip: 'WiFi 传书',
+                  onPressed: () => Get.toNamed<void>(Routes.wifiTransfer),
+                  hugeIcon: HugeIcons.strokeRoundedWifi01,
+                ),
+                _ToolbarButton(
+                  tooltip: state.aiSelectionMode ? '退出 AI 框选' : 'AI 框选',
+                  onPressed: controller.toggleAiSelectionMode,
+                  selected: state.aiSelectionMode,
+                  hugeIcon: HugeIcons.strokeRoundedAiGenerative,
+                ),
+                _ToolbarButton(
+                  tooltip: '适宽',
+                  onPressed: controller.fitWidth,
+                  hugeIcon: HugeIcons.strokeRoundedArrowHorizontal,
+                ),
+                _BackgroundThemeButton(
+                  theme: state.backgroundTheme,
+                  onSelected: controller.setBackgroundTheme,
+                ),
+                _ToolbarButton(
+                  tooltip: '最近阅读',
+                  onPressed: controller.showRecentFiles,
+                  hugeIcon: HugeIcons.strokeRoundedTransactionHistory,
+                ),
+              ],
             ),
-            _ToolbarButton(
-              tooltip: 'AI 对话',
-              onPressed: () => Get.toNamed<void>(Routes.readerAi),
-              materialIcon: Icons.chat_bubble_outline_rounded,
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Divider(height: 1, color: AppColors.borderSubtle),
-            ),
-            _ToolbarButton(
-              tooltip: '打开文件',
-              onPressed: controller.handleOpenFile,
-              hugeIcon: HugeIcons.strokeRoundedFolderOpen,
-            ),
-            _ToolbarButton(
-              tooltip: 'WiFi 传书',
-              onPressed: () => Get.toNamed<void>(Routes.wifiTransfer),
-              hugeIcon: HugeIcons.strokeRoundedWifi01,
-            ),
-            _ToolbarButton(
-              tooltip: state.aiSelectionMode ? '退出 AI 框选' : 'AI 框选',
-              onPressed: controller.toggleAiSelectionMode,
-              selected: state.aiSelectionMode,
-              hugeIcon: HugeIcons.strokeRoundedAiGenerative,
-            ),
-            _ToolbarButton(
-              tooltip: '适宽',
-              onPressed: controller.fitWidth,
-              hugeIcon: HugeIcons.strokeRoundedArrowHorizontal,
-            ),
-            _BackgroundThemeButton(
-              theme: state.backgroundTheme,
-              onSelected: controller.setBackgroundTheme,
-            ),
-            _ToolbarButton(
-              tooltip: '最近阅读',
-              onPressed: controller.showRecentFiles,
-              hugeIcon: HugeIcons.strokeRoundedTransactionHistory,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -104,15 +112,13 @@ class _ToolbarButton extends StatelessWidget {
   const _ToolbarButton({
     required this.tooltip,
     required this.onPressed,
-    this.hugeIcon,
-    this.materialIcon,
+    required this.hugeIcon,
     this.selected = false,
-  }) : assert(hugeIcon != null || materialIcon != null);
+  });
 
   final String tooltip;
   final VoidCallback? onPressed;
-  final List<List<dynamic>>? hugeIcon;
-  final IconData? materialIcon;
+  final List<List<dynamic>> hugeIcon;
   final bool selected;
 
   @override
@@ -132,9 +138,7 @@ class _ToolbarButton extends StatelessWidget {
           backgroundColor: selected ? AppColors.seed : Colors.transparent,
           shape: const CircleBorder(),
         ),
-        icon: materialIcon != null
-            ? Icon(materialIcon, size: 21)
-            : HugeIcon(icon: hugeIcon!, size: 19, strokeWidth: 1.5),
+        icon: HugeIcon(icon: hugeIcon, size: 17, strokeWidth: 1.5),
       ),
     );
   }
@@ -182,7 +186,7 @@ class _BackgroundThemeButton extends StatelessWidget {
           child: HugeIcon(
             icon: _themeIcon(theme),
             color: AppColors.textSecondary,
-            size: 19,
+            size: 17,
             strokeWidth: 1.5,
           ),
         ),

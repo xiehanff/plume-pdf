@@ -52,16 +52,22 @@ class AiSidebarSettingsList extends StatelessWidget {
     required this.deepSeekController,
     required this.onDeepSeekChanged,
     required this.onSaveDeepSeek,
+    this.shrinkWrap = false,
   });
 
   final TextEditingController deepSeekController;
   final ValueChanged<String> onDeepSeekChanged;
   final VoidCallback onSaveDeepSeek;
 
+  /// 在底部弹窗等有限高度容器内使用时置 true。
+  final bool shrinkWrap;
+
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       children: <Widget>[
         const _ModelInfoCard(),
         ApiKeyCard(

@@ -5,6 +5,7 @@ import '../../../routes/app_pages.dart';
 import '../../../theme/app_colors.dart';
 import '../controllers/home_controller.dart';
 import '../models/pdf_reader_state.dart';
+import '../services/deepseek_service.dart';
 import 'widgets/ai_selectable_pdf_viewer.dart';
 import 'widgets/error_reader_view.dart';
 import 'widgets/mobile_reader_floating_toolbar.dart';
@@ -179,6 +180,14 @@ class _MobileHomeViewState extends State<MobileHomeView> {
     );
   }
 
+  /// 移动端执行 AI 动作后直接进入 AI 对话路由：
+  /// 桌面端结果展示在常驻侧栏，移动端没有侧栏，
+  /// 不跳转的话动作执行了但界面毫无反馈。
+  void _handleAiActionSelected(AiToolAction action) {
+    _controller.runAiAction(action);
+    Get.toNamed<void>(Routes.readerAi);
+  }
+
   Widget _buildBody(PdfReaderState state) {
     if (state.errorMessage != null) {
       return ErrorReaderView(
@@ -218,7 +227,8 @@ class _MobileHomeViewState extends State<MobileHomeView> {
         onViewerReady: _controller.onViewerReady,
         onLoadError: _controller.onLoadError,
         onSelectionChanged: _controller.onAiSelectionChanged,
-        onActionSelected: _controller.runAiAction,
+        onActionSelected: _handleAiActionSelected,
+        onExitAiSelection: _controller.exitAiSelectionMode,
       ),
     );
   }
