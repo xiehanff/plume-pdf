@@ -68,6 +68,7 @@ class HomeController extends GetxController {
   PdfReaderState state = const PdfReaderState();
   Timer? _saveDebounce;
   double _renderAreaWidth = 0;
+  bool _reserveFitWidthScrollbarInset = true;
   int _recentFilesCheckId = 0;
 
   @override
