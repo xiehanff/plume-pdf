@@ -25,10 +25,15 @@ class MobileHomeView extends StatefulWidget {
 }
 
 class _MobileHomeViewState extends State<MobileHomeView> {
+  static const double _contentPadding = 12;
+  static const double _tapSlop = 6;
+
   late final HomeController _controller = Get.find<HomeController>();
 
   bool _toolbarVisible = false;
-  double? _pointerDownY;
+  int? _trackedPointer;
+  Offset? _pointerDownPosition;
+  bool _pointerMoved = false;
 
   void _showToolbar() {
     if (_toolbarVisible) {
@@ -49,21 +54,53 @@ class _MobileHomeViewState extends State<MobileHomeView> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    _pointerDownY = event.position.dy;
+    if (_trackedPointer != null) {
+      _pointerMoved = true;
+      _hideToolbar();
+      return;
+    }
+    _trackedPointer = event.pointer;
+    _pointerDownPosition = event.position;
+    _pointerMoved = false;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    final double? pointerDownY = _pointerDownY;
-    if (pointerDownY == null) {
+    if (event.pointer != _trackedPointer) {
       return;
     }
-    if ((event.position.dy - pointerDownY).abs() >= 6) {
+    final Offset? start = _pointerDownPosition;
+    if (start == null) {
+      return;
+    }
+    final Offset delta = event.position - start;
+    if (delta.distance >= _tapSlop) {
+      _pointerMoved = true;
+    }
+    if (delta.dy.abs() >= _tapSlop) {
       _hideToolbar();
     }
   }
 
-  void _resetPointerTracking([PointerEvent? _]) {
-    _pointerDownY = null;
+  void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer != _trackedPointer) {
+      return;
+    }
+    if (!_pointerMoved) {
+      _showToolbar();
+    }
+    _resetPointerTracking();
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer == _trackedPointer) {
+      _resetPointerTracking();
+    }
+  }
+
+  void _resetPointerTracking() {
+    _trackedPointer = null;
+    _pointerDownPosition = null;
+    _pointerMoved = false;
   }
 
   @override
@@ -84,65 +121,61 @@ class _MobileHomeViewState extends State<MobileHomeView> {
             }
             return ColoredBox(
               color: AppColors.surfaceBg,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    controller.updateRenderAreaWidth(constraints.maxWidth);
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: <Widget>[
-                        Positioned.fill(child: _buildBody(state)),
-                        if (state.hasDocument)
-                          Positioned.fill(
-                            child: _PdfInteractionLayer(
-                              onTap: _showToolbar,
-                              onPointerDown: _handlePointerDown,
-                              onPointerMove: _handlePointerMove,
-                              onPointerUp: _resetPointerTracking,
-                              onPointerCancel: _resetPointerTracking,
-                            ),
-                          ),
-                        if (state.hasDocument)
-                          Positioned(
-                            right: MobileReaderFloatingToolbar.horizontalInset,
-                            top: 0,
-                            bottom: 0,
-                            child: Center(
-                              child: IgnorePointer(
-                                ignoring: !_toolbarVisible,
-                                child: AnimatedScale(
-                                  duration: const Duration(milliseconds: 150),
-                                  scale: _toolbarVisible ? 1 : 0.92,
-                                  curve: Curves.easeOutCubic,
-                                  child: AnimatedOpacity(
-                                    duration: const Duration(milliseconds: 140),
-                                    opacity: _toolbarVisible ? 1 : 0,
-                                    curve: Curves.easeOut,
-                                    child: MobileReaderFloatingToolbar(
-                                      controller: controller,
-                                      state: state,
-                                    ),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final double renderWidth =
+                      (constraints.maxWidth - _contentPadding * 2).clamp(
+                        0,
+                        double.infinity,
+                      );
+                  controller.updateRenderAreaWidth(renderWidth);
+                  return Stack(
+                    children: <Widget>[
+                      Positioned.fill(
+                        child: Padding(
+                          padding: const EdgeInsets.all(_contentPadding),
+                          child: _buildBody(state),
+                        ),
+                      ),
+                      if (state.hasDocument)
+                        Positioned(
+                          right: MobileReaderFloatingToolbar.horizontalInset,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: IgnorePointer(
+                              ignoring: !_toolbarVisible,
+                              child: AnimatedScale(
+                                duration: const Duration(milliseconds: 150),
+                                scale: _toolbarVisible ? 1 : 0.92,
+                                curve: Curves.easeOutCubic,
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 140),
+                                  opacity: _toolbarVisible ? 1 : 0,
+                                  curve: Curves.easeOut,
+                                  child: MobileReaderFloatingToolbar(
+                                    controller: controller,
+                                    state: state,
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        if (state.loading)
-                          const Positioned.fill(
-                            child: ColoredBox(
-                              color: AppColors.loadingOverlay,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: AppColors.textSecondary,
-                                ),
+                        ),
+                      if (state.loading)
+                        const Positioned.fill(
+                          child: ColoredBox(
+                            color: AppColors.loadingOverlay,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: AppColors.textSecondary,
                               ),
                             ),
                           ),
-                      ],
-                    );
-                  },
-                ),
+                        ),
+                    ],
+                  );
+                },
               ),
             );
           },
@@ -169,53 +202,27 @@ class _MobileHomeViewState extends State<MobileHomeView> {
         onRecoverRecentFile: _controller.recoverRecentFile,
       );
     }
-    return AiSelectablePdfViewer(
-      filePath: state.filePath!,
-      controller: _controller.pdfViewerController,
-      initialPage: state.initialPage,
-      spreadMode: false,
-      lockHorizontalPan: _controller.shouldLockHorizontalPan,
-      backgroundTheme: state.backgroundTheme,
-      aiSelectionEnabled: state.aiSelectionMode,
-      onPageChanged: _controller.onPageChanged,
-      onDocumentChanged: _controller.onDocumentChanged,
-      onViewerReady: _controller.onViewerReady,
-      onLoadError: _controller.onLoadError,
-      onSelectionChanged: _controller.onAiSelectionChanged,
-      onActionSelected: _controller.runAiAction,
-    );
-  }
-}
-
-/// 透明的原始指针监听层，不参与 Flutter gesture arena，因此不会抢占
-/// pdfrx 的拖动、缩放与选择手势；仅用于判断“点击显示 / 纵向移动隐藏”。
-class _PdfInteractionLayer extends StatelessWidget {
-  const _PdfInteractionLayer({
-    required this.onTap,
-    required this.onPointerDown,
-    required this.onPointerMove,
-    required this.onPointerUp,
-    required this.onPointerCancel,
-  });
-
-  final VoidCallback onTap;
-  final PointerDownEventListener onPointerDown;
-  final PointerMoveEventListener onPointerMove;
-  final PointerUpEventListener onPointerUp;
-  final PointerCancelEventListener onPointerCancel;
-
-  @override
-  Widget build(BuildContext context) {
     return Listener(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: onPointerDown,
-      onPointerMove: onPointerMove,
-      onPointerUp: (PointerUpEvent event) {
-        onPointerUp(event);
-        onTap();
-      },
-      onPointerCancel: onPointerCancel,
-      child: const SizedBox.expand(),
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerUp,
+      onPointerCancel: _handlePointerCancel,
+      child: AiSelectablePdfViewer(
+        filePath: state.filePath!,
+        controller: _controller.pdfViewerController,
+        initialPage: state.initialPage,
+        spreadMode: false,
+        lockHorizontalPan: _controller.shouldLockHorizontalPan,
+        backgroundTheme: state.backgroundTheme,
+        aiSelectionEnabled: state.aiSelectionMode,
+        onPageChanged: _controller.onPageChanged,
+        onDocumentChanged: _controller.onDocumentChanged,
+        onViewerReady: _controller.onViewerReady,
+        onLoadError: _controller.onLoadError,
+        onSelectionChanged: _controller.onAiSelectionChanged,
+        onActionSelected: _controller.runAiAction,
+      ),
     );
   }
 }
