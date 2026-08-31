@@ -25,6 +25,8 @@ class AiSelectablePdfViewer extends StatefulWidget {
     required this.onLoadError,
     required this.onSelectionChanged,
     required this.onActionSelected,
+    this.pageMargin = 24,
+    this.showScrollThumb = true,
   });
 
   final String filePath;
@@ -40,6 +42,8 @@ class AiSelectablePdfViewer extends StatefulWidget {
   final void Function(Object, StackTrace?) onLoadError;
   final ValueChanged<PdfAiSelection?> onSelectionChanged;
   final ValueChanged<AiToolAction> onActionSelected;
+  final double pageMargin;
+  final bool showScrollThumb;
 
   @override
   State<AiSelectablePdfViewer> createState() => _AiSelectablePdfViewerState();
@@ -59,9 +63,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceBg,
-      ),
+      decoration: const BoxDecoration(color: AppColors.surfaceBg),
       child: Stack(
         children: <Widget>[
           _buildPdfViewer(),
@@ -69,9 +71,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
             const Positioned(
               right: 20,
               top: 20,
-              child: IgnorePointer(
-                child: AiSelectionModeBadge(),
-              ),
+              child: IgnorePointer(child: AiSelectionModeBadge()),
             ),
         ],
       ),
@@ -86,7 +86,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
       controller: widget.controller,
       initialPageNumber: widget.initialPage,
       params: PdfViewerParams(
-        margin: 24,
+        margin: widget.pageMargin,
         backgroundColor: AppColors.transparent,
         layoutPages:
             widget.spreadMode ? _spreadLayoutPages : _singleLayoutPages,
@@ -102,21 +102,22 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
         onPageChanged: widget.onPageChanged,
         onDocumentChanged: widget.onDocumentChanged,
         onViewerReady: widget.onViewerReady,
-        viewerOverlayBuilder: (context, size, handleLinkTap) => [
-          PdfViewerScrollThumb(
-            controller: widget.controller,
-            orientation: ScrollbarOrientation.right,
-            thumbSize: const Size(8, 48),
-            margin: 4,
-            thumbBuilder: (context, thumbSize, pageNumber, controller) {
-              return DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.borderVisible,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              );
-            },
-          ),
+        viewerOverlayBuilder: (context, size, handleLinkTap) => <Widget>[
+          if (widget.showScrollThumb)
+            PdfViewerScrollThumb(
+              controller: widget.controller,
+              orientation: ScrollbarOrientation.right,
+              thumbSize: const Size(8, 48),
+              margin: 4,
+              thumbBuilder: (context, thumbSize, pageNumber, controller) {
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.borderVisible,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                );
+              },
+            ),
         ],
         pageOverlaysBuilder: (
           BuildContext context,
