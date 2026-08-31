@@ -13,14 +13,26 @@ project_type: app
 migration:
   platforms:
     - platform: root
-      create_revision: 00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
-      base_revision: 00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
+      create_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+      base_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
     - platform: android
       create_revision: 00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
       base_revision: 00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
     - platform: ios
       create_revision: 00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
       base_revision: 00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
+    - platform: linux
+      create_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+      base_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+    - platform: macos
+      create_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+      base_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+    - platform: web
+      create_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+      base_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+    - platform: windows
+      create_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
+      base_revision: dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668
 
   # User provided section
 
