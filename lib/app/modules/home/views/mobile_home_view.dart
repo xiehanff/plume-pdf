@@ -16,7 +16,8 @@ import 'widgets/recent_files_grid.dart';
 /// - 点击 PDF 阅读区域显示；
 /// - 开始上下滑动时隐藏；
 /// - 大纲与 AI 仍通过独立路由展示；
-/// - 翻页、缩放、适宽、单双页等触屏可直接完成的动作不进入悬浮栏。
+/// - 页码、单双页和缩放按钮不进入悬浮栏；
+/// - 适宽保留，用于手势缩放后恢复最佳阅读宽度。
 class MobileHomeView extends StatefulWidget {
   const MobileHomeView({super.key});
 
@@ -25,7 +26,6 @@ class MobileHomeView extends StatefulWidget {
 }
 
 class _MobileHomeViewState extends State<MobileHomeView> {
-  static const double _contentPadding = 12;
   static const double _tapSlop = 6;
 
   late final HomeController _controller = Get.find<HomeController>();
@@ -123,19 +123,15 @@ class _MobileHomeViewState extends State<MobileHomeView> {
               color: AppColors.surfaceBg,
               child: LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
-                  final double renderWidth = (constraints.maxWidth -
-                          _contentPadding * 2)
-                      .clamp(0.0, double.infinity)
-                      .toDouble();
-                  controller.updateRenderAreaWidth(renderWidth);
+                  // 移动端 PDF 直接使用 SafeArea 内完整宽度；悬浮工具栏覆盖在上方，
+                  // 不参与 PDF 布局，也不为桌面滚动条预留宽度。
+                  controller.updateRenderAreaWidth(
+                    constraints.maxWidth,
+                    reserveScrollbarInset: false,
+                  );
                   return Stack(
                     children: <Widget>[
-                      Positioned.fill(
-                        child: Padding(
-                          padding: const EdgeInsets.all(_contentPadding),
-                          child: _buildBody(state),
-                        ),
-                      ),
+                      Positioned.fill(child: _buildBody(state)),
                       if (state.hasDocument)
                         Positioned(
                           right: MobileReaderFloatingToolbar.horizontalInset,
@@ -215,6 +211,8 @@ class _MobileHomeViewState extends State<MobileHomeView> {
         lockHorizontalPan: _controller.shouldLockHorizontalPan,
         backgroundTheme: state.backgroundTheme,
         aiSelectionEnabled: state.aiSelectionMode,
+        pageMargin: 0,
+        showScrollThumb: false,
         onPageChanged: _controller.onPageChanged,
         onDocumentChanged: _controller.onDocumentChanged,
         onViewerReady: _controller.onViewerReady,
