@@ -9,16 +9,18 @@ import 'chat_input_bar.dart';
 import 'chat_message.dart';
 
 class AiSidebar extends StatelessWidget {
-  const AiSidebar({super.key});
+  const AiSidebar({super.key, this.fullWidth = false});
+
+  final bool fullWidth;
 
   @override
   Widget build(BuildContext context) {
-    // Controller 由 HomeController 创建并注册（不传 init），
-    // 侧栏开关期间实例常驻，会话历史保留。
+    // Controller 由 HomeController（桌面）或 MobileAiView（移动端）创建并注册。
+    // 侧栏/路由开关期间实例常驻，会话历史保留。
     return GetBuilder<AiSidebarController>(
       tag: AiSidebarController.tag,
       builder: (AiSidebarController controller) {
-        return _AiSidebarView(controller: controller);
+        return _AiSidebarView(controller: controller, fullWidth: fullWidth);
       },
     );
   }
@@ -27,55 +29,67 @@ class AiSidebar extends StatelessWidget {
 class _AiSidebarView extends StatelessWidget {
   static const double _kHandleWidth = 6;
 
-  const _AiSidebarView({required this.controller});
+  const _AiSidebarView({
+    required this.controller,
+    required this.fullWidth,
+  });
 
   final AiSidebarController controller;
+  final bool fullWidth;
 
   @override
   Widget build(BuildContext context) {
+    final Widget content = ColoredBox(
+      color: AppColors.scaffoldBg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (controller.mode == AiSidebarMode.settings)
+            AiSidebarSettingsHeader(onBack: controller.showConversation),
+          if (controller.mode == AiSidebarMode.settings)
+            Expanded(
+              child: AiSidebarSettingsList(
+                deepSeekController: controller.deepSeekController,
+                onDeepSeekChanged: controller.onApiKeyChanged,
+                onSaveDeepSeek: controller.onSaveApiKey,
+              ),
+            )
+          else ...<Widget>[
+            Expanded(child: _buildMessageList()),
+            ChatInputBar(
+              controller: controller.inputController,
+              focusNode: controller.inputFocusNode,
+              isLoading: controller.state.loading,
+              onSend: controller.handleSend,
+              onNewSession: controller.onNewSession,
+              onSettingsTap: controller.showSettings,
+            ),
+          ],
+        ],
+      ),
+    );
+
+    if (fullWidth) {
+      return SizedBox.expand(child: content);
+    }
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onHorizontalDragUpdate: (DragUpdateDetails details) {
-            controller.handleResize(details, MediaQuery.of(context).size.width);
+            controller.handleResize(
+              details,
+              MediaQuery.of(context).size.width,
+            );
           },
           child: const MouseRegion(
             cursor: SystemMouseCursors.resizeColumn,
             child: SizedBox(width: _kHandleWidth, height: double.infinity),
           ),
         ),
-        Container(
-          width: controller.sidebarWidth,
-          color: AppColors.scaffoldBg,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              if (controller.mode == AiSidebarMode.settings)
-                AiSidebarSettingsHeader(onBack: controller.showConversation),
-              if (controller.mode == AiSidebarMode.settings)
-                Expanded(
-                  child: AiSidebarSettingsList(
-                    deepSeekController: controller.deepSeekController,
-                    onDeepSeekChanged: controller.onApiKeyChanged,
-                    onSaveDeepSeek: controller.onSaveApiKey,
-                  ),
-                )
-              else ...<Widget>[
-                Expanded(child: _buildMessageList()),
-                ChatInputBar(
-                  controller: controller.inputController,
-                  focusNode: controller.inputFocusNode,
-                  isLoading: controller.state.loading,
-                  onSend: controller.handleSend,
-                  onNewSession: controller.onNewSession,
-                  onSettingsTap: controller.showSettings,
-                ),
-              ],
-            ],
-          ),
-        ),
+        SizedBox(width: controller.sidebarWidth, child: content),
       ],
     );
   }
@@ -104,7 +118,6 @@ class _AiSidebarView extends StatelessWidget {
     return NotificationListener<ScrollNotification>(
       onNotification: controller.handleScrollNotification,
       child: Listener(
-        // 在 Scrollable 发出滚动通知前，先使已排队的自动跟随失效。
         onPointerSignal: controller.handlePointerSignal,
         child: ListView.builder(
           controller: controller.scrollController,
@@ -133,7 +146,10 @@ class _AiSidebarView extends StatelessWidget {
 
 /// 模型回复完成后展示的追问建议（Wrap 组件）。
 class _FollowUpSuggestions extends StatelessWidget {
-  const _FollowUpSuggestions({required this.suggestions, required this.onTap});
+  const _FollowUpSuggestions({
+    required this.suggestions,
+    required this.onTap,
+  });
 
   final List<String> suggestions;
   final ValueChanged<String> onTap;

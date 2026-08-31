@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
@@ -12,21 +11,35 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   AppLaunchArgs.setArgs(args);
 
-  await windowManager.ensureInitialized();
-  final windowOptions = WindowOptions(
-    size: const Size(1280, 840),
-    minimumSize: const Size(800, 600),
-    center: true,
-    title: 'Plume PDF',
-    titleBarStyle: TitleBarStyle.hidden,
-    windowButtonVisibility: Platform.isMacOS,
-  );
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+  if (_isDesktopPlatform) {
+    await windowManager.ensureInitialized();
+    final windowOptions = WindowOptions(
+      size: const Size(1280, 840),
+      minimumSize: const Size(800, 600),
+      center: true,
+      title: 'Plume PDF',
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: defaultTargetPlatform == TargetPlatform.macOS,
+    );
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
 
   runApp(const MyApp());
+}
+
+bool get _isDesktopPlatform {
+  if (kIsWeb) {
+    return false;
+  }
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.windows ||
+    TargetPlatform.macOS ||
+    TargetPlatform.linux => true,
+    _ => false,
+  };
 }
 
 class MyApp extends StatelessWidget {

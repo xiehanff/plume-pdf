@@ -9,21 +9,25 @@ class ReaderSidebar extends StatelessWidget {
     required this.outline,
     required this.selectedOutlineId,
     required this.onOpenOutlinePage,
+    this.fullWidth = false,
   });
 
   final List<PdfOutlineEntry> outline;
   final String? selectedOutlineId;
   final ValueChanged<PdfOutlineEntry> onOpenOutlinePage;
+  final bool fullWidth;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 260,
-      decoration: const BoxDecoration(
+      width: fullWidth ? double.infinity : 260,
+      decoration: BoxDecoration(
         color: AppColors.scaffoldBg,
-        border: Border(
-          right: BorderSide(color: AppColors.borderSubtle),
-        ),
+        border: fullWidth
+            ? null
+            : const Border(
+                right: BorderSide(color: AppColors.borderSubtle),
+              ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,7 +98,9 @@ class _OutlineList extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: selected ? AppColors.textPrimary : AppColors.textTertiary,
+                    color: selected
+                        ? AppColors.textPrimary
+                        : AppColors.textTertiary,
                     fontSize: 12,
                   ),
                 ),
@@ -103,7 +109,9 @@ class _OutlineList extends StatelessWidget {
               Text(
                 '${item.pageNumber}',
                 style: TextStyle(
-                  color: selected ? AppColors.textSecondary : AppColors.textTertiary,
+                  color: selected
+                      ? AppColors.textSecondary
+                      : AppColors.textTertiary,
                   fontSize: 11,
                 ),
               ),
@@ -141,10 +149,7 @@ class _SidebarListItem extends StatelessWidget {
         splashColor: AppColors.transparent,
         hoverColor: AppColors.transparent,
         onTap: onTap,
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
   }
