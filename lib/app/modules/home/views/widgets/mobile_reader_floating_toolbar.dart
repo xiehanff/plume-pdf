@@ -10,8 +10,8 @@ import '../../models/pdf_reader_state.dart';
 /// 移动端阅读器右侧悬浮工具栏。
 ///
 /// 只保留触屏场景仍然有价值的动作：大纲、AI、打开文件、WiFi 传书、
-/// AI 框选、阅读背景与最近阅读。翻页、缩放、适宽和单双页均交给手势
-/// 或移动端路由处理，不占用永久 UI 空间。
+/// AI 框选、适宽、阅读背景与最近阅读。翻页、页码、缩放按钮和单双页
+/// 均不占用移动端永久 UI 空间。
 class MobileReaderFloatingToolbar extends StatelessWidget {
   const MobileReaderFloatingToolbar({
     super.key,
@@ -78,6 +78,11 @@ class MobileReaderFloatingToolbar extends StatelessWidget {
               onPressed: controller.toggleAiSelectionMode,
               selected: state.aiSelectionMode,
               hugeIcon: HugeIcons.strokeRoundedAiGenerative,
+            ),
+            _ToolbarButton(
+              tooltip: '适宽',
+              onPressed: controller.fitWidth,
+              hugeIcon: HugeIcons.strokeRoundedArrowHorizontal,
             ),
             _BackgroundThemeButton(
               theme: state.backgroundTheme,
