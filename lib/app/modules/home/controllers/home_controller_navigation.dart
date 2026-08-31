@@ -129,8 +129,12 @@ extension HomeControllerNavigation on HomeController {
     _setPageText('$currentPage');
   }
 
-  void updateRenderAreaWidth(double width) {
+  void updateRenderAreaWidth(
+    double width, {
+    bool reserveScrollbarInset = true,
+  }) {
     _renderAreaWidth = width;
+    _reserveFitWidthScrollbarInset = reserveScrollbarInset;
   }
 
   bool get shouldLockHorizontalPan {
@@ -181,9 +185,12 @@ extension HomeControllerNavigation on HomeController {
 
   double? _currentFitWidthZoom() {
     final Rect? targetRect = _currentFitWidthRect();
+    final double scrollbarInset = _reserveFitWidthScrollbarInset
+        ? HomeController._kScrollbarWidth
+        : 0;
     final double availableWidth = _renderAreaWidth > 0
-        ? _renderAreaWidth - HomeController._kScrollbarWidth
-        : pdfViewerController.viewSize.width - HomeController._kScrollbarWidth;
+        ? _renderAreaWidth - scrollbarInset
+        : pdfViewerController.viewSize.width - scrollbarInset;
     if (targetRect == null || targetRect.width <= 0 || availableWidth <= 0) {
       return null;
     }
