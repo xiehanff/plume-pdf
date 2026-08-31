@@ -123,11 +123,10 @@ class _MobileHomeViewState extends State<MobileHomeView> {
               color: AppColors.surfaceBg,
               child: LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
-                  final double renderWidth =
-                      (constraints.maxWidth - _contentPadding * 2).clamp(
-                        0,
-                        double.infinity,
-                      );
+                  final double renderWidth = (constraints.maxWidth -
+                          _contentPadding * 2)
+                      .clamp(0.0, double.infinity)
+                      .toDouble();
                   controller.updateRenderAreaWidth(renderWidth);
                   return Stack(
                     children: <Widget>[
