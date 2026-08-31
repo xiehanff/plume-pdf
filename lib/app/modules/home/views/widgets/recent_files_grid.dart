@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 import '../../models/pdf_recent_file.dart';
 import '../../../../theme/app_colors.dart';
@@ -15,6 +16,7 @@ class RecentFilesGrid extends StatelessWidget {
     required this.onRecentFileTap,
     required this.onDeleteRecentFile,
     required this.onRecoverRecentFile,
+    this.onOpenWifiTransfer,
   });
 
   final List<PdfRecentFile> files;
@@ -23,11 +25,15 @@ class RecentFilesGrid extends StatelessWidget {
   final ValueChanged<String> onRecentFileTap;
   final ValueChanged<String> onDeleteRecentFile;
   final ValueChanged<String> onRecoverRecentFile;
+  final VoidCallback? onOpenWifiTransfer;
 
   @override
   Widget build(BuildContext context) {
     if (files.isEmpty) {
-      return EmptyReaderView(onOpenFile: onOpenFile);
+      return EmptyReaderView(
+        onOpenFile: onOpenFile,
+        onOpenWifiTransfer: onOpenWifiTransfer,
+      );
     }
 
     return Padding(
@@ -35,23 +41,40 @@ class RecentFilesGrid extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Padding(
-            padding: EdgeInsets.only(bottom: 16),
-            child: Text(
-              '最近阅读',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: <Widget>[
+                const Text(
+                  '最近阅读',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (onOpenWifiTransfer != null) ...<Widget>[
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: onOpenWifiTransfer,
+                    icon: const HugeIcon(
+                      icon: HugeIcons.strokeRoundedWifi01,
+                      size: 17,
+                      strokeWidth: 1.5,
+                    ),
+                    label: const Text('WiFi 传书'),
+                  ),
+                ],
+              ],
             ),
           ),
           Expanded(
             child: LayoutBuilder(
               builder: (_, BoxConstraints constraints) {
                 const double itemWidth = 180;
-                final int crossAxisCount =
-                    (constraints.maxWidth / itemWidth).floor().clamp(1, 6);
+                final int crossAxisCount = (constraints.maxWidth / itemWidth)
+                    .floor()
+                    .clamp(1, 6);
                 return GridView.builder(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
@@ -147,10 +170,7 @@ class _GridItem extends StatelessWidget {
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: _InfoFooter(
-                    file: file,
-                    onDelete: onDelete,
-                  ),
+                  child: _InfoFooter(file: file, onDelete: onDelete),
                 ),
               ],
             ),
@@ -174,10 +194,7 @@ class _GridItem extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[
-            Color(0xFF3D2A5C),
-            Color(0xFF2A1A3E),
-          ],
+          colors: <Color>[Color(0xFF3D2A5C), Color(0xFF2A1A3E)],
         ),
       ),
       child: Center(
@@ -195,10 +212,7 @@ class _GridItem extends StatelessWidget {
 }
 
 class _InfoFooter extends StatelessWidget {
-  const _InfoFooter({
-    required this.file,
-    required this.onDelete,
-  });
+  const _InfoFooter({required this.file, required this.onDelete});
 
   final PdfRecentFile file;
   final VoidCallback onDelete;
@@ -218,7 +232,7 @@ class _InfoFooter extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
           Expanded(
-          child: Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
@@ -237,10 +251,7 @@ class _InfoFooter extends StatelessWidget {
                   '添加于 ${_GridItem._formatTime(file.lastOpenedAt)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 10,
-                  ),
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
                 ),
               ],
             ),
@@ -308,11 +319,7 @@ class _UnavailableMenuButton extends StatelessWidget {
               color: Color(0xD9000000),
             ),
             alignment: Alignment.center,
-            child: const Icon(
-              Icons.more_horiz,
-              size: 18,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.more_horiz, size: 18, color: Colors.white),
           ),
         ),
       ),
@@ -358,9 +365,7 @@ class _UnavailableBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      constraints: const BoxConstraints(
-        minHeight: _GridItem._kBadgeHeight,
-      ),
+      constraints: const BoxConstraints(minHeight: _GridItem._kBadgeHeight),
       decoration: BoxDecoration(
         color: const Color(0xFFD93A32),
         borderRadius: BorderRadius.circular(999),
@@ -381,7 +386,4 @@ class _UnavailableBadge extends StatelessWidget {
   }
 }
 
-enum _UnavailableAction {
-  delete,
-  recover,
-}
+enum _UnavailableAction { delete, recover }

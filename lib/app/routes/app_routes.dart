@@ -6,6 +6,7 @@ abstract class Routes {
   static const home = _Paths.home;
   static const readerOutline = _Paths.readerOutline;
   static const readerAi = _Paths.readerAi;
+  static const wifiTransfer = _Paths.wifiTransfer;
   static const debugGallery = _Paths.debugGallery;
 }
 
@@ -14,5 +15,6 @@ abstract class _Paths {
   static const home = '/home';
   static const readerOutline = '/reader/outline';
   static const readerAi = '/reader/ai';
+  static const wifiTransfer = '/wifi-transfer';
   static const debugGallery = '/debug-gallery';
 }

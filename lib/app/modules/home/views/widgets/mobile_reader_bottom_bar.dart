@@ -66,6 +66,11 @@ class MobileReaderBottomBar extends StatelessWidget {
                       onPressed: controller.handleOpenFile,
                       icon: HugeIcons.strokeRoundedFolderOpen,
                     ),
+                    _MobileToolbarButton(
+                      tooltip: 'WiFi 传书',
+                      onPressed: () => Get.toNamed<void>(Routes.wifiTransfer),
+                      icon: HugeIcons.strokeRoundedWifi01,
+                    ),
                     if (hasDocument) ...<Widget>[
                       _MobileToolbarButton(
                         tooltip: '上一页',
@@ -161,9 +166,7 @@ class MobileReaderBottomBar extends StatelessWidget {
               FilteringTextInputFormatter.digitsOnly,
             ],
             onSubmitted: (_) => submit(),
-            decoration: InputDecoration(
-              hintText: '1 - ${state.pageCount}',
-            ),
+            decoration: InputDecoration(hintText: '1 - ${state.pageCount}'),
           ),
           actions: <Widget>[
             TextButton(
@@ -205,7 +208,9 @@ class _MobileToolbarButton extends StatelessWidget {
           foregroundColor: selected
               ? AppColors.textPrimary
               : AppColors.textSecondary,
-          disabledForegroundColor: AppColors.textTertiary.withValues(alpha: 0.45),
+          disabledForegroundColor: AppColors.textTertiary.withValues(
+            alpha: 0.45,
+          ),
           backgroundColor: selected ? AppColors.seed : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -264,7 +269,9 @@ class _ZoomButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           foregroundColor: AppColors.textPrimary,
           backgroundColor: AppColors.fillFaint,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         child: Text(
           '${(zoom * 100).round()}%',
@@ -276,10 +283,7 @@ class _ZoomButton extends StatelessWidget {
 }
 
 class _BackgroundThemeButton extends StatelessWidget {
-  const _BackgroundThemeButton({
-    required this.theme,
-    required this.onSelected,
-  });
+  const _BackgroundThemeButton({required this.theme, required this.onSelected});
 
   final PdfBackgroundTheme theme;
   final ValueChanged<PdfBackgroundTheme> onSelected;

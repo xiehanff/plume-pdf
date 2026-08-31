@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../routes/app_pages.dart';
 import '../controllers/home_controller.dart';
 import '../models/pdf_reader_state.dart';
 import '../../../theme/app_colors.dart';
@@ -86,6 +87,7 @@ class MobileHomeView extends GetView<HomeController> {
         files: state.recentFiles,
         unavailableFilePaths: state.unavailableRecentFilePaths,
         onOpenFile: controller.handleOpenFile,
+        onOpenWifiTransfer: () => Get.toNamed<void>(Routes.wifiTransfer),
         onRecentFileTap: controller.handleOpenRecentFile,
         onDeleteRecentFile: controller.deleteRecentFile,
         onRecoverRecentFile: controller.recoverRecentFile,

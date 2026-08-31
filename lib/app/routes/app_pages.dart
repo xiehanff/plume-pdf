@@ -6,6 +6,7 @@ import '../modules/home/views/home_view.dart';
 import '../modules/home/views/mobile_ai_view.dart';
 import '../modules/home/views/mobile_home_view.dart';
 import '../modules/home/views/mobile_outline_view.dart';
+import '../modules/home/views/mobile_wifi_transfer_view.dart';
 import '../modules/home/views/widgets/debug_gallery_view.dart';
 
 part 'app_routes.dart';
@@ -18,24 +19,17 @@ class AppPages {
   static final routes = [
     GetPage(
       name: _Paths.home,
-      page: () => _isMobilePlatform
-          ? const MobileHomeView()
-          : const HomeView(),
+      page: () => _isMobilePlatform ? const MobileHomeView() : const HomeView(),
       binding: HomeBinding(),
     ),
+    GetPage(name: _Paths.readerOutline, page: () => const MobileOutlineView()),
+    GetPage(name: _Paths.readerAi, page: () => const MobileAiView()),
     GetPage(
-      name: _Paths.readerOutline,
-      page: () => const MobileOutlineView(),
-    ),
-    GetPage(
-      name: _Paths.readerAi,
-      page: () => const MobileAiView(),
+      name: _Paths.wifiTransfer,
+      page: () => const MobileWifiTransferView(),
     ),
     if (kDebugMode)
-      GetPage(
-        name: _Paths.debugGallery,
-        page: () => const DebugGalleryView(),
-      ),
+      GetPage(name: _Paths.debugGallery, page: () => const DebugGalleryView()),
   ];
 }
 
