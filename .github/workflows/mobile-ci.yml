@@ -1,0 +1,90 @@
+name: Mobile CI
+
+on:
+  push:
+    branches: [feat/mobile-ios-android]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.41.9'
+
+jobs:
+  bootstrap:
+    name: Bootstrap Android/iOS scaffolds
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout latest branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Generate missing mobile platform projects
+        shell: bash
+        run: |
+          if [ ! -d android ] || [ ! -d ios ]; then
+            flutter create \
+              --platforms=android,ios \
+              --project-name=plume_pdf \
+              --org=com.xiehan \
+              .
+          fi
+
+      - name: Commit generated platform scaffolds
+        shell: bash
+        run: |
+          git add android ios .metadata
+          if git diff --cached --quiet; then
+            echo "Mobile platform scaffolds already exist."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: add Android and iOS platform scaffolds"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+  verify:
+    name: Analyze + Android/iOS build
+    needs: bootstrap
+    runs-on: macos-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout latest branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+
+      - name: Build iOS simulator app
+        run: flutter build ios --simulator
