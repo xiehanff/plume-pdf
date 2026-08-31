@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -8,53 +9,127 @@ import 'package:path_provider/path_provider.dart';
 typedef WifiUploadedFileCallback = Future<void> Function(String filePath);
 
 class WifiTransferService {
+  WifiTransferService({
+    InternetAddress? bindAddressOverride,
+    Directory? uploadDirectoryOverride,
+    String? sessionTokenOverride,
+    Future<void> Function()? beforeBind,
+  }) : _bindAddressOverride = bindAddressOverride,
+       _uploadDirectoryOverride = uploadDirectoryOverride,
+       _sessionTokenOverride = sessionTokenOverride,
+       _beforeBind = beforeBind;
+
   static const int _maxUploadBytes = 512 * 1024 * 1024;
+
+  final InternetAddress? _bindAddressOverride;
+  final Directory? _uploadDirectoryOverride;
+  final String? _sessionTokenOverride;
+  final Future<void> Function()? _beforeBind;
 
   HttpServer? _server;
   StreamSubscription<HttpRequest>? _subscription;
   Directory? _uploadDirectory;
   WifiUploadedFileCallback? _onUploaded;
   String? _address;
+  String? _sessionToken;
+  Future<String>? _startFuture;
+  int _generation = 0;
 
   String? get address => _address;
   bool get isRunning => _server != null;
 
-  Future<String> start({required WifiUploadedFileCallback onUploaded}) async {
-    if (isRunning && _address != null) {
-      return _address!;
+  Future<String> start({required WifiUploadedFileCallback onUploaded}) {
+    final String? currentAddress = _address;
+    if (isRunning && currentAddress != null) {
+      return Future<String>.value(currentAddress);
     }
 
-    final String ipAddress = await _findLocalIpAddress();
-    final Directory documentsDirectory =
-        await getApplicationDocumentsDirectory();
-    final Directory uploadDirectory = Directory(
-      path.join(documentsDirectory.path, 'wifi_uploads'),
-    );
+    final Future<String>? pendingStart = _startFuture;
+    if (pendingStart != null) {
+      return pendingStart;
+    }
+
+    final int generation = _generation;
+    late final Future<String> future;
+    future = _startInternal(
+      onUploaded: onUploaded,
+      generation: generation,
+    ).whenComplete(() {
+      if (identical(_startFuture, future)) {
+        _startFuture = null;
+      }
+    });
+    _startFuture = future;
+    return future;
+  }
+
+  Future<String> _startInternal({
+    required WifiUploadedFileCallback onUploaded,
+    required int generation,
+  }) async {
+    final String ipAddress =
+        _bindAddressOverride?.address ?? await _findLocalIpAddress();
+    final Directory uploadDirectory =
+        _uploadDirectoryOverride ?? await _defaultUploadDirectory();
     await uploadDirectory.create(recursive: true);
 
-    final HttpServer server = await HttpServer.bind(
-      InternetAddress.anyIPv4,
-      0,
-      shared: true,
-    );
+    await _beforeBind?.call();
+    _throwIfStartCancelled(generation);
+
+    final InternetAddress bindAddress =
+        _bindAddressOverride ?? InternetAddress(ipAddress);
+    final HttpServer server = await HttpServer.bind(bindAddress, 0);
+    if (generation != _generation) {
+      await server.close(force: true);
+      throw StateError('传书服务启动已取消。');
+    }
+
+    final String sessionToken =
+        _sessionTokenOverride ?? _generateSessionToken();
     _server = server;
     _uploadDirectory = uploadDirectory;
     _onUploaded = onUploaded;
-    _address = 'http://$ipAddress:${server.port}';
+    _sessionToken = sessionToken;
+    _address = 'http://$ipAddress:${server.port}/$sessionToken';
     _subscription = server.listen(_handleRequest);
     return _address!;
   }
 
   Future<void> stop() async {
+    _generation++;
+    final Future<String>? pendingStart = _startFuture;
     final StreamSubscription<HttpRequest>? subscription = _subscription;
     final HttpServer? server = _server;
+
     _subscription = null;
     _server = null;
     _uploadDirectory = null;
     _onUploaded = null;
     _address = null;
+    _sessionToken = null;
+
     await subscription?.cancel();
     await server?.close(force: true);
+
+    if (pendingStart != null) {
+      try {
+        await pendingStart;
+      } catch (_) {
+        // stop() 取消了正在进行的 start() 时，等待其完成清理即可。
+      }
+    }
+  }
+
+  void _throwIfStartCancelled(int generation) {
+    if (generation != _generation) {
+      throw StateError('传书服务启动已取消。');
+    }
+  }
+
+  Future<Directory> _defaultUploadDirectory() async {
+    final Directory documentsDirectory =
+        await getApplicationDocumentsDirectory();
+    return Directory(path.join(documentsDirectory.path, 'wifi_uploads'));
   }
 
   Future<String> _findLocalIpAddress() async {
@@ -91,29 +166,52 @@ class WifiTransferService {
     return 1;
   }
 
+  String _generateSessionToken() {
+    final Random random = Random.secure();
+    final List<int> bytes = List<int>.generate(
+      24,
+      (_) => random.nextInt(256),
+      growable: false,
+    );
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+
   Future<void> _handleRequest(HttpRequest request) async {
     try {
-      if (request.method == 'GET' && request.uri.path == '/') {
-        await _writeHtml(request.response, _uploadPage);
+      final String? sessionToken = _sessionToken;
+      if (sessionToken == null) {
+        await _writeNotFound(request.response);
         return;
       }
-      if (request.method == 'GET' && request.uri.path == '/health') {
+
+      final String basePath = '/$sessionToken';
+      final String requestPath = request.uri.path;
+      if (request.method == 'GET' &&
+          (requestPath == basePath || requestPath == '$basePath/')) {
+        await _writeHtml(
+          request.response,
+          _uploadPage.replaceAll('__UPLOAD_PATH__', '$basePath/upload'),
+        );
+        return;
+      }
+      if (request.method == 'GET' && requestPath == '$basePath/health') {
         await _writeJson(request.response, 200, <String, Object>{'ok': true});
         return;
       }
-      if (request.method == 'POST' && request.uri.path == '/upload') {
+      if (request.method == 'POST' && requestPath == '$basePath/upload') {
         await _handleUpload(request);
         return;
       }
-      await _writeJson(request.response, 404, <String, Object>{
-        'ok': false,
-        'message': 'Not found',
-      });
+      await _writeNotFound(request.response);
     } catch (error) {
-      await _writeJson(request.response, 500, <String, Object>{
-        'ok': false,
-        'message': '服务器错误：$error',
-      });
+      try {
+        await _writeJson(request.response, 500, <String, Object>{
+          'ok': false,
+          'message': '服务器错误：$error',
+        });
+      } catch (_) {
+        // 客户端已断开或响应已关闭时无需再次写回错误。
+      }
     }
   }
 
@@ -145,36 +243,49 @@ class WifiTransferService {
       return;
     }
 
-    final String uploadId = DateTime.now().microsecondsSinceEpoch.toString();
+    final String uploadId =
+        '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
     final File temporaryFile = File(
       path.join(uploadDirectory.path, '.$uploadId.upload'),
     );
-    final File targetFile = _nextAvailableFile(uploadDirectory, fileName);
     IOSink? sink;
     bool sinkClosed = false;
+    File? committedFile;
     try {
       sink = temporaryFile.openWrite();
       int receivedBytes = 0;
       await for (final List<int> chunk in request) {
         receivedBytes += chunk.length;
         if (receivedBytes > _maxUploadBytes) {
-          throw const _UploadException('文件不能超过 512 MB。');
+          throw const _UploadException(
+            '文件不能超过 512 MB。',
+            statusCode: 413,
+          );
         }
         sink.add(chunk);
       }
       await sink.flush();
       await sink.close();
       sinkClosed = true;
-      await temporaryFile.rename(targetFile.path);
+
+      if (!await _hasPdfHeader(temporaryFile)) {
+        throw const _UploadException(
+          '文件内容不是有效的 PDF。',
+          statusCode: 400,
+        );
+      }
+
+      final File targetFile = _nextAvailableFile(uploadDirectory, fileName);
+      committedFile = await temporaryFile.rename(targetFile.path);
 
       await _writeJson(request.response, 200, <String, Object>{
         'ok': true,
-        'fileName': fileName,
+        'fileName': path.basename(committedFile.path),
         'message': '上传成功，手机正在打开文件。',
       });
       final WifiUploadedFileCallback? onUploaded = _onUploaded;
       if (onUploaded != null) {
-        unawaited(onUploaded(targetFile.path));
+        unawaited(onUploaded(committedFile.path));
       }
     } catch (error) {
       if (!sinkClosed) {
@@ -183,14 +294,31 @@ class WifiTransferService {
       if (await temporaryFile.exists()) {
         await temporaryFile.delete();
       }
-      if (await targetFile.exists()) {
-        await targetFile.delete();
+      if (committedFile != null && await committedFile.exists()) {
+        await committedFile.delete();
       }
-      final int statusCode = error is _UploadException ? 413 : 500;
+      final int statusCode = error is _UploadException
+          ? error.statusCode
+          : 500;
       await _writeJson(request.response, statusCode, <String, Object>{
         'ok': false,
         'message': error.toString().replaceFirst('Exception: ', ''),
       });
+    }
+  }
+
+  Future<bool> _hasPdfHeader(File file) async {
+    final RandomAccessFile randomAccessFile = await file.open();
+    try {
+      final List<int> header = await randomAccessFile.read(5);
+      return header.length == 5 &&
+          header[0] == 0x25 &&
+          header[1] == 0x50 &&
+          header[2] == 0x44 &&
+          header[3] == 0x46 &&
+          header[4] == 0x2D;
+    } finally {
+      await randomAccessFile.close();
     }
   }
 
@@ -218,8 +346,15 @@ class WifiTransferService {
     }
     final String stem = path.basenameWithoutExtension(fileName);
     final String extension = path.extension(fileName);
-    final String suffix = DateTime.now().millisecondsSinceEpoch.toString();
+    final String suffix = DateTime.now().microsecondsSinceEpoch.toString();
     return File(path.join(directory.path, '$stem-$suffix$extension'));
+  }
+
+  Future<void> _writeNotFound(HttpResponse response) {
+    return _writeJson(response, 404, <String, Object>{
+      'ok': false,
+      'message': 'Not found',
+    });
   }
 
   Future<void> _writeHtml(HttpResponse response, String html) async {
@@ -228,6 +363,7 @@ class WifiTransferService {
       'html',
       charset: 'utf-8',
     );
+    _setNoStoreHeaders(response);
     response.write(html);
     await response.close();
   }
@@ -239,8 +375,15 @@ class WifiTransferService {
   ) async {
     response.statusCode = statusCode;
     response.headers.contentType = ContentType.json;
+    _setNoStoreHeaders(response);
     response.write(jsonEncode(payload));
     await response.close();
+  }
+
+  void _setNoStoreHeaders(HttpResponse response) {
+    response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    response.headers.set('Referrer-Policy', 'no-referrer');
   }
 }
 
@@ -252,9 +395,10 @@ class _NetworkAddress {
 }
 
 class _UploadException implements Exception {
-  const _UploadException(this.message);
+  const _UploadException(this.message, {required this.statusCode});
 
   final String message;
+  final int statusCode;
 
   @override
   String toString() => message;
@@ -284,14 +428,14 @@ const String _uploadPage = '''<!doctype html>
 <body>
   <main>
     <h1>WiFi 传书</h1>
-    <p>请确保电脑和手机连接同一个 WiFi。将 PDF 拖到下面区域，文件会直接传到手机。</p>
+    <p>请确保电脑和手机连接同一个受信任的 WiFi。将 PDF 拖到下面区域，文件会直接传到手机。</p>
     <label class="drop" id="drop">
       <strong>拖动 PDF 到这里</strong>
       <span>或点击选择 PDF 文件</span>
       <input id="file" type="file" accept="application/pdf,.pdf">
     </label>
     <div id="status"></div>
-    <div class="hint">只支持 PDF，单个文件最大 512 MB</div>
+    <div class="hint">只支持 PDF，单个文件最大 512 MB；关闭手机传书页面后本次地址立即失效。</div>
   </main>
   <script>
     const drop = document.getElementById('drop');
@@ -304,7 +448,7 @@ const String _uploadPage = '''<!doctype html>
     function upload(file) {
       if (!file.name.toLowerCase().endsWith('.pdf')) { status.textContent = '请选择 PDF 文件。'; return; }
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/upload');
+      xhr.open('POST', '__UPLOAD_PATH__');
       xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
       xhr.setRequestHeader('Content-Type', 'application/pdf');
       xhr.upload.onprogress = event => {

@@ -18,6 +18,7 @@ class EmptyReaderView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool mobileActions = onOpenWifiTransfer != null;
     return ReaderStateCard(
       title: '打开本地 PDF',
       body: Text(
@@ -27,7 +28,7 @@ class EmptyReaderView extends StatelessWidget {
           height: 1.6,
         ),
       ),
-      action: onOpenWifiTransfer == null
+      action: !mobileActions
           ? _buildLocalButton()
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,12 +51,14 @@ class EmptyReaderView extends StatelessWidget {
                 ),
               ],
             ),
-      footer: Text(
-        '快捷键：${primaryShortcutModifierLabel()} + O',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: AppColors.textTertiary,
-        ),
-      ),
+      footer: mobileActions
+          ? null
+          : Text(
+              '快捷键：${primaryShortcutModifierLabel()} + O',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.textTertiary,
+              ),
+            ),
     );
   }
 

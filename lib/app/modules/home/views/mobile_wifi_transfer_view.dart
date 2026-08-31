@@ -47,13 +47,16 @@ class _WifiTransferPageState extends State<_WifiTransferPage> {
   }
 
   Future<void> _startServer() async {
-    setState(() {
-      _starting = true;
-      _errorMessage = null;
-    });
+    if (mounted) {
+      setState(() {
+        _starting = true;
+        _errorMessage = null;
+      });
+    }
     try {
       final String address = await _service.start(onUploaded: _handleUploaded);
       if (!mounted) {
+        await _service.stop();
         return;
       }
       setState(() {
@@ -126,7 +129,7 @@ class _WifiTransferPageState extends State<_WifiTransferPage> {
               ),
               const SizedBox(height: 10),
               const Text(
-                '让电脑和手机连接同一个 WiFi，然后用电脑浏览器访问下面的地址。',
+                '让电脑和手机连接同一个受信任的 WiFi，然后用电脑浏览器访问下面的临时地址。关闭此页面后地址立即失效。',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textSecondary, height: 1.5),
               ),
@@ -196,7 +199,7 @@ class _WifiTransferPageState extends State<_WifiTransferPage> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: AppColors.accentBright,
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -226,9 +229,10 @@ class _WifiTransferPageState extends State<_WifiTransferPage> {
           ),
           SizedBox(height: 12),
           Text(
-            '1. 在电脑浏览器打开上面的地址\n'
+            '1. 在电脑浏览器打开上面的临时地址\n'
             '2. 将 .pdf 文件拖到网页上传区域\n'
-            '3. 上传完成后，手机会自动打开 PDF',
+            '3. 上传完成后，手机会自动打开 PDF\n'
+            '4. 完成后返回上一页，传书服务会立即关闭',
             style: TextStyle(color: AppColors.textSecondary, height: 1.7),
           ),
         ],

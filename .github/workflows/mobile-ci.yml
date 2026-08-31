@@ -9,6 +9,7 @@ on:
       - 'android/**'
       - 'ios/**'
       - 'packages/**'
+      - 'test/**'
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - '.github/workflows/mobile-ci.yml'
@@ -26,9 +27,9 @@ env:
 
 jobs:
   verify:
-    name: Analyze + Android/iOS build
+    name: Test + Analyze + Android/iOS build
     runs-on: macos-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -43,6 +44,9 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Test
+        run: flutter test
 
       - name: Analyze
         run: flutter analyze --no-fatal-infos
