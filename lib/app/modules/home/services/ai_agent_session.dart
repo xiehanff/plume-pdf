@@ -159,15 +159,20 @@ class AiAgentSession {
       });
     }
 
-    await for (final DeepSeekStreamChunk chunk in stream()) {
-      if (isStale != null && isStale()) {
-        break;
+    try {
+      await for (final DeepSeekStreamChunk chunk in stream()) {
+        if (isStale != null && isStale()) {
+          break;
+        }
+        textBuffer.write(chunk.text);
+        reasoningBuffer.write(chunk.reasoning);
+        schedulePreview();
       }
-      textBuffer.write(chunk.text);
-      reasoningBuffer.write(chunk.reasoning);
-      schedulePreview();
+    } finally {
+      // await-for 因网络/解析异常退出时也必须取消 pending preview，
+      // 避免错误状态已经写入后，迟到的 Timer 又回调旧的流式内容。
+      previewTimer?.cancel();
     }
-    previewTimer?.cancel();
 
     final AiResponse response = AiResponseParser.parse(textBuffer.toString());
     final String content = response.content.trim();
