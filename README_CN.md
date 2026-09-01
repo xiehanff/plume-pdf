@@ -37,6 +37,7 @@ Plume PDF 是一个基于 Flutter + PDFium（`pdfrx`）的跨平台 PDF 阅读�
 ### 移动端
 
 - 已加入标准 Flutter Android / iOS 工程
+- Android 仅支持 ARMv8-A / `arm64-v8a`
 - 使用独立 `MobileHomeView`，桌面 `HomeView` 保持原结构
 - 阅读区完整处理顶部/底部安全区，并提供固定移动端工具栏
 - 目录、AI 使用全屏移动路由，但继续复用同一套 `HomeController`、`PdfReaderState`、`PdfViewerController`
@@ -50,7 +51,7 @@ Plume PDF 是一个基于 Flutter + PDFium（`pdfrx`）的跨平台 PDF 阅读�
 | macOS | 可用 | 原生 Vision OCR、PDF 打开集成、DMG 发布打包 |
 | Windows | 可用 | 原生 OCR、`.pdf` 关联、EXE 安装包 |
 | Linux | 可用 | DEB + RPM 发布打包 |
-| Android | 可用 | CI 验证 debug APK；明确打 `v*` tag 时额外生成 release 模式 APK |
+| Android | 可用 | 仅 `arm64-v8a`；CI 验证 arm64 debug APK，明确发版时生成 arm64 release APK |
 | iOS | 可用 | 已验证 simulator build；尚未配置生产签名与正式分发 |
 
 > Android 当前 `release` buildType 仍使用仓库中的 debug signing 配置。该 APK 适合自测/自托管分发；正式上架 Play Store 或生产分发前必须接入正式 keystore。
@@ -73,7 +74,7 @@ fvm flutter run -d linux
 # 移动端
 fvm flutter run -d android
 fvm flutter run -d ios
-fvm flutter build apk --debug
+fvm flutter build apk --debug --target-platform android-arm64
 fvm flutter build ios --simulator
 ```
 
@@ -81,20 +82,13 @@ fvm flutter build ios --simulator
 
 仓库现在有两条主要 Actions：
 
-- `Mobile CI`：在 `main`、移动端开发分支及相关 PR 上执行测试、静态分析、Android debug APK、iOS simulator build。
+- `Mobile CI`：在 `main`、移动端开发分支及相关 PR 上执行测试、静态分析、Android arm64 debug APK、iOS simulator build。
 - `Build Packages`：普通 `main` push 构建并上传 Linux DEB+RPM、Windows EXE、macOS DMG。
 
-只有明确推送 `v*` 版本 tag 时，才额外生成 Android release APK 并发布 GitHub Release：
-
-```bash
-git tag v0.0.20
-git push origin v0.0.20
-```
-
-Tag 发布会等待 Linux、Windows、macOS、Android 四个平台打包成功，然后将产物统一放入同一个 GitHub Release。Android 文件名类似：
+只有明确发布版本时，才额外生成 Android arm64 release APK 并发布 GitHub Release。Android 文件名类似：
 
 ```text
-plume-pdf-android-v0.0.20.apk
+plume-pdf-android-arm64-v8a-v0.0.21.apk
 ```
 
 普通 `main` push **不会**生成 Android release APK。
