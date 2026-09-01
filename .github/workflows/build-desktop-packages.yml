@@ -228,6 +228,18 @@ jobs:
       - name: Build Android arm64 release APK
         run: flutter build apk --release --target-platform android-arm64
 
+      - name: Verify APK contains only arm64-v8a native libraries
+        shell: bash
+        run: |
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          ABIS="$(unzip -Z1 "$APK" | awk -F/ '/^lib\/[^/]+\/.*\.so$/ { print $2 }' | sort -u)"
+          echo "Native ABIs in APK:"
+          printf '%s\n' "$ABIS"
+          if [[ "$ABIS" != "arm64-v8a" ]]; then
+            echo "Expected only arm64-v8a native libraries." >&2
+            exit 1
+          fi
+
       - name: Prepare Android APK
         run: cp build/app/outputs/flutter-apk/app-release.apk "plume-pdf-android-arm64-v8a-${RELEASE_TAG}.apk"
 
