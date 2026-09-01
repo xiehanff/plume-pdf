@@ -294,9 +294,9 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        // 展开态按钮已隐藏，无需测量；折叠态以纯文本测量估算是否
-        // 超出八行，决定展开按钮显隐与截断渲染。
-        final bool hasOverflow = !_expanded && _measureHasOverflow(constraints);
+        // 以纯文本测量估算内容是否超出八行（与展开状态无关，
+        // 展开后仍需显示“收起”按钮）；渲染路径再区分展开/折叠。
+        final bool hasOverflow = _measureHasOverflow(constraints);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),

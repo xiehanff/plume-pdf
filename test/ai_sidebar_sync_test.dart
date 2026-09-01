@@ -165,7 +165,7 @@ void main() {
     );
   });
 
-  testWidgets('推理过程按 markdown 渲染，超限折叠渐隐并可展开', (tester) async {
+  testWidgets('推理过程折叠态纯文本轻量渲染，展开后完整 markdown 渲染', (tester) async {
     final String reasoning = List<String>.generate(
       9,
       (int index) => '推理第 ${index + 1} 行',
@@ -182,15 +182,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(ReasoningPanel), findsOneWidget);
-    expect(find.byType(GptMarkdown), findsOneWidget);
+    // 折叠态：轻量纯文本渲染（不构建完整 Markdown），八行截断 + 渐隐遮罩。
+    expect(find.byType(GptMarkdown), findsNothing);
+    expect(find.textContaining('推理第 1 行'), findsOneWidget);
     expect(find.text('展开全部'), findsOneWidget);
-    // 折叠态：八行高度截断 + 渐隐遮罩。
     expect(find.byType(ShaderMask), findsOneWidget);
 
     await tester.tap(find.text('展开全部'));
     await tester.pump();
     expect(find.text('收起'), findsOneWidget);
-    // 展开态：解除截断与遮罩，完整渲染。
+    // 展开态：完整 Markdown 渲染，解除截断与遮罩。
+    expect(find.byType(GptMarkdown), findsOneWidget);
     expect(find.byType(ShaderMask), findsNothing);
   });
 }
