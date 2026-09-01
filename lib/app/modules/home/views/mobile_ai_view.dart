@@ -27,7 +27,13 @@ class MobileAiView extends GetView<HomeController> {
       ),
       body: const SafeArea(
         top: false,
-        child: AiSidebar(fullWidth: true),
+        child: Padding(
+          // SafeArea 先避开系统底部区域，再额外保留 20px。
+          // 某些 Android 设备 bottom padding 为 0，也能保证输入框
+          // 不会直接贴到屏幕底边。
+          padding: EdgeInsets.only(bottom: 20),
+          child: AiSidebar(fullWidth: true),
+        ),
       ),
     );
   }
