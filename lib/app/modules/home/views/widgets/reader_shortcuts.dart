@@ -30,57 +30,54 @@ class ReaderShortcuts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool useMeta = usesMetaModifier();
-    return Focus(
-      autofocus: true,
-      child: CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.escape): onEscape,
-          SingleActivator(
-            LogicalKeyboardKey.keyO,
-            meta: useMeta,
-            control: !useMeta,
-          ): onOpenFile,
-          const SingleActivator(LogicalKeyboardKey.arrowLeft): onPreviousPage,
-          const SingleActivator(LogicalKeyboardKey.arrowRight): onNextPage,
-          SingleActivator(
-            LogicalKeyboardKey.digit0,
-            meta: useMeta,
-            control: !useMeta,
-          ): onActualSize,
-          SingleActivator(
-            LogicalKeyboardKey.keyB,
-            meta: useMeta,
-            control: !useMeta,
-          ): onToggleSidebar,
-          SingleActivator(
-            LogicalKeyboardKey.equal,
-            meta: useMeta,
-            control: !useMeta,
-          ): onZoomIn,
-          SingleActivator(
-            LogicalKeyboardKey.equal,
-            shift: true,
-            meta: useMeta,
-            control: !useMeta,
-          ): onZoomIn,
-          SingleActivator(
-            LogicalKeyboardKey.numpadAdd,
-            meta: useMeta,
-            control: !useMeta,
-          ): onZoomIn,
-          SingleActivator(
-            LogicalKeyboardKey.minus,
-            meta: useMeta,
-            control: !useMeta,
-          ): onZoomOut,
-          SingleActivator(
-            LogicalKeyboardKey.numpadSubtract,
-            meta: useMeta,
-            control: !useMeta,
-          ): onZoomOut,
-        },
-        child: child,
-      ),
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.escape): onEscape,
+        SingleActivator(
+          LogicalKeyboardKey.keyO,
+          meta: useMeta,
+          control: !useMeta,
+        ): onOpenFile,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): onPreviousPage,
+        const SingleActivator(LogicalKeyboardKey.arrowRight): onNextPage,
+        SingleActivator(
+          LogicalKeyboardKey.digit0,
+          meta: useMeta,
+          control: !useMeta,
+        ): onActualSize,
+        SingleActivator(
+          LogicalKeyboardKey.keyB,
+          meta: useMeta,
+          control: !useMeta,
+        ): onToggleSidebar,
+        SingleActivator(
+          LogicalKeyboardKey.equal,
+          meta: useMeta,
+          control: !useMeta,
+        ): onZoomIn,
+        SingleActivator(
+          LogicalKeyboardKey.equal,
+          shift: true,
+          meta: useMeta,
+          control: !useMeta,
+        ): onZoomIn,
+        SingleActivator(
+          LogicalKeyboardKey.numpadAdd,
+          meta: useMeta,
+          control: !useMeta,
+        ): onZoomIn,
+        SingleActivator(
+          LogicalKeyboardKey.minus,
+          meta: useMeta,
+          control: !useMeta,
+        ): onZoomOut,
+        SingleActivator(
+          LogicalKeyboardKey.numpadSubtract,
+          meta: useMeta,
+          control: !useMeta,
+        ): onZoomOut,
+      },
+      child: Focus(autofocus: true, child: child),
     );
   }
 }
