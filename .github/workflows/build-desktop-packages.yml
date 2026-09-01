@@ -1,8 +1,8 @@
-name: Build Desktop Packages
+name: Build Packages
 
 on:
   push:
-    branches: [main, feat/mobile-ios-android]
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
@@ -167,11 +167,14 @@ jobs:
       - name: Build Android release APK
         run: flutter build apk --release
 
+      - name: Prepare Android APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk "plume-pdf-android-${GITHUB_REF_NAME}.apk"
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: plume-pdf-android-${{ github.ref_name }}
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: plume-pdf-android-*.apk
           if-no-files-found: error
           retention-days: 30
 
