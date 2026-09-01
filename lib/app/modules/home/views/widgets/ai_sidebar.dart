@@ -152,7 +152,23 @@ class _AiSidebarView extends StatelessWidget {
                 AiSidebarSettingsList(
                   deepSeekController: controller.deepSeekController,
                   onDeepSeekChanged: controller.onApiKeyChanged,
-                  onSaveDeepSeek: controller.onSaveApiKey,
+                  onSaveDeepSeek: () async {
+                    final String apiKey = controller.deepSeekController.text
+                        .trim();
+                    if (apiKey.isEmpty) {
+                      return;
+                    }
+
+                    // 保存前统一去掉用户误输入的首尾空白；状态同步是同步的，
+                    // 随后的 save 会持久化修正后的值。
+                    if (apiKey != controller.state.apiKey) {
+                      controller.onApiKeyChanged(apiKey);
+                    }
+                    await controller.onSaveApiKey();
+                    if (sheetContext.mounted) {
+                      Navigator.of(sheetContext).pop();
+                    }
+                  },
                   shrinkWrap: true,
                 ),
               ],
