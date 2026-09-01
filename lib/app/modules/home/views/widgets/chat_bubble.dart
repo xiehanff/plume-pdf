@@ -146,7 +146,7 @@ class ChatBubble extends StatelessWidget {
       margin: EdgeInsets.only(
         bottom: 12,
         left: isHuman ? 32 : 0,
-        right: isHuman ? 0 : 32,
+        right: 0,
       ),
       child: Column(
         crossAxisAlignment: isHuman
