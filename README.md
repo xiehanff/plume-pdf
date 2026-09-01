@@ -37,6 +37,7 @@ Plume PDF is a cross-platform PDF reader built with Flutter + PDFium (`pdfrx`) w
 ### Mobile
 
 - Native Flutter Android and iOS projects
+- Android supports ARMv8-A / `arm64-v8a` only
 - Dedicated mobile reader shell; desktop `HomeView` remains unchanged
 - Safe-area-aware reader layout and fixed mobile toolbar
 - Outline and AI use full-screen mobile routes while reusing the same `HomeController`, `PdfReaderState` and `PdfViewerController`
@@ -50,7 +51,7 @@ Plume PDF is a cross-platform PDF reader built with Flutter + PDFium (`pdfrx`) w
 | macOS | Available | Native Vision OCR, PDF opener integration, DMG release packaging |
 | Windows | Available | Native OCR, `.pdf` association, EXE installer packaging |
 | Linux | Available | DEB + RPM release packaging |
-| Android | Available | Debug CI build; `v*` tags also produce a release-mode APK artifact |
+| Android | Available | `arm64-v8a` only; CI builds arm64 debug APKs and releases produce arm64 APKs |
 | iOS | Available | Simulator build verified; production signing/distribution is not configured yet |
 
 > Android release-mode APKs currently use the repository's debug signing configuration. They are suitable for self-hosted testing, but a production keystore must be configured before Play Store or production distribution.
@@ -73,7 +74,7 @@ fvm flutter run -d linux
 # Mobile
 fvm flutter run -d android
 fvm flutter run -d ios
-fvm flutter build apk --debug
+fvm flutter build apk --debug --target-platform android-arm64
 fvm flutter build ios --simulator
 ```
 
@@ -81,20 +82,13 @@ fvm flutter build ios --simulator
 
 Two workflows protect the project:
 
-- `Mobile CI`: on `main`, the mobile feature branch, and relevant pull requests it runs tests, static analysis, Android debug build, and iOS simulator build.
+- `Mobile CI`: runs tests, static analysis, an Android arm64 debug APK build, and an iOS simulator build.
 - `Build Packages`: normal `main` pushes build/upload Linux DEB+RPM, Windows EXE, and macOS DMG artifacts.
 
-Only an explicit version tag matching `v*` adds Android release packaging and publishes a GitHub Release:
-
-```bash
-git tag v0.0.20
-git push origin v0.0.20
-```
-
-A tag release waits for Linux, Windows, macOS, and Android packaging, then uploads the generated assets to the same GitHub Release. The Android file is named like:
+Explicit releases additionally build an Android arm64 release APK and publish a GitHub Release. Android files are named like:
 
 ```text
-plume-pdf-android-v0.0.20.apk
+plume-pdf-android-arm64-v8a-v0.0.21.apk
 ```
 
 ## Distribution Docs
