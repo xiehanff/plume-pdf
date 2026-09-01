@@ -35,6 +35,22 @@ android {
         }
     }
 
+    // Some plugins bundle prebuilt JNI libraries for multiple ABIs. `abiFilters`
+    // alone does not remove every prebuilt .so, so explicitly exclude all
+    // non-arm64 native libraries from the final APK as well.
+    packaging {
+        jniLibs {
+            excludes += setOf(
+                "**/armeabi/*.so",
+                "**/armeabi-v7a/*.so",
+                "**/x86/*.so",
+                "**/x86_64/*.so",
+                "**/mips/*.so",
+                "**/mips64/*.so",
+            )
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
