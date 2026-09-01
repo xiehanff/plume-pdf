@@ -1,104 +1,80 @@
 # Windows 安装包生成与分发
 
-项目路径：`D:\xiehan\github\plume-pdf`
-
-这份文档只记录两件事：
-
-- 如何重新生成 Windows 安装包
-- 如何把安装包分发给用户
+本文记录当前 Windows Release / Inno Setup 安装包生成方式，以及 GitHub Actions 发布行为。
 
 ## 1. 前置条件
 
 - 使用项目固定 Flutter 版本：`fvm`
-- 本机已安装 Inno Setup 6
+- 本机安装 Inno Setup 6
 
-## 2. 重新生成安装包
+## 2. 本地生成安装包
 
-推荐直接走聚合命令：
+推荐：
 
 ```powershell
 .\make.cmd package-windows
 ```
 
-这条命令会先构建最新的 Release，再继续生成 setup 安装包。
+这条命令会构建最新 Windows Release，并调用 `windows/installer/build_installer.ps1` 生成 setup。
 
-如果你只想手动拆开执行，顺序如下。
-
-如果刚改过代码，先重新生成 Release：
+手动执行：
 
 ```powershell
-fvm flutter build windows --release --verbose
-```
-
-如果 `build/windows/x64/runner/Release/` 已经是最新的，可以直接跳过上面这步。
-
-然后执行安装包脚本：
-
-```powershell
+fvm flutter build windows --release
 & .\windows\installer\build_installer.ps1 -SkipBuild
 ```
 
-如果希望脚本自动先构建再打包，也可以直接执行：
+如果希望脚本自己构建：
 
 ```powershell
 & .\windows\installer\build_installer.ps1
 ```
 
-或者走项目入口命令：
-
-```powershell
-powershell -File .\make.ps1 package-windows
-```
-
-如果你的环境装了 GNU make，也可以直接执行：
-
-```powershell
-make package-windows
-```
-
-## 3. 安装包输出位置
-
-生成后的安装包在：
+## 3. 输出位置
 
 ```text
-windows/installer/dist/PlumePDF_Setup_0.0.16.exe
+windows/installer/dist/PlumePDF_Setup_<version>.exe
 ```
 
-如果后面版本号变化，文件名会跟随 `pubspec.yaml` 的版本号更新。
+版本来自 `pubspec.yaml`，不要在文档中固定旧版本文件名。
 
-## 4. 安装包会帮用户做什么
+## 4. 安装器行为
 
-用户双击安装包后，安装器会自动：
+安装器会：
 
-- 安装程序到 `C:\Program Files\Plume PDF`
-- 创建桌面快捷方式 `Plume PDF`
-- 创建开始菜单入口 `Plume PDF`
-- 注册 `.pdf` 文件关联；用户可在“打开方式”里选择 Plume PDF，之后双击 PDF 会直接进入阅读页
+- 安装到 `C:\Program Files\Plume PDF`
+- 创建桌面快捷方式
+- 创建开始菜单入口
+- 注册 `.pdf` 文件关联
 
-用户不需要自己运行 PowerShell 脚本。
+## 5. GitHub Actions
 
-## 5. 分发给用户时怎么说
-
-直接把这个文件发给用户：
+`.github/workflows/build-desktop-packages.yml` 的 Windows job 使用 `windows-2022`：
 
 ```text
-PlumePDF_Setup_0.0.16.exe
+Checkout
+→ Setup Flutter
+→ Install Inno Setup
+→ flutter pub get
+→ flutter build windows --release
+→ build_installer.ps1 -SkipBuild
+→ upload-artifact *.exe
 ```
 
-附一句最小说明就够了：
+普通 `main` push 会生成 Actions Artifact。
 
-```text
-双击安装包完成安装。安装后桌面会出现 Plume PDF 快捷方式，开始菜单里也可以找到 Plume PDF。
-```
+当明确推送 `v*` tag 时，Windows EXE 会和 Linux DEB/RPM、macOS DMG、Android APK 一起进入同一个 GitHub Release。
 
-## 6. 打包后建议自查
+## 6. 发布前自查
 
-每次发版前至少检查这几项：
+- Windows Release 构建通过
+- Inno Setup 成功输出 EXE
+- 安装后主程序存在
+- 桌面/开始菜单快捷方式存在
+- PDF “打开方式”中可以选择 Plume PDF
+- 双击 PDF 可以把文件路径传给应用并打开
+- 卸载行为正常
 
-- 安装包能正常生成
-- 安装后 `C:\Program Files\Plume PDF\plume_pdf.exe` 存在
-- 桌面快捷方式存在
-- 快捷方式能启动应用
-- 开始菜单能搜到 `Plume PDF`
-- 右键 PDF 时能在“打开方式”里看到 `Plume PDF`
-- 选中 `Plume PDF` 后，双击 PDF 会直接打开对应文档，不会再次弹出“选择打开方式”
+## 7. 当前 CI 状态
+
+移动端合并前已重新跑过完整 Windows release + installer + Artifact 上传，链路通过。

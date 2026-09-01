@@ -1,184 +1,325 @@
 # Plume PDF 源码报告
 
+> 更新于 2026-09-01。本文描述当前 `main`/移动端合并后的目标结构，不再以早期“macOS MVP”视角描述项目。
+
 ## 1. 项目定位
 
-`plume_pdf` 是一个基于 Flutter + GetX 的桌面 PDF 阅读器 MVP，当前重点运行环境是 macOS。核心能力包括：
+`plume_pdf` 是独立 Flutter App，不是 Flutter Module。当前目标平台包括：
 
-- 打开本地 PDF
-- 支持 Finder / Dock / 窗口拖拽打开 PDF
-- 目录侧边栏
-- 最近文件记录
-- 翻页 / 跳页 / 缩放
-- 单页 / 双页阅读
-- 阅读进度持久化
-- DeepSeek AI 辅助阅读
-- 图片型 PDF OCR 兜底识别
+- Windows
+- macOS
+- Linux
+- Android
+- iOS
 
-当前不是 Flutter Module，而是独立 Flutter App。
+核心能力包括 PDF 阅读、目录/最近文件、阅读进度、AI 多轮对话、Viewer 级跨页区域框选、文本/截图/OCR 上下文提取，以及移动端 WiFi 传书。
 
-## 2. 项目结构划分
+## 2. 顶层结构
 
-### 根目录
+```text
+lib/
+├─ main.dart
+└─ app/
+   ├─ routes/
+   ├─ theme/
+   ├─ services/
+   └─ modules/home/
+      ├─ bindings/
+      ├─ controllers/
+      ├─ models/
+      ├─ services/
+      └─ views/
 
-- `lib/`：业务源码
-- `macos/`：macOS Runner 与桌面配置
-- `test/`：测试
-- `docs/`：项目文档
-- `README.md`：项目使用说明
-- `CHANGELOG.md`：变更记录
-- `AGENTS.md`：仓库协作指南
+android/   标准 Flutter Android 工程
+ios/       标准 Flutter iOS 工程
+windows/   Windows Runner + OCR + Installer
+macos/     macOS Runner + Vision OCR + 文件打开桥接
+linux/     Linux Runner + desktop entry + icons
+scripts/   桌面打包脚本
+packaging/ RPM spec
+.github/workflows/
+├─ mobile-ci.yml
+└─ build-desktop-packages.yml
+```
 
-### lib/
+## 3. 平台启动隔离
 
-- `main.dart`
-  - 应用入口
-  - 注入全局暗色主题
-  - 配置全局去 splash 的 Material 主题
+`lib/main.dart` 只在 Windows/macOS/Linux 初始化 `window_manager`。Android/iOS 不进入桌面窗口初始化流程。
 
-- `app/routes/`
-  - `app_pages.dart`：GetX 路由表
-  - `app_routes.dart`：路由常量
+`app/routes/app_pages.dart` 根据运行平台决定 Home Shell：
 
-- `app/modules/home/`
-  - 当前唯一业务模块，承担整个阅读器主界面
+```text
+Android / iOS
+    → MobileHomeView
 
-## 3. Home 模块拆分
+Windows / macOS / Linux / Web fallback
+    → HomeView
+```
 
-### bindings
+这意味着移动端适配没有复制第二套业务 controller，而是只拆 UI Shell 和导航表现。
 
-- `home_binding.dart`
-  - 注册 `HomeController`
+## 4. Home 模块
 
-### controllers
+### HomeController
 
-- `home_controller.dart`
-  - 阅读器主控制器
-  - 负责文件打开、窗口拖拽 / Finder / Dock 打开接入、页面跳转、缩放、快捷键、最近文件加载、阅读状态刷新
-  - 当前是主状态编排入口，属于模块内 source of truth
+`HomeController` 仍是阅读模块编排入口，但职责已经拆到多个文件/服务：
 
-### models
+- 文件打开、最近文件与持久化
+- 页码、缩放、单双页、适宽
+- Outline 跳转
+- AI 动作/对话编排
+- `PdfViewerController` 生命周期
 
-- `pdf_reader_state.dart`
-  - 页面状态对象
-  - 包含文件路径、页码、缩放、侧边栏开关、双页模式、目录、最近文件、拖拽悬停状态等
+移动端和桌面端共用：
 
-- `pdf_outline_entry.dart`
-  - 目录项扁平结构
+```text
+HomeController
+PdfReaderState
+PdfViewerController
+AiSidebarController / StreamingAiSidebarController
+AiAgentSession
+PdfAiContextService
+```
 
-- `pdf_recent_file.dart`
-  - 最近文件结构与序列化
+### 桌面 Shell
 
-### services
+`home_view.dart` 保留桌面三栏/工具栏结构，负责桌面拖拽、标题栏、左右 Sidebar 和状态栏。
 
-- `pdf_file_picker.dart`
-  - 文件选择器封装
-  - 当前统一走 `file_selector`
+### 移动 Shell
 
-- `pdf_outline_mapper.dart`
-  - 将 `pdfrx` 的 outline tree 扁平化为 UI 可直接消费的数据
+`mobile_home_view.dart` 使用移动端布局：
 
-- `pdf_reader_store.dart`
-  - 最近文件和阅读进度持久化
-  - 基于 `shared_preferences`
+- PDF 内容避开顶部 SafeArea
+- 固定移动工具栏占用底部布局空间
+- 底部系统安全区继续保留
+- Outline、AI、WiFi 传书进入独立全屏路由
 
-- `macos_file_open_service.dart`
-  - macOS 原生文件打开桥接
-  - 接收 Finder / Dock 传入的文件路径并转发给 Dart 层
+相关页面：
 
-### views
+- `mobile_outline_view.dart`
+- `mobile_ai_view.dart`
+- `mobile_wifi_transfer_view.dart`
+- `mobile_reader_floating_toolbar.dart`
 
-- `home_view.dart`
-  - 阅读器页面骨架
-  - 组合顶部工具栏、左侧目录、中央 PDF 区、底部状态栏
-  - 根层集成桌面拖拽接收区和拖入提示层
+## 5. AI 架构
 
-### views/widgets
+当前核心调用链：
 
-- `reader_shortcuts.dart`
-  - 页面级快捷键壳层
+```text
+HomeController
+    ↓ 编排 / state
+HomeControllerAiSession
+    ├───────────────┐
+    ↓               ↓
+AiAgentSession   PdfAiContextService
+    │               │
+    │               ├─ 选区文本
+    │               ├─ 跨页区域
+    │               ├─ PDF 页面全文
+    │               ├─ 截图裁剪
+    │               └─ OCR fallback
+    ↓
+DeepSeekService / Genkit
+```
 
-- `reader_toolbar.dart`
-  - 顶部工具栏
-  - 包含打开文件、目录开关、单双页切换、翻页、缩放、适宽、100%
+### AiAgentSession
 
-- `reader_sidebar.dart`
-  - 左侧目录 / 最近文件区域
-  - 当有 outline 时显示目录，否则显示最近文件
+负责：
 
-- `pdfrx_viewer_adapter.dart`
-  - `pdfrx` 适配层
-  - 负责 viewer 参数、错误回调、双页排版
+- 会话 history
+- tool action / chat
+- stream accumulation
+- reasoning accumulation
+- preview 合并
+- response parsing
+- history commit / rollback
+- request generation / stale stream 防护
 
-- `page_status_bar.dart`
-  - 底部状态栏
+### PdfAiContextService
 
-- `empty_reader_view.dart`
-  - 空态
+负责：
 
-- `error_reader_view.dart`
-  - 错误态
+- 单页/跨页 selection 文本提取
+- 页面上下文
+- selection 截图
+- 跨页截图纵向合并
+- OCR fallback
+- 文档上下文边界处理
 
-## 4. 主要状态流
+隐私边界：本机目录和文件大小不发送给 DeepSeek；PDF 文本按不可信文档内容处理。
 
-### 打开文件
+## 6. Viewer 级跨页 AI 框选
 
-1. `ReaderToolbar` / 空态按钮 / Finder / Dock / 窗口拖拽 任一入口触发文件打开
-2. Flutter 文件选择器或 macOS 原生桥接返回文件路径
-3. `HomeController.openFilePath()` 更新 `PdfReaderState`
-4. PDF Viewer 重新加载 PDF
-5. `PdfReaderStore` 记录最近文件和页码
+旧结构是 `pageOverlaysBuilder` 每页维护一份 Stateful selection overlay，导致不同页可以同时残留选区。
 
-### 阅读状态更新
+当前结构改为：
 
-1. `pdfrx` 页码变化回调进入 `HomeController.onPageChanged()`
-2. 更新当前页码与输入框
-3. debounce 后写入最近文件记录
+```text
+PdfViewer
+   ↓ viewerOverlayBuilder
+PdfViewerAreaSelectionOverlay  ← 全局唯一
+   ↓
+viewer-local Rect
+   ↓ globalToDocument
+PDF document Rect
+   ↓ intersect pageLayouts
+List<PdfAiSelectionRegion>
+   ↓
+PdfAiSelection
+```
 
-### 目录跳转
+特性：
 
-1. `ReaderSidebar` 点击目录项
-2. `HomeController.jumpToOutlinePage()`
-3. 设置选中目录 id
-4. 调 `PdfViewerController.goToPage()`
+- 全局最多一个 selection
+- 可跨多页
+- PDF 页纵向 gap 为 0
+- selection 结束后映射为多个 page region
+- AI 文本/截图按同一个 selection 处理
 
-## 5. 平台层说明
+### 工具条定位
+
+`selection_toolbar_placement.dart` 使用屏幕可视区域而不是 PDF page 坐标决定动作按钮位置：
+
+1. 计算选区顶部到 viewport 顶部空间
+2. 计算选区底部到 viewport 底部空间
+3. 能完整容纳工具条的一侧优先
+4. 两侧都可用时选择空间更大的一侧
+5. 上下空间都低于 `screenHeight * 20%` 时，将工具条放到选区垂直中心
+6. X 始终按 viewport 水平中心对齐
+7. 移动端避让右上角 AI 模式控件
+
+## 7. AI 流式 UI
+
+### FollowTailScrollController
+
+流式气泡高度增长时，在 `correctForNewDimensions` 中使用 `correctPixels()` 并返回 `false`，让 viewport 在同一 frame 重新 layout，避免“offset 已正确但画面下一帧才跳”的闪烁。
+
+### StreamingAiSidebarController
+
+当用户上滚阅读历史且模型仍在流式输出时，临时延后高频昂贵 rebuild；用户回到底部或进入完成/错误终态时再 flush。
+
+### Markdown 成本控制
+
+- stream preview 约 40 ms 合并
+- 未闭合代码围栏先使用纯文本
+- reasoning 折叠态避免完整 Markdown 解析
+
+## 8. WiFi 传书
+
+`WifiTransferService` 在移动传书页面生命周期内启动 `HttpServer`：
+
+- 默认端口 8080，被占用时回退随机端口
+- 只接受 `.pdf`
+- 最大 512 MB
+- 校验 `%PDF-` header
+- 上传先写临时文件，再 rename commit
+- 页面销毁时停止 server
+
+当前安全假设是“受信任同一局域网”。后续若公开分发，建议增加随机 session token / upload token。
+
+## 9. 平台层
 
 ### macOS
 
-- `macos/Runner/MainFlutterWindow.swift`
-  - 标准 Flutter macOS 窗口初始化
-  - 注册 OCR channel 和文件打开 channel
+- Finder / Dock / 默认打开方式文件路径接入
+- Vision OCR
+- DMG 打包
 
-- `macos/Runner/AppDelegate.swift`
-  - 处理 `application(_:openFiles:)`
-  - 接收 Finder 双击、Dock 拖入、默认打开方式唤起时传入的 PDF 路径
+### Windows
 
-- `macos/Runner/Info.plist`
-  - 注册 `com.adobe.pdf` 文档类型
-  - 让系统识别 Plume PDF 为可打开 PDF 的应用
+- Windows.Media.Ocr
+- `.pdf` 文件关联
+- Inno Setup EXE installer
 
-当前文件打开能力同时依赖 Flutter 插件和 macOS 原生 openFiles 桥接。
+### Linux
 
-## 6. 测试现状
+- DEB / RPM
+- desktop entry / icons
 
-- `test/widget_test.dart`
-  - 校验首次启动空态
+### Android
 
-- `test/pdf_outline_mapper_test.dart`
-  - 校验目录扁平化逻辑
+- 标准 Flutter Android Runner
+- Mobile CI debug APK
+- `v*` tag 时 release-mode APK
+- 当前 release 使用 debug signing，生产分发前需正式 keystore
 
-当前测试覆盖偏轻，集中在启动空态和纯逻辑映射。
+### iOS
 
-## 7. 后续 agent 进入仓库建议
+- 标准 Flutter iOS Runner
+- 本地网络用途说明用于 WiFi 传书
+- CI 验证 simulator build
+- 尚未配置生产签名/IPA 发布链路
 
-1. 先从 `lib/main.dart -> app/routes/app_pages.dart -> home_view.dart -> home_controller.dart` 顺着主链路读
-2. 只要涉及 PDF 加载、翻页、缩放，优先看 `home_controller.dart` 和 `pdfrx_viewer_adapter.dart`
-3. 只要涉及最近文件或阅读页码持久化，优先看 `pdf_reader_store.dart`
-4. 只要涉及目录显示或选中逻辑，优先看 `pdf_outline_mapper.dart`、`pdf_outline_entry.dart`、`reader_sidebar.dart`
-5. 改 macOS 文件打开行为前，先确认是“窗口内拖拽”还是“Finder / Dock / 默认打开方式”链路；后者已经接入 `macos/` 原生层
+## 10. CI / Release
 
-## 8. 当前代码边界
+### Mobile CI
 
-- 当前只有一个 `home` 模块，没有拆分多页面或多 domain
-- 主题、颜色和交互样式已经收敛到 `app/theme/app_colors.dart`，但主阅读链路仍主要由 `home` 模块承载
-- `HomeController` 仍然是模块内最重的文件，后续若继续重构，优先拆“阅读会话状态编排”和“快捷键处理”
+执行：
+
+```text
+flutter pub get
+flutter test
+flutter analyze --no-fatal-infos
+flutter build apk --debug
+flutter build ios --simulator
+```
+
+### Build Packages
+
+普通 `main` push：
+
+- Linux DEB + RPM
+- Windows EXE
+- macOS DMG
+
+明确推送 `v*` tag：
+
+- 上述三平台
+- Android release-mode APK
+- 四个平台成功后统一 Publish GitHub Release
+
+## 11. 测试现状
+
+当前已覆盖的重点包括：
+
+- AI response/session
+- stale stream / clear during stream
+- AI Sidebar state sync
+- 流式 scroll 与同帧渲染断言
+- streaming rebuild suppression
+- API Key bottom sheet
+- PDF AI context / selection model
+- 跨页 selection model
+- selection toolbar 屏幕定位
+- reader state / toolbar layout
+- WiFi transfer service
+
+因此测试已经不再是早期“启动空态 + outline mapper”的轻覆盖状态。
+
+## 12. Agent 阅读顺序
+
+建议按下面顺序进入仓库：
+
+```text
+lib/main.dart
+  ↓
+app/routes/app_pages.dart
+  ↓
+HomeView / MobileHomeView
+  ↓
+HomeController
+  ↓
+PdfReaderState + HomeControllerNavigation/FileManager/AiSession
+  ↓
+AiSelectablePdfViewer
+  ↓
+PdfViewerAreaSelectionOverlay
+  ↓
+AiSidebarController / StreamingAiSidebarController
+  ↓
+AiAgentSession + PdfAiContextService
+  ↓
+DeepSeekService
+```
+
+若问题是桌面平台行为，再进入 `windows/` / `macos/` / `linux/`；若问题是移动 Runner/权限，再进入 `android/` / `ios/`。

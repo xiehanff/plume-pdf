@@ -2,107 +2,133 @@
 
 English | [中文](./README_CN.md)
 
-A high-performance desktop PDF reader built with Flutter + PDFium, featuring DeepSeek AI assistance.
+Plume PDF is a cross-platform PDF reader built with Flutter + PDFium (`pdfrx`) with DeepSeek AI-assisted reading. The same reading state/controller layer is shared by desktop and mobile, while desktop and mobile use platform-specific shells.
 
 ## Features
 
-- Open local PDFs with recent file history (grid layout)
-- macOS: open via Finder double-click, Dock icon drag, or window drop
-- Windows: open via "Open with" / double-click `.pdf` to launch and load
-- Linux: release `.rpm` and `.deb` packages available for Fedora/Debian/Ubuntu-based systems
-- Table of contents sidebar with chapter navigation (preserves manual selection within multi-level TOC on the same page)
+### Reading
+
+- Open local PDFs and keep recent files / reading progress
+- Table of contents navigation
 - Previous / next page and page number jump
 - Zoom in / out / fit width / reset to `100%`
 - Single-page / dual-page reading mode
-- AI selection mode
-- Quick actions on selected area: `Translate`, `Explain`, `Deep Understand` (with full-page context)
-- AI sidebar: configure a DeepSeek API Key and continue streaming multi-turn conversations
-- AI-generated, context-aware follow-up suggestion chips shown after model replies
-- Markdown rendering (gpt_markdown) + code syntax highlighting (atom-one-dark)
-- AI sidebar streaming is bottom-anchored: follow-tail without jitter, and scrolling up to read history is never pushed away by incoming tokens
-- Unified `OPPO Sans` font for UI and Markdown text; inline code and code blocks use `Google Sans Mono`
-- Vision-capable models: AI selection prioritizes screenshot-based cloud understanding; falls back to local OCR / text extraction
-- Non-vision models skip screenshot path entirely, avoiding unnecessary rendering
 - Reading background themes: `Default` / `Cloudy` / `Parchment` / `Eye Green`
+- PDF pages are rendered continuously without vertical page gaps
+
+### AI reading
+
+- Configure a DeepSeek API Key and use streaming multi-turn chat
+- Area selection actions: `Translate`, `Explain`, `Deep Understand`
+- A selection belongs to the whole PDF viewer rather than one page, so one selection can span multiple consecutive pages
+- Only one selection rectangle and one action toolbar can exist globally at a time
+- Selection action toolbar placement is based on real screen space, not page coordinates; when both sides have less than 20% screen height available it falls back to the vertical center of the selection, while staying horizontally centered in the viewport
+- Cross-page text extraction is merged in page order; screenshot/OCR fallback crops each selected page region and combines them into one AI context
+- Vision-capable models prefer screenshot understanding and fall back to local OCR / PDF text extraction
+- AI responses use streaming-aware rebuild suppression while the user is reading history, and same-frame follow-tail correction avoids bottom flicker
+- Markdown rendering uses the local `gpt_markdown` fork; code blocks use syntax highlighting
+
+### Desktop
+
+- macOS: Finder / Dock / window-drop PDF opening, native Vision OCR
+- Windows: `.pdf` file association, native OCR, keyboard shortcuts and Inno Setup installer
+- Linux: `.deb` and `.rpm` release packages
+
+### Mobile
+
+- Native Flutter Android and iOS projects
+- Dedicated mobile reader shell; desktop `HomeView` remains unchanged
+- Safe-area-aware reader layout and fixed mobile toolbar
+- Outline and AI use full-screen mobile routes while reusing the same `HomeController`, `PdfReaderState` and `PdfViewerController`
+- Mobile AI input keeps the system bottom safe area plus an additional 20 px gap
+- WiFi transfer: while the transfer page is open, a temporary local HTTP endpoint accepts PDF uploads from a computer on the same trusted LAN and opens the uploaded PDF on the phone
 
 ## Platform Status
 
 | Platform | Status | Notes |
 |---|---|---|
-| macOS | Available | Native Vision OCR, PDF default opener registration, Dock/Finder open and window drop |
-| Windows | Available | Native OCR, keyboard shortcuts, window title, rounded icon, `.pdf` file association |
-| Linux | Available | Release `.rpm` package for Fedora-based systems, native title bar/icon handling |
+| macOS | Available | Native Vision OCR, PDF opener integration, DMG release packaging |
+| Windows | Available | Native OCR, `.pdf` association, EXE installer packaging |
+| Linux | Available | DEB + RPM release packaging |
+| Android | Available | Debug CI build; `v*` tags also produce a release-mode APK artifact |
+| iOS | Available | Simulator build verified; production signing/distribution is not configured yet |
+
+> Android release-mode APKs currently use the repository's debug signing configuration. They are suitable for self-hosted testing, but a production keystore must be configured before Play Store or production distribution.
 
 ## Development
 
-This project uses [fvm](https://fvm.app/) to manage the Flutter SDK version. All `flutter` / `dart` commands must be prefixed with `fvm`.
+The project uses [FVM](https://fvm.app/) and locks Flutter in `.fvmrc`.
 
 ```bash
-# After first clone
-fvm install                       # Install Flutter version locked in .fvmrc
-fvm flutter pub get               # Install dependencies
+fvm install
+fvm flutter pub get
+fvm flutter test
+fvm flutter analyze --no-fatal-infos
 
-# Daily development
-fvm dart analyze lib/             # Static analysis
-fvm flutter run -d windows         # Run on Windows
-fvm flutter run -d macos           # Run on macOS
-fvm flutter run -d linux           # Run on Linux
-fvm flutter build windows          # Build Windows
-fvm flutter build macos            # Build macOS
-fvm flutter build linux            # Build Linux
-powershell -File .\make.ps1 build-msix-windows  # Build Windows MSIX
-.\make.cmd package-windows         # Build Windows release + setup installer
-fvm flutter build linux --release --verbose  # Build Linux release bundle
-fvm flutter clean                  # Clean build artifacts
-fvm flutter pub upgrade            # Upgrade dependencies
+# Desktop
+fvm flutter run -d windows
+fvm flutter run -d macos
+fvm flutter run -d linux
+
+# Mobile
+fvm flutter run -d android
+fvm flutter run -d ios
+fvm flutter build apk --debug
+fvm flutter build ios --simulator
 ```
 
-## Windows Distribution
+## CI and Releases
 
-- MSIX package: `powershell -File .\make.ps1 build-msix-windows`
-- Inno Setup installer: `.\make.cmd package-windows`
-- Windows installer for `v0.0.16`: `PlumePDF_Setup_0.0.16.exe`
-- GitHub release assets are attached to the `v0.0.16` release
+Two workflows protect the project:
 
-Related document:
+- `Mobile CI`: on `main`, the mobile feature branch, and relevant pull requests it runs tests, static analysis, Android debug build, and iOS simulator build.
+- `Build Packages`: normal `main` pushes build/upload Linux DEB+RPM, Windows EXE, and macOS DMG artifacts.
+
+Only an explicit version tag matching `v*` adds Android release packaging and publishes a GitHub Release:
+
+```bash
+git tag v0.0.20
+git push origin v0.0.20
+```
+
+A tag release waits for Linux, Windows, macOS, and Android packaging, then uploads the generated assets to the same GitHub Release. The Android file is named like:
+
+```text
+plume-pdf-android-v0.0.20.apk
+```
+
+## Distribution Docs
 
 - [Windows installer distribution](./docs/windows-installer-distribution.md)
+- [Linux Debian package distribution](./docs/linux-deb-distribution.md)
+- [Linux RPM package distribution](./docs/linux-rpm-distribution.md)
 
-## Linux Distribution
+## Architecture Notes
 
-- RPM package: `plume-pdf-0.0.16-17.fc44.x86_64.rpm`
-- Suitable for Fedora-based systems
-- DEB package: `plume-pdf_0.0.16+17_amd64.deb`
-- GitHub release assets: download the attached packages from the `v0.0.16` release
-- Build RPM: `make package-rpm`
-- Build DEB: `make package-deb`
-- How to package: [Linux RPM package distribution](./docs/linux-rpm-distribution.md)
-- Debian/Ubuntu package distribution: [Linux Debian package distribution](./docs/linux-deb-distribution.md)
+- PDF rendering: `pdfrx` / PDFium
+- Routing/state: GetX
+- Shared reader orchestration: `HomeController` + `PdfReaderState` + `PdfViewerController`
+- Desktop shell: `HomeView`
+- Mobile shell: `MobileHomeView`, with full-screen Outline / AI / WiFi transfer routes
+- AI orchestration: `HomeControllerAiSession`
+- AI session/history/stream aggregation: `AiAgentSession`
+- PDF text/image/OCR context: `PdfAiContextService`
+- AI transport: `DeepSeekService` via Genkit
+- Streaming UI optimization: `StreamingAiSidebarController` + `FollowTailScrollController`
+- Viewer-level multi-page AI selection: `PdfViewerAreaSelectionOverlay`
+- Local network PDF transfer: `WifiTransferService`
 
-## Technical Notes
-
-- PDF rendering and interaction powered by `pdfrx` (backed by PDFium)
-- Image-based PDF text recognition uses native OCR: macOS via Vision, Windows via `Windows.Media.Ocr`
-- AI requests routed through Google Genkit: DeepSeek streaming chat completions
-- Model capabilities configured via `assets/config/ai_models.json`; `supportsVision` flag controls screenshot understanding pipeline
-- Markdown rendering uses gpt_markdown (local fork at `packages/gpt_markdown`)
-- App bundle embeds `OPPO Sans` and `GoogleSansMono` font assets: text uses OPPO Sans, code uses GoogleSansMono
-- Code highlighting uses flutter_highlight (atom-one-dark theme)
-- macOS file opening integrates native `openFiles` callback for receiving PDF paths from Finder / Dock
-- Windows builds use [`Directory.Build.props`](./Directory.Build.props) to disable `TrackFileAccess`, preventing `MSBuild/Tracker.exe` from hanging
-- Windows release script at [`scripts/build_windows_msix.ps1`](./scripts/build_windows_msix.ps1) generates rounded Windows icons and packages as `msix`
-- Windows installer script at [`windows/installer/build_installer.ps1`](./windows/installer/build_installer.ps1) packages the Release folder with Inno Setup and creates desktop/start-menu shortcuts
+For a deeper source map, see [docs/source_code_report.md](./docs/source_code_report.md).
 
 ## Key Dependencies
 
-- `desktop_drop` — Desktop window drag-and-drop file opening
-- `get` — Routing and state management
+- `get` — routing and state management
 - `pdfrx` — PDF rendering and reader control
 - `gpt_markdown` — Markdown rendering (local fork)
-- `flutter_highlight` + `highlight` — Code syntax highlighting
-- `file_selector` — Native file picker dialog
-- `hugeicons` — Toolbar and status icons
-- `http` — HTTP client used by the DeepSeek service
-- `genkit` + `genkit_openai` — DeepSeek streaming chat completions
-- `loading_indicator` — Loading animations (ballPulse etc.)
-- `shared_preferences` — Recent file persistence
+- `flutter_highlight` + `highlight` — code syntax highlighting
+- `file_selector` — native file picker
+- `desktop_drop` — desktop drag-and-drop opening
+- `http` — HTTP utilities
+- `genkit` + `genkit_openai` — DeepSeek streaming calls
+- `shared_preferences` — recent files / reader settings persistence
+- `path_provider` — application directories, including mobile WiFi transfers

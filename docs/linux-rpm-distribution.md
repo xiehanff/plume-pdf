@@ -1,36 +1,32 @@
 # Linux RPM Package Distribution
 
-本文说明如何生成 Fedora/Linux RPM release 包，以及如何在 Fedora 上安装测试。
+本文记录 Plume PDF 的 Fedora/Linux RPM release 打包方式。
 
-## 1. 前置条件
+## 1. 本地前置条件
 
-- 使用项目固定 Flutter 版本：`fvm`
-- 已安装 `rpm-build` 和 `patchelf`：
+Fedora：
 
 ```bash
 sudo dnf install rpm-build patchelf
 ```
 
-## 2. 生成 RPM
+项目使用 FVM 锁定 Flutter 版本。
 
-从项目根目录执行：
+## 2. 生成 RPM
 
 ```bash
 make package-rpm
 ```
 
-脚本会先执行 `fvm flutter build linux --release`，再使用
-`packaging/plume-pdf.spec` 生成 RPM。
+脚本先构建 Linux Release，再使用 `packaging/plume-pdf.spec` 生成 RPM。
 
-本次 `0.0.16+17` 的输出文件为：
+输出格式类似：
 
 ```text
-build/linux/x64/release/plume-pdf-0.0.16-17.fc44.x86_64.rpm
+build/linux/x64/release/plume-pdf-<version>-<build>.<dist>.x86_64.rpm
 ```
 
-文件名中的 `.fc44` 是 Fedora 发行版标识；在其他 Fedora 版本上构建时，该后缀会随系统 RPM 配置变化。
-
-如果已经有最新的 Linux release bundle，可跳过 Flutter 构建：
+若已有最新 Release Bundle：
 
 ```bash
 ./scripts/build_linux_rpm.sh --skip-build
@@ -39,30 +35,41 @@ build/linux/x64/release/plume-pdf-0.0.16-17.fc44.x86_64.rpm
 ## 3. 安装测试
 
 ```bash
-sudo dnf install ./build/linux/x64/release/plume-pdf-0.0.16-17.fc44.x86_64.rpm
+sudo dnf install ./build/linux/x64/release/*.rpm
 ```
 
-升级同一应用的后续版本时仍使用 `dnf install`；卸载时执行：
+卸载：
 
 ```bash
 sudo dnf remove plume-pdf
 ```
 
-## 4. 手动验收
+验收：
 
-- 应用菜单中能看到 `Plume PDF` 和正确图标。
-- 应用可以启动并打开 PDF。
-- 自定义标题栏可以拖动窗口。
-- 最小化、最大化、关闭按钮可用，关闭按钮 hover 背景为红色。
-- 操作栏右侧菜单上下留白一致，顶部左侧不再重复显示文件标题。
-- 从文件管理器双击或使用“打开方式”打开 PDF 时，应用能加载传入文件。
+- 应用菜单、图标正常
+- 应用可启动并打开 PDF
+- 桌面窗口控制正常
+- 文件管理器“打开方式”链路正常
 
-## 5. GitHub Release
+## 4. GitHub Actions 特殊说明
 
-将生成的 `.rpm` 作为 `v0.0.16` Release asset 上传：
+GitHub Hosted Linux runner 使用 Ubuntu，因此 `patchelf` 是通过 apt/dpkg 安装，而 `rpmbuild` 的 `BuildRequires` 只查看 RPM 自己的数据库。
 
-```bash
-gh release upload v0.0.16 \
-  build/linux/x64/release/plume-pdf-0.0.16-17.fc44.x86_64.rpm \
-  --clobber
+当前脚本会：
+
+```text
+先检查 rpmbuild / patchelf 命令真实存在
+→ rpmbuild --nodeps
 ```
+
+`--nodeps` 只用于绕过“RPM 数据库看不到 apt 已安装 patchelf”的误判，并不是无条件忽略系统依赖。
+
+## 5. CI / Release
+
+普通 `main` push 会自动生成 DEB + RPM Actions Artifact。
+
+明确 `v*` tag 时，RPM 会和 DEB、Windows EXE、macOS DMG、Android APK 一起进入 GitHub Release，不需要手动执行 `gh release upload`。
+
+## 6. 当前验证状态
+
+移动端合并前已在 Hosted runner 上重新验证 Linux Release、DEB、RPM、Artifact 上传整条链路通过。
