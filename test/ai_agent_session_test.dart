@@ -54,6 +54,59 @@ void main() {
     expect(session.history.last.role, AiChatHistoryRole.assistant);
   });
 
+  test('高频 chunk 在 40ms 窗口内合并为一次 preview', () async {
+    final _FakeDeepSeekService fake = _FakeDeepSeekService();
+    final AiAgentSession session = AiAgentSession(deepSeekService: fake);
+    final List<String> previews = <String>[];
+
+    final Future<AiStreamResult> running = session.runToolAction(
+      action: AiToolAction.translate,
+      apiKey: 'k',
+      selectionText: 'hello',
+      onPreview: (String text, String reasoning) {
+        previews.add(text);
+      },
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    for (int index = 0; index < 10; index++) {
+      fake.chunks.add(DeepSeekStreamChunk(text: '$index'));
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 55));
+    expect(previews, <String>['0123456789']);
+
+    await fake.chunks.close();
+    final AiStreamResult result = await running;
+    expect(result.content, '0123456789');
+  });
+
+  test('流异常会取消 pending preview，错误后不再回调旧内容', () async {
+    final _FakeDeepSeekService fake = _FakeDeepSeekService();
+    final AiAgentSession session = AiAgentSession(deepSeekService: fake);
+    int previewCount = 0;
+
+    final Future<AiStreamResult> running = session.runToolAction(
+      action: AiToolAction.translate,
+      apiKey: 'k',
+      selectionText: 'hello',
+      onPreview: (String text, String reasoning) {
+        previewCount++;
+      },
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    fake.chunks.add(const DeepSeekStreamChunk(text: '部分回答'));
+    await Future<void>.delayed(Duration.zero);
+    fake.chunks.addError(StateError('network failed'));
+
+    await expectLater(running, throwsA(isA<StateError>()));
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(previewCount, 0);
+
+    await fake.chunks.close();
+  });
+
   test('动作流式中途新建会话：旧请求完成后不写入历史', () async {
     final _FakeDeepSeekService fake = _FakeDeepSeekService();
     final AiAgentSession session = AiAgentSession(deepSeekService: fake);

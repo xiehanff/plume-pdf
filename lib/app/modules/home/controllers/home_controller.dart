@@ -13,6 +13,7 @@ import '../models/ai_chat_input.dart';
 import '../models/pdf_ai_panel_state.dart';
 import '../models/pdf_ai_context.dart';
 import 'ai_sidebar_controller.dart';
+import 'streaming_ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
@@ -206,9 +207,49 @@ class HomeController extends GetxController {
   }
 
   void _applyState(PdfReaderState nextState) {
+    final PdfReaderState previousState = state;
     state = nextState;
     _syncAiSidebarController();
-    update(<Object>[viewId]);
+
+    final bool aiPanelChanged =
+        !identical(previousState.aiPanelState, nextState.aiPanelState);
+    if (!aiPanelChanged || _readerViewStateChanged(previousState, nextState)) {
+      update(<Object>[viewId]);
+    }
+  }
+
+  /// 判断是否有 AI 面板之外、会影响 Reader Shell/PDF 区域的状态变化。
+  ///
+  /// 流式 preview 只替换 [PdfAiPanelState]，这种高频更新只需要通知
+  /// [AiSidebarController]，不应让被 AI 路由覆盖的 MobileHomeView 或
+  /// 桌面 PDF Reader 每 ~40ms 跟着 rebuild。
+  bool _readerViewStateChanged(
+    PdfReaderState previousState,
+    PdfReaderState nextState,
+  ) {
+    return previousState.filePath != nextState.filePath ||
+        previousState.fileName != nextState.fileName ||
+        previousState.loading != nextState.loading ||
+        previousState.errorMessage != nextState.errorMessage ||
+        previousState.currentPage != nextState.currentPage ||
+        previousState.pageCount != nextState.pageCount ||
+        previousState.zoom != nextState.zoom ||
+        previousState.sidebarVisible != nextState.sidebarVisible ||
+        previousState.aiSidebarVisible != nextState.aiSidebarVisible ||
+        previousState.spreadMode != nextState.spreadMode ||
+        previousState.fitWidthActive != nextState.fitWidthActive ||
+        previousState.selectedOutlineId != nextState.selectedOutlineId ||
+        previousState.initialPage != nextState.initialPage ||
+        !identical(previousState.outline, nextState.outline) ||
+        !identical(previousState.recentFiles, nextState.recentFiles) ||
+        previousState.aiSelectionMode != nextState.aiSelectionMode ||
+        !identical(previousState.aiSelection, nextState.aiSelection) ||
+        previousState.backgroundTheme != nextState.backgroundTheme ||
+        previousState.draggingLocalFile != nextState.draggingLocalFile ||
+        !identical(
+          previousState.unavailableRecentFilePaths,
+          nextState.unavailableRecentFilePaths,
+        );
   }
 
   /// 唯一的侧栏状态同步入口：控制器已注册则无条件同步最新状态；
@@ -231,8 +272,8 @@ class HomeController extends GetxController {
       return;
     }
     if (state.aiSidebarVisible) {
-      Get.put(
-        AiSidebarController(
+      Get.put<AiSidebarController>(
+        StreamingAiSidebarController(
           state: state.aiPanelState,
           onApiKeyChanged: updateAiApiKey,
           onSaveApiKey: saveAiApiKey,

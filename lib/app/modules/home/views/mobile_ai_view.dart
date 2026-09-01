@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../controllers/ai_sidebar_controller.dart';
 import '../controllers/home_controller.dart';
+import '../controllers/streaming_ai_sidebar_controller.dart';
 import '../../../theme/app_colors.dart';
 import 'widgets/ai_sidebar.dart';
 
@@ -36,7 +37,7 @@ class MobileAiView extends GetView<HomeController> {
       return Get.find<AiSidebarController>(tag: AiSidebarController.tag);
     }
     return Get.put<AiSidebarController>(
-      AiSidebarController(
+      StreamingAiSidebarController(
         state: homeController.state.aiPanelState,
         onApiKeyChanged: homeController.updateAiApiKey,
         onSaveApiKey: homeController.saveAiApiKey,
