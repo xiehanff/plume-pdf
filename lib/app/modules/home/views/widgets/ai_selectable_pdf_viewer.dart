@@ -148,6 +148,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
               aiSelectionEnabled: widget.aiSelectionEnabled,
               onSelectionChanged: widget.onSelectionChanged,
               onActionSelected: widget.onActionSelected,
+              avoidTopRightControls: widget.onExitAiSelection != null,
             ),
           ];
         },
