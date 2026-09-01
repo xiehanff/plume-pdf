@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -10,35 +11,35 @@ import 'selection_toolbar_placement.dart';
 
 enum DragMode { none, create, move }
 
-class PdfPageAreaSelectionOverlay extends StatefulWidget {
-  const PdfPageAreaSelectionOverlay({
+/// PDF Viewer 级别的 AI 区域框选层。
+///
+/// 与旧的 pageOverlaysBuilder 方案不同，这里整个 PdfViewer 只有一个
+/// Stateful overlay，因此任何时刻最多只有一个框选框和一组动作按钮。
+/// 框选矩形使用 viewer 坐标，可以直接跨过相邻 PDF 页；结束拖拽后再把
+/// 这个矩形映射为它与各个 page layout 的交集 regions。
+class PdfViewerAreaSelectionOverlay extends StatefulWidget {
+  const PdfViewerAreaSelectionOverlay({
     super.key,
-    required this.page,
-    required this.pageRect,
-    required this.aiSelectionEnabled,
+    required this.controller,
+    required this.viewportSize,
     required this.onSelectionChanged,
     required this.onActionSelected,
     this.avoidTopRightControls = false,
   });
 
-  final PdfPage page;
-  final Rect pageRect;
-  final bool aiSelectionEnabled;
+  final PdfViewerController controller;
+  final Size viewportSize;
   final ValueChanged<PdfAiSelection?> onSelectionChanged;
   final ValueChanged<AiToolAction> onActionSelected;
-
-  /// 移动端 AI 选择模式在右上角有常驻状态胶囊/退出按钮；工具条需要避让。
   final bool avoidTopRightControls;
 
   @override
-  State<PdfPageAreaSelectionOverlay> createState() =>
-      _PdfPageAreaSelectionOverlayState();
+  State<PdfViewerAreaSelectionOverlay> createState() =>
+      _PdfViewerAreaSelectionOverlayState();
 }
 
-class _PdfPageAreaSelectionOverlayState
-    extends State<PdfPageAreaSelectionOverlay> {
-  final GlobalKey _overlayKey = GlobalKey(debugLabel: 'pdf-ai-selection-overlay');
-
+class _PdfViewerAreaSelectionOverlayState
+    extends State<PdfViewerAreaSelectionOverlay> {
   Rect? _dragRect;
   Rect? _selectedRect;
   Offset? _dragStart;
@@ -46,28 +47,16 @@ class _PdfPageAreaSelectionOverlayState
   DragMode _dragMode = DragMode.none;
 
   @override
-  void didUpdateWidget(covariant PdfPageAreaSelectionOverlay oldWidget) {
+  void didUpdateWidget(covariant PdfViewerAreaSelectionOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.page.pageNumber != widget.page.pageNumber ||
-        oldWidget.pageRect != widget.pageRect) {
-      _dragRect = null;
-      _selectedRect = null;
-      _dragStart = null;
-    } else if (!widget.aiSelectionEnabled && _dragRect != null) {
-      setState(() {
-        _dragRect = null;
-        _selectedRect = null;
-        _dragStart = null;
-      });
+    if (oldWidget.controller != widget.controller ||
+        oldWidget.viewportSize != widget.viewportSize) {
+      _clearSelection(notify: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.aiSelectionEnabled && _dragRect == null) {
-      return const SizedBox.shrink();
-    }
-
     final Rect? selectedRect = _selectedRect;
     final Offset? toolbarPosition = selectedRect == null
         ? null
@@ -75,47 +64,44 @@ class _PdfPageAreaSelectionOverlayState
 
     return Positioned.fill(
       child: Stack(
-        key: _overlayKey,
         clipBehavior: Clip.none,
         children: <Widget>[
           GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTapDown: _handleTapDown,
-            onPanStart: widget.aiSelectionEnabled ? _handlePanStart : null,
-            onPanUpdate: widget.aiSelectionEnabled ? _handlePanUpdate : null,
-            onPanEnd: widget.aiSelectionEnabled ? _handlePanEnd : null,
+            onPanStart: _handlePanStart,
+            onPanUpdate: _handlePanUpdate,
+            onPanEnd: _handlePanEnd,
             onPanCancel: _handlePanCancel,
             child: CustomPaint(
               painter: _SelectionRectPainter(rect: _dragRect),
-              child: widget.aiSelectionEnabled
-                  ? Align(
-                      alignment: Alignment.topLeft,
-                      child: Container(
-                        margin: const EdgeInsets.all(10),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.tooltipBg,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: const Text(
-                          '拖拽框选图片区域',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    )
-                  : null,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Container(
+                  margin: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.tooltipBg,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    '拖拽框选 PDF 区域',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
           if (selectedRect != null)
             _SelectionActionToolbar(
               rect: selectedRect,
-              pageSize: widget.pageRect.size,
+              viewportSize: widget.viewportSize,
               screenAwarePosition: toolbarPosition,
               onTranslate: () {
                 widget.onActionSelected(AiToolAction.translate);
@@ -135,35 +121,204 @@ class _PdfPageAreaSelectionOverlayState
     );
   }
 
-  /// 将 page-local 的框选矩形转换成屏幕 global 坐标，再依据屏幕真正
-  /// 可用的上下空间决定工具条放上方还是下方；最后把 global 位置转换
-  /// 回 page overlay 的 local 坐标供 [Positioned] 使用。
-  Offset? _resolveToolbarPosition(BuildContext context, Rect rect) {
-    final BuildContext? overlayContext = _overlayKey.currentContext;
-    final RenderObject? renderObject = overlayContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) {
-      // 第一次布局尚未建立 RenderBox 时保留旧 page-local 兜底；下一次
-      // selection/state 更新后即可使用屏幕坐标算法。
-      return null;
+  void _handleTapDown(TapDownDetails details) {
+    final Rect? selectedRect = _selectedRect;
+    if (selectedRect == null || selectedRect.contains(details.localPosition)) {
+      return;
+    }
+    _clearSelection();
+  }
+
+  void _handlePanStart(DragStartDetails details) {
+    final Offset point = _clampToViewport(details.localPosition);
+    final Rect? selectedRect = _selectedRect;
+    if (selectedRect != null && selectedRect.contains(point)) {
+      setState(() {
+        _dragMode = DragMode.move;
+        _dragPointerOffset = point - selectedRect.topLeft;
+        _dragRect = selectedRect;
+      });
+      return;
     }
 
-    final Offset globalTopLeft = renderObject.localToGlobal(rect.topLeft);
-    final Offset globalBottomRight = renderObject.localToGlobal(
+    setState(() {
+      _dragMode = DragMode.create;
+      _dragStart = point;
+      _dragRect = Rect.fromPoints(point, point);
+      _selectedRect = null;
+    });
+    // 开始新的拖拽时立即清掉旧的业务 selection，保证全局只有一份。
+    widget.onSelectionChanged(null);
+  }
+
+  void _handlePanUpdate(DragUpdateDetails details) {
+    if (_dragMode == DragMode.none) return;
+
+    if (_dragMode == DragMode.move) {
+      final Rect? currentRect = _dragRect;
+      final Offset? pointerOffset = _dragPointerOffset;
+      if (currentRect == null || pointerOffset == null) return;
+      final Offset point = _clampToViewport(details.localPosition);
+      final Offset topLeft = _clampTopLeft(
+        point - pointerOffset,
+        currentRect.size,
+      );
+      setState(() {
+        _dragRect = topLeft & currentRect.size;
+      });
+      return;
+    }
+
+    final Offset? start = _dragStart;
+    if (start == null) return;
+    final Offset point = _clampToViewport(details.localPosition);
+    setState(() {
+      _dragRect = Rect.fromPoints(start, point);
+    });
+  }
+
+  void _handlePanEnd(DragEndDetails details) {
+    final Rect? rect = _dragRect;
+    _dragStart = null;
+    _dragPointerOffset = null;
+    _dragMode = DragMode.none;
+
+    if (rect == null || rect.width < 12 || rect.height < 12) {
+      _clearSelection();
+      return;
+    }
+
+    final List<PdfAiSelectionRegion> regions = _regionsForViewerRect(rect);
+    if (regions.isEmpty) {
+      _clearSelection();
+      return;
+    }
+
+    setState(() {
+      _selectedRect = rect;
+      _dragRect = rect;
+    });
+    widget.onSelectionChanged(PdfAiSelection.regions(regions: regions));
+  }
+
+  void _handlePanCancel() {
+    final Rect? selectedRect = _selectedRect;
+    setState(() {
+      _dragRect = selectedRect;
+      _dragStart = null;
+      _dragPointerOffset = null;
+      _dragMode = DragMode.none;
+    });
+    if (selectedRect == null) {
+      widget.onSelectionChanged(null);
+    }
+  }
+
+  void _clearSelection({bool notify = true}) {
+    if (mounted) {
+      setState(() {
+        _selectedRect = null;
+        _dragRect = null;
+        _dragStart = null;
+        _dragPointerOffset = null;
+        _dragMode = DragMode.none;
+      });
+    }
+    if (notify) {
+      widget.onSelectionChanged(null);
+    }
+  }
+
+  Offset _clampToViewport(Offset point) {
+    return Offset(
+      point.dx.clamp(0, widget.viewportSize.width),
+      point.dy.clamp(0, widget.viewportSize.height),
+    );
+  }
+
+  Offset _clampTopLeft(Offset topLeft, Size size) {
+    return Offset(
+      topLeft.dx.clamp(0, math.max(0, widget.viewportSize.width - size.width)),
+      topLeft.dy.clamp(0, math.max(0, widget.viewportSize.height - size.height)),
+    );
+  }
+
+  /// 将 viewer-local 的一个矩形映射为与多个 PDF 页的交集。
+  /// pageLayouts 使用 PDF document layout 坐标（72dpi），因此无需再除 zoom。
+  List<PdfAiSelectionRegion> _regionsForViewerRect(Rect viewerRect) {
+    final Offset? globalTopLeft = widget.controller.localToGlobal(
+      viewerRect.topLeft,
+    );
+    final Offset? globalBottomRight = widget.controller.localToGlobal(
+      viewerRect.bottomRight,
+    );
+    if (globalTopLeft == null || globalBottomRight == null) {
+      return const <PdfAiSelectionRegion>[];
+    }
+
+    final Offset? documentTopLeft = widget.controller.globalToDocument(
+      globalTopLeft,
+    );
+    final Offset? documentBottomRight = widget.controller.globalToDocument(
+      globalBottomRight,
+    );
+    if (documentTopLeft == null || documentBottomRight == null) {
+      return const <PdfAiSelectionRegion>[];
+    }
+
+    final Rect documentRect = Rect.fromLTRB(
+      math.min(documentTopLeft.dx, documentBottomRight.dx),
+      math.min(documentTopLeft.dy, documentBottomRight.dy),
+      math.max(documentTopLeft.dx, documentBottomRight.dx),
+      math.max(documentTopLeft.dy, documentBottomRight.dy),
+    );
+
+    final List<Rect> pageLayouts = widget.controller.layout.pageLayouts;
+    final List<PdfPage> pages = widget.controller.pages;
+    final int count = math.min(pageLayouts.length, pages.length);
+    final List<PdfAiSelectionRegion> regions = <PdfAiSelectionRegion>[];
+
+    for (int index = 0; index < count; index++) {
+      final Rect pageLayout = pageLayouts[index];
+      final Rect intersection = documentRect.intersect(pageLayout);
+      if (intersection.width <= 0 || intersection.height <= 0) continue;
+
+      final PdfPage page = pages[index];
+      final Rect inPage = intersection.shift(-pageLayout.topLeft);
+      final double left = inPage.left.clamp(0, page.width);
+      final double right = inPage.right.clamp(0, page.width);
+      final double visualTop = inPage.top.clamp(0, page.height);
+      final double visualBottom = inPage.bottom.clamp(0, page.height);
+      if (right <= left || visualBottom <= visualTop) continue;
+
+      regions.add(
+        PdfAiSelectionRegion(
+          pageNumber: index + 1,
+          bounds: PdfRect(
+            left,
+            page.height - visualTop,
+            right,
+            page.height - visualBottom,
+          ),
+        ),
+      );
+    }
+
+    return regions;
+  }
+
+  Offset? _resolveToolbarPosition(BuildContext context, Rect rect) {
+    final Offset? globalTopLeft = widget.controller.localToGlobal(rect.topLeft);
+    final Offset? globalBottomRight = widget.controller.localToGlobal(
       rect.bottomRight,
     );
+    if (globalTopLeft == null || globalBottomRight == null) return null;
+
     final Rect selectionGlobalRect = Rect.fromLTRB(
-      globalTopLeft.dx < globalBottomRight.dx
-          ? globalTopLeft.dx
-          : globalBottomRight.dx,
-      globalTopLeft.dy < globalBottomRight.dy
-          ? globalTopLeft.dy
-          : globalBottomRight.dy,
-      globalTopLeft.dx > globalBottomRight.dx
-          ? globalTopLeft.dx
-          : globalBottomRight.dx,
-      globalTopLeft.dy > globalBottomRight.dy
-          ? globalTopLeft.dy
-          : globalBottomRight.dy,
+      math.min(globalTopLeft.dx, globalBottomRight.dx),
+      math.min(globalTopLeft.dy, globalBottomRight.dy),
+      math.max(globalTopLeft.dx, globalBottomRight.dx),
+      math.max(globalTopLeft.dy, globalBottomRight.dy),
     );
 
     final MediaQueryData mediaQuery = MediaQuery.of(context);
@@ -177,8 +332,6 @@ class _PdfPageAreaSelectionOverlayState
 
     Rect? avoidGlobalRect;
     if (widget.avoidTopRightControls) {
-      // AiSelectablePdfViewer 的 AI 模式胶囊固定在 SafeArea 内右上角 20px。
-      // 这里留出略大于实际控件的区域，包含退出按钮和两侧点击余量。
       const double reservedWidth = 190;
       const double reservedHeight = 68;
       final double reservedLeft = (viewportGlobalRect.right - reservedWidth)
@@ -201,152 +354,16 @@ class _PdfPageAreaSelectionOverlayState
           selectionGlobalRect: selectionGlobalRect,
           viewportGlobalRect: viewportGlobalRect,
           avoidGlobalRect: avoidGlobalRect,
+          screenHeight: mediaQuery.size.height,
         );
-    return renderObject.globalToLocal(placement.globalRect.topLeft);
-  }
-
-  void _clearSelection() {
-    setState(() {
-      _selectedRect = null;
-      _dragRect = null;
-      _dragStart = null;
-      _dragPointerOffset = null;
-      _dragMode = DragMode.none;
-    });
-    widget.onSelectionChanged(null);
-  }
-
-  void _notifySelectionChanged(Rect rect) {
-    widget.onSelectionChanged(
-      PdfAiSelection.area(
-        pageNumber: widget.page.pageNumber,
-        bounds: _toPdfRect(rect),
-      ),
-    );
-  }
-
-  void _handleTapDown(TapDownDetails details) {
-    final Rect? selectedRect = _selectedRect;
-    if (selectedRect == null) {
-      return;
-    }
-    if (selectedRect.contains(details.localPosition)) {
-      return;
-    }
-    _clearSelection();
-  }
-
-  void _handlePanStart(DragStartDetails details) {
-    final Offset point = _clampToPage(details.localPosition);
-    final Rect? selectedRect = _selectedRect;
-    if (selectedRect != null && selectedRect.contains(point)) {
-      setState(() {
-        _dragMode = DragMode.move;
-        _dragPointerOffset = point - selectedRect.topLeft;
-        _dragRect = selectedRect;
-      });
-      return;
-    }
-    setState(() {
-      _dragMode = DragMode.create;
-      _dragStart = point;
-      _dragRect = Rect.fromPoints(point, point);
-      _selectedRect = null;
-    });
-  }
-
-  void _handlePanUpdate(DragUpdateDetails details) {
-    if (_dragMode == DragMode.none) {
-      return;
-    }
-    if (_dragMode == DragMode.move) {
-      final Rect? currentRect = _dragRect;
-      final Offset? pointerOffset = _dragPointerOffset;
-      if (currentRect == null || pointerOffset == null) {
-        return;
-      }
-      final Offset point = _clampToPage(details.localPosition);
-      final Offset topLeft = _clampTopLeft(
-        point - pointerOffset,
-        currentRect.size,
-      );
-      setState(() {
-        _dragRect = topLeft & currentRect.size;
-      });
-      return;
-    }
-    if (_dragStart == null) {
-      return;
-    }
-    final Offset point = _clampToPage(details.localPosition);
-    setState(() {
-      _dragRect = Rect.fromPoints(_dragStart!, point);
-    });
-  }
-
-  void _handlePanEnd(DragEndDetails details) {
-    final Rect? rect = _dragRect;
-    _dragStart = null;
-    _dragPointerOffset = null;
-    _dragMode = DragMode.none;
-    if (rect == null || rect.width < 12 || rect.height < 12) {
-      _clearSelection();
-      return;
-    }
-
-    setState(() {
-      _selectedRect = rect;
-      _dragRect = rect;
-    });
-    _notifySelectionChanged(rect);
-  }
-
-  void _handlePanCancel() {
-    if (_dragRect == null && _dragStart == null) {
-      return;
-    }
-    final Rect? selectedRect = _selectedRect;
-    setState(() {
-      _dragRect = selectedRect;
-      _dragPointerOffset = null;
-      _dragStart = null;
-      _dragMode = DragMode.none;
-    });
-    if (selectedRect == null) {
-      widget.onSelectionChanged(null);
-    }
-  }
-
-  Offset _clampToPage(Offset point) {
-    return Offset(
-      point.dx.clamp(0, widget.pageRect.width),
-      point.dy.clamp(0, widget.pageRect.height),
-    );
-  }
-
-  Offset _clampTopLeft(Offset topLeft, Size size) {
-    final double maxLeft = widget.pageRect.width - size.width;
-    final double maxTop = widget.pageRect.height - size.height;
-    return Offset(
-      topLeft.dx.clamp(0, maxLeft < 0 ? 0 : maxLeft),
-      topLeft.dy.clamp(0, maxTop < 0 ? 0 : maxTop),
-    );
-  }
-
-  PdfRect _toPdfRect(Rect rect) {
-    final double scale = widget.pageRect.height / widget.page.height;
-    final double left = rect.left / scale;
-    final double right = rect.right / scale;
-    final double top = widget.page.height - (rect.top / scale);
-    final double bottom = widget.page.height - (rect.bottom / scale);
-    return PdfRect(left, top, right, bottom);
+    return widget.controller.globalToLocal(placement.globalRect.topLeft);
   }
 }
 
 class _SelectionActionToolbar extends StatelessWidget {
   const _SelectionActionToolbar({
     required this.rect,
-    required this.pageSize,
+    required this.viewportSize,
     required this.screenAwarePosition,
     required this.onTranslate,
     required this.onExplain,
@@ -354,7 +371,7 @@ class _SelectionActionToolbar extends StatelessWidget {
   });
 
   final Rect rect;
-  final Size pageSize;
+  final Size viewportSize;
   final Offset? screenAwarePosition;
   final VoidCallback onTranslate;
   final VoidCallback onExplain;
@@ -362,8 +379,7 @@ class _SelectionActionToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Offset position = screenAwarePosition ?? _fallbackPagePosition();
-
+    final Offset position = screenAwarePosition ?? _fallbackViewerPosition();
     return Positioned(
       left: position.dx,
       top: position.dy,
@@ -382,20 +398,11 @@ class _SelectionActionToolbar extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  _SelectionActionButton(
-                    label: '翻译',
-                    onPressed: onTranslate,
-                  ),
+                  _SelectionActionButton(label: '翻译', onPressed: onTranslate),
                   const _Divider(),
-                  _SelectionActionButton(
-                    label: '解释',
-                    onPressed: onExplain,
-                  ),
+                  _SelectionActionButton(label: '解释', onPressed: onExplain),
                   const _Divider(),
-                  _SelectionActionButton(
-                    label: '深度理解',
-                    onPressed: onDeepDive,
-                  ),
+                  _SelectionActionButton(label: '深度理解', onPressed: onDeepDive),
                 ],
               ),
             ),
@@ -405,28 +412,23 @@ class _SelectionActionToolbar extends StatelessWidget {
     );
   }
 
-  Offset _fallbackPagePosition() {
-    const double toolbarHeight = 40;
+  Offset _fallbackViewerPosition() {
     const double toolbarWidth = 256;
+    const double toolbarHeight = 40;
     const double gap = 10;
-    final double preferredLeft = rect.center.dx - (toolbarWidth / 2);
-    final double clampedLeft = preferredLeft.clamp(
-      12,
-      (pageSize.width - toolbarWidth - 12).clamp(12, double.infinity),
+    final double left = ((viewportSize.width - toolbarWidth) / 2).clamp(
+      0,
+      math.max(0, viewportSize.width - toolbarWidth),
     );
     double top = rect.bottom + gap;
-    if (top + toolbarHeight > pageSize.height - 12) {
+    if (top + toolbarHeight > viewportSize.height) {
       top = rect.top - toolbarHeight - gap;
     }
-    top = top.clamp(
-      12,
-      (pageSize.height - toolbarHeight - 12).clamp(12, double.infinity),
-    );
-    return Offset(clampedLeft, top);
+    top = top.clamp(0, math.max(0, viewportSize.height - toolbarHeight));
+    return Offset(left, top);
   }
 }
 
-/// 按钮之间的竖向分割线。
 class _Divider extends StatelessWidget {
   const _Divider();
 
@@ -443,10 +445,7 @@ class _Divider extends StatelessWidget {
 }
 
 class _SelectionActionButton extends StatelessWidget {
-  const _SelectionActionButton({
-    required this.label,
-    required this.onPressed,
-  });
+  const _SelectionActionButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;
@@ -487,10 +486,7 @@ class _SelectionRectPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final Rect? value = rect;
-    if (value == null || value.isEmpty) {
-      return;
-    }
-
+    if (value == null || value.isEmpty) return;
     canvas.drawRect(value, Paint()..color = AppColors.selectionFill);
     canvas.drawRect(
       value,
