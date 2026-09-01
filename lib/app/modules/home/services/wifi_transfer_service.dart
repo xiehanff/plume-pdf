@@ -400,7 +400,7 @@ const String _uploadPage = '''<!doctype html>
     main { width: min(680px, calc(100% - 32px)); padding: 36px; border: 1px solid #ffffff18; border-radius: 24px; background: #343643; box-shadow: 0 24px 60px #0006; }
     h1 { margin: 0 0 10px; font-size: 28px; }
     p { color: #ffffffb3; line-height: 1.6; }
-    .drop { margin-top: 28px; padding: 58px 24px; text-align: center; border: 2px dashed #b39ddb; border-radius: 18px; background: #ffffff08; cursor: pointer; transition: .2s; }
+    .drop { display: block; margin-top: 28px; padding: 58px 24px; text-align: center; border: 2px dashed #b39ddb; border-radius: 18px; background: #ffffff08; cursor: pointer; transition: .2s; }
     .drop.over, .drop:hover { background: #68668766; }
     .drop strong { display: block; margin-bottom: 8px; font-size: 20px; }
     input { display: none; }

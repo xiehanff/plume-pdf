@@ -108,7 +108,7 @@ Widget _buildChatMarkdown(
       codeBuilder:
           (BuildContext context, String name, String code, bool closed) {
             final String language = name.isNotEmpty ? name : 'plaintext';
-            return CodeBlock(language: language, code: code);
+            return CodeBlock(language: language, code: code, closed: closed);
           },
       highlightBuilder: (BuildContext context, String text, TextStyle style) {
         return Container(
@@ -294,17 +294,9 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double maxTextWidth = constraints.maxWidth.isFinite
-            ? (constraints.maxWidth - 24).clamp(1, double.infinity)
-            : 640;
-        final TextPainter painter = TextPainter(
-          text: TextSpan(text: widget.text, style: _textStyle),
-          textDirection: Directionality.of(context),
-          maxLines: _maxLines,
-          ellipsis: '…',
-        )..layout(maxWidth: maxTextWidth);
-        // 以源文本行数估算是否超出折叠上限，决定按钮显隐与截断渲染。
-        final bool hasOverflow = painter.didExceedMaxLines;
+        // 展开态按钮已隐藏，无需测量；折叠态以纯文本测量估算是否
+        // 超出八行，决定展开按钮显隐与截断渲染。
+        final bool hasOverflow = !_expanded && _measureHasOverflow(constraints);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -368,16 +360,42 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
     );
   }
 
-  /// 折叠且内容超限时截断为八行高度并渐隐；展开或未超限时完整渲染。
+  /// 以源文本行数估算是否超出折叠上限，决定按钮显隐与截断渲染。
+  bool _measureHasOverflow(BoxConstraints constraints) {
+    final double maxTextWidth = constraints.maxWidth.isFinite
+        ? (constraints.maxWidth - 24).clamp(1, double.infinity)
+        : 640;
+    final TextPainter painter = TextPainter(
+      text: TextSpan(text: widget.text, style: _textStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: _maxLines,
+      ellipsis: '…',
+    )..layout(maxWidth: maxTextWidth);
+    return painter.didExceedMaxLines;
+  }
+
+  /// 折叠态：纯文本轻量渲染，截断八行并渐隐，不构建完整 Markdown。
+  ///
+  /// 流式期间推理文本不断增长，折叠态若每次都走 Markdown 全量解析
+  /// 是显著 CPU 热区（视觉上仅展示八行，却解析全部内容）；只有用户
+  /// 点击展开后才完整渲染 Markdown。
   Widget _buildReasoningBody(BuildContext context, bool hasOverflow) {
-    final Widget markdown = _buildChatMarkdown(
-      context,
+    if (_expanded) {
+      return _buildChatMarkdown(
+        context,
+        widget.text,
+        style: _textStyle,
+        themeData: _reasoningMarkdownThemeData(context),
+      );
+    }
+    final Widget text = Text(
       widget.text,
       style: _textStyle,
-      themeData: _reasoningMarkdownThemeData(context),
+      maxLines: _maxLines,
+      overflow: TextOverflow.clip,
     );
-    if (_expanded || !hasOverflow) {
-      return markdown;
+    if (!hasOverflow) {
+      return text;
     }
     final double maxCollapsedHeight =
         _maxLines * _textStyle.fontSize! * _textStyle.height!;
@@ -392,7 +410,7 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
       child: ClipRect(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxCollapsedHeight),
-          child: markdown,
+          child: text,
         ),
       ),
     );
@@ -400,10 +418,28 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
 }
 
 class CodeBlock extends StatelessWidget {
-  const CodeBlock({super.key, required this.language, required this.code});
+  const CodeBlock({
+    super.key,
+    required this.language,
+    required this.code,
+    this.closed = true,
+  });
 
   final String language;
   final String code;
+
+  /// 代码围栏是否已闭合。
+  ///
+  /// 流式期间未闭合的代码块以等宽纯文本渲染，避免每个 preview 都对
+  /// 不断增长的代码重新做语法高亮解析；围栏闭合后才切换为高亮渲染。
+  final bool closed;
+
+  static const TextStyle _codeTextStyle = TextStyle(
+    fontSize: 13,
+    height: 1.5,
+    fontFamily: kCodeFontFamily,
+    fontFamilyFallback: kMarkdownFontFallback,
+  );
 
   static const Map<String, String> _langMap = <String, String>{
     'dart': 'dart',
@@ -466,17 +502,14 @@ class CodeBlock extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: HighlightView(
-              code,
-              language: hlLang,
-              theme: atomOneDarkTheme,
-              textStyle: const TextStyle(
-                fontSize: 13,
-                height: 1.5,
-                fontFamily: kCodeFontFamily,
-                fontFamilyFallback: kMarkdownFontFallback,
-              ),
-            ),
+            child: closed
+                ? HighlightView(
+                    code,
+                    language: hlLang,
+                    theme: atomOneDarkTheme,
+                    textStyle: _codeTextStyle,
+                  )
+                : Text(code, style: _codeTextStyle),
           ),
         ],
       ),
