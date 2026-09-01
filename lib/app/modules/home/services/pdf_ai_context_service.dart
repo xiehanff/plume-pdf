@@ -22,10 +22,6 @@ class PdfAiContextService {
   final PdfViewerController _viewerController;
   final MacosOcrService _ocrService;
 
-  /// 在每次对话请求前读取当前打开 PDF 的元数据、目录和页面正文。
-  ///
-  /// 文档上下文不写入会话历史，而是作为本次请求的 system prompt
-  /// 附加内容传给模型，避免同一份页面全文在多轮历史中不断复制。
   Future<PdfAiContext?> buildDocumentContext({
     required String? filePath,
     required String? fileName,
@@ -96,110 +92,179 @@ class PdfAiContextService {
     return _ocrService.recognizeText(bytes);
   }
 
+  /// 跨页 selection 会按页顺序提取每个 region 的文本，并保持为一次请求。
   Future<String> extractSelectionText(PdfAiSelection selection) async {
     return await _viewerController.useDocument<String>((
           PdfDocument document,
         ) async {
-          if (selection.pageNumber < 1 ||
-              selection.pageNumber > document.pages.length) {
-            return '';
+          final List<String> chunks = <String>[];
+          for (final PdfAiSelectionRegion region in selection.regions) {
+            if (region.pageNumber < 1 ||
+                region.pageNumber > document.pages.length) {
+              continue;
+            }
+            final PdfPageText pageText = await document
+                .pages[region.pageNumber - 1]
+                .loadText();
+            final String text = pageText.fragments
+                .where(
+                  (PdfPageTextFragment fragment) =>
+                      _intersects(region.bounds, fragment.bounds),
+                )
+                .map((PdfPageTextFragment fragment) => fragment.text.trim())
+                .where((String value) => value.isNotEmpty)
+                .join('\n')
+                .trim();
+            if (text.isEmpty) continue;
+            chunks.add(
+              selection.spansMultiplePages
+                  ? '【第 ${region.pageNumber} 页】\n$text'
+                  : text,
+            );
           }
-          final PdfPageText pageText = await document
-              .pages[selection.pageNumber - 1]
-              .loadText();
-          final Iterable<String> texts = pageText.fragments
-              .where(
-                (PdfPageTextFragment fragment) =>
-                    _intersects(selection.bounds, fragment.bounds),
-              )
-              .map((PdfPageTextFragment fragment) => fragment.text.trim())
-              .where((String text) => text.isNotEmpty);
-          return texts.join('\n');
+          return chunks.join('\n');
         }) ??
         '';
   }
 
+  /// 单页时仍返回该页全文；跨页时返回所有被选中页的上下文。
   Future<String?> extractPageContext(PdfAiSelection selection) async {
     return await _viewerController.useDocument<String?>((
       PdfDocument document,
     ) async {
-      if (selection.pageNumber < 1 ||
-          selection.pageNumber > document.pages.length) {
-        return null;
+      final List<String> chunks = <String>[];
+      final Set<int> visited = <int>{};
+      for (final PdfAiSelectionRegion region in selection.regions) {
+        if (!visited.add(region.pageNumber) ||
+            region.pageNumber < 1 ||
+            region.pageNumber > document.pages.length) {
+          continue;
+        }
+        final String fullText = await _loadPdfPageText(
+          document,
+          region.pageNumber,
+        );
+        if (fullText.isEmpty) continue;
+        chunks.add(
+          selection.spansMultiplePages
+              ? '【第 ${region.pageNumber} 页全文】\n$fullText'
+              : fullText,
+        );
       }
-      final PdfPageText pageText = await document
-          .pages[selection.pageNumber - 1]
-          .loadText();
-      final String fullText = pageText.fragments
-          .map((PdfPageTextFragment f) => f.text.trim())
-          .where((String t) => t.isNotEmpty)
-          .join('\n');
-      return fullText.trim().isEmpty ? null : fullText;
+      final String result = chunks.join('\n').trim();
+      return result.isEmpty ? null : result;
     });
   }
 
+  /// 将一个跨页框选对应的多个页面裁剪图纵向拼成一张 PNG。
+  /// 对视觉模型和 OCR 来说仍然是一份 selection，而不是多次请求。
   Future<Uint8List?> extractSelectionImageBytes(
     PdfAiSelection selection,
   ) async {
     return _viewerController.useDocument<Uint8List?>((
       PdfDocument document,
     ) async {
-      if (selection.pageNumber < 1 ||
-          selection.pageNumber > document.pages.length) {
-        return null;
-      }
-      final PdfPage page = document.pages[selection.pageNumber - 1];
-      const double scale = 3;
-      final double fullWidth = page.width * scale;
-      final double fullHeight = page.height * scale;
-      final int maxX = math.max(0, fullWidth.ceil() - 1);
-      final int maxY = math.max(0, fullHeight.ceil() - 1);
-      final int x = (selection.bounds.left * scale).floor().clamp(0, maxX);
-      final int y = ((page.height - selection.bounds.top) * scale)
-          .floor()
-          .clamp(0, maxY);
-      final int width = (selection.bounds.width * scale).ceil().clamp(
-        1,
-        fullWidth.ceil(),
-      );
-      final int height = (selection.bounds.height * scale).ceil().clamp(
-        1,
-        fullHeight.ceil(),
-      );
-      final int safeWidth = width.clamp(1, math.max(1, fullWidth.ceil() - x));
-      final int safeHeight = height.clamp(
-        1,
-        math.max(1, fullHeight.ceil() - y),
-      );
-      final PdfImage? rendered = await page.render(
-        x: x,
-        y: y,
-        width: safeWidth,
-        height: safeHeight,
-        fullWidth: fullWidth,
-        fullHeight: fullHeight,
-      );
-      if (rendered == null) {
-        return null;
-      }
+      final List<ui.Image> images = <ui.Image>[];
+      try {
+        for (final PdfAiSelectionRegion region in selection.regions) {
+          final ui.Image? image = await _renderSelectionRegion(document, region);
+          if (image != null) {
+            images.add(image);
+          }
+        }
+        if (images.isEmpty) return null;
+        if (images.length == 1) {
+          return _imageToPng(images.first);
+        }
 
-      final ui.Image image = await rendered.createImage();
-      rendered.dispose();
-      final ByteData? data = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      image.dispose();
-      return data?.buffer.asUint8List();
+        final int width = images.fold<int>(
+          1,
+          (int value, ui.Image image) => math.max(value, image.width),
+        );
+        final int height = images.fold<int>(
+          0,
+          (int value, ui.Image image) => value + image.height,
+        );
+        if (height <= 0) return null;
+
+        final ui.PictureRecorder recorder = ui.PictureRecorder();
+        final ui.Canvas canvas = ui.Canvas(recorder);
+        double y = 0;
+        for (final ui.Image image in images) {
+          final double x = (width - image.width) / 2;
+          canvas.drawImage(image, ui.Offset(x, y), ui.Paint());
+          y += image.height;
+        }
+        final ui.Picture picture = recorder.endRecording();
+        final ui.Image combined = await picture.toImage(width, height);
+        picture.dispose();
+        try {
+          return await _imageToPng(combined);
+        } finally {
+          combined.dispose();
+        }
+      } finally {
+        for (final ui.Image image in images) {
+          image.dispose();
+        }
+      }
     });
   }
 
+  Future<ui.Image?> _renderSelectionRegion(
+    PdfDocument document,
+    PdfAiSelectionRegion region,
+  ) async {
+    if (region.pageNumber < 1 || region.pageNumber > document.pages.length) {
+      return null;
+    }
+    final PdfPage page = document.pages[region.pageNumber - 1];
+    const double scale = 3;
+    final double fullWidth = page.width * scale;
+    final double fullHeight = page.height * scale;
+    final int maxX = math.max(0, fullWidth.ceil() - 1);
+    final int maxY = math.max(0, fullHeight.ceil() - 1);
+    final int x = (region.bounds.left * scale).floor().clamp(0, maxX);
+    final int y = ((page.height - region.bounds.top) * scale)
+        .floor()
+        .clamp(0, maxY);
+    final int width = (region.bounds.width * scale).ceil().clamp(
+      1,
+      fullWidth.ceil(),
+    );
+    final int height = (region.bounds.height * scale).ceil().clamp(
+      1,
+      fullHeight.ceil(),
+    );
+    final int safeWidth = width.clamp(1, math.max(1, fullWidth.ceil() - x));
+    final int safeHeight = height.clamp(
+      1,
+      math.max(1, fullHeight.ceil() - y),
+    );
+    final PdfImage? rendered = await page.render(
+      x: x,
+      y: y,
+      width: safeWidth,
+      height: safeHeight,
+      fullWidth: fullWidth,
+      fullHeight: fullHeight,
+    );
+    if (rendered == null) return null;
+    try {
+      return await rendered.createImage();
+    } finally {
+      rendered.dispose();
+    }
+  }
+
+  Future<Uint8List?> _imageToPng(ui.Image image) async {
+    final ByteData? data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return data?.buffer.asUint8List();
+  }
+
   int _safePdfPage(int pageNumber, int pageCount) {
-    if (pageNumber < 1) {
-      return 1;
-    }
-    if (pageNumber > pageCount) {
-      return pageCount;
-    }
+    if (pageNumber < 1) return 1;
+    if (pageNumber > pageCount) return pageCount;
     return pageNumber;
   }
 
