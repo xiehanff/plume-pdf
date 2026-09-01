@@ -11,6 +11,10 @@ class MobileAiView extends GetView<HomeController> {
 
   @override
   Widget build(BuildContext context) {
+    // 路由打开时确保侧栏控制器已注册（会话历史在路由关闭后仍保留）。
+    // 后续状态统一由 HomeController._applyState → updateExternalState
+    // 单向同步，本视图不再监听 HomeController 重复同步，避免流式期间
+    // 每个状态变更触发多次侧栏全量重建。
     _ensureAiController(controller);
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -20,15 +24,9 @@ class MobileAiView extends GetView<HomeController> {
         backgroundColor: AppColors.scaffoldBg,
         surfaceTintColor: Colors.transparent,
       ),
-      body: SafeArea(
+      body: const SafeArea(
         top: false,
-        child: GetBuilder<HomeController>(
-          id: HomeController.viewId,
-          builder: (HomeController homeController) {
-            _scheduleAiStateSync(homeController);
-            return const AiSidebar(fullWidth: true);
-          },
-        ),
+        child: AiSidebar(fullWidth: true),
       ),
     );
   }
@@ -49,24 +47,5 @@ class MobileAiView extends GetView<HomeController> {
       ),
       tag: AiSidebarController.tag,
     );
-  }
-
-  void _scheduleAiStateSync(HomeController homeController) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
-        return;
-      }
-      Get.find<AiSidebarController>(
-        tag: AiSidebarController.tag,
-      ).updateExternalState(
-        state: homeController.state.aiPanelState,
-        onApiKeyChanged: homeController.updateAiApiKey,
-        onSaveApiKey: homeController.saveAiApiKey,
-        onSendChat: homeController.sendAiChat,
-        onNewSession: homeController.startNewAiSession,
-        documentPath: homeController.state.filePath,
-        leftSidebarWidth: 0,
-      );
-    });
   }
 }

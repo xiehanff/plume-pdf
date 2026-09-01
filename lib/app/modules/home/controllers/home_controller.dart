@@ -211,15 +211,26 @@ class HomeController extends GetxController {
     update(<Object>[viewId]);
   }
 
-  /// 侧栏可见时确保 `AiSidebarController` 已注册，并把最新面板状态同步过去。
-  ///
-  /// 不随侧栏开关销毁 —— 会话历史在收起侧栏后保留；
-  /// 参数变化（换文档、新建会话、API Key 等）由 `updateExternalState` 收敛。
+  /// 唯一的侧栏状态同步入口：控制器已注册则无条件同步最新状态；
+  /// 未注册时仅在侧栏需要展示（桌面可见或移动端 AI 路由 ensure 后）
+  /// 才首次创建。流式期间每个状态变更只经由本方法同步一次，
+  /// 视图层（MobileAiView）不再各自 post-frame 重复同步。
   void _syncAiSidebarController() {
-    if (!state.aiSidebarVisible) {
+    if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
+      Get.find<AiSidebarController>(
+        tag: AiSidebarController.tag,
+      ).updateExternalState(
+        state: state.aiPanelState,
+        onApiKeyChanged: updateAiApiKey,
+        onSaveApiKey: saveAiApiKey,
+        onSendChat: sendAiChat,
+        onNewSession: startNewAiSession,
+        documentPath: state.filePath,
+        leftSidebarWidth: state.sidebarVisible ? 260 : 0,
+      );
       return;
     }
-    if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
+    if (state.aiSidebarVisible) {
       Get.put(
         AiSidebarController(
           state: state.aiPanelState,
@@ -232,19 +243,7 @@ class HomeController extends GetxController {
         ),
         tag: AiSidebarController.tag,
       );
-      return;
     }
-    Get.find<AiSidebarController>(
-      tag: AiSidebarController.tag,
-    ).updateExternalState(
-      state: state.aiPanelState,
-      onApiKeyChanged: updateAiApiKey,
-      onSaveApiKey: saveAiApiKey,
-      onSendChat: sendAiChat,
-      onNewSession: startNewAiSession,
-      documentPath: state.filePath,
-      leftSidebarWidth: state.sidebarVisible ? 260 : 0,
-    );
   }
 
   void _setPageText(String text) {

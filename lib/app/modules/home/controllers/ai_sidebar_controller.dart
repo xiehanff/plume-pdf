@@ -16,8 +16,6 @@ enum AiSidebarMode { conversation, settings }
 
 enum AiSidebarFollowUpState { hidden, visible }
 
-enum _MessageLayoutState { clean, needsPostFrameSync }
-
 enum _ScrollFollowState { followingTail, userControlled }
 
 enum _ResultUpdateMode { replace, incremental }
@@ -76,7 +74,6 @@ class _FollowTailScrollPosition extends ScrollPositionWithSingleContext {
 
 class _ConversationState {
   final List<ChatMessage> messages = <ChatMessage>[];
-  _MessageLayoutState layoutState = _MessageLayoutState.needsPostFrameSync;
   int? lastActionId;
   String? lastResult;
   String? lastReasoning;
@@ -84,13 +81,8 @@ class _ConversationState {
 
   String nextMessageId() => 'msg_${_nextMessageId++}';
 
-  void markLayoutNeedsSync() {
-    layoutState = _MessageLayoutState.needsPostFrameSync;
-  }
-
   void reset() {
     messages.clear();
-    layoutState = _MessageLayoutState.clean;
     lastActionId = null;
     lastResult = null;
     lastReasoning = null;
@@ -337,7 +329,6 @@ class AiSidebarController extends GetxController {
         imageBytes: image?.bytes,
       ),
     );
-    _conversation.markLayoutNeedsSync();
     _ensureLoadingPlaceholder();
     _resumeScrollFollowing();
     update();
@@ -409,7 +400,6 @@ class AiSidebarController extends GetxController {
         id: _conversation.nextMessageId(),
       ),
     );
-    _conversation.markLayoutNeedsSync();
     _resumeScrollFollowing();
     // 动作触发后流式输出立即开始，直接 jumpTo 跟随尾部。
     _scheduleScrollToBottom();
@@ -474,8 +464,6 @@ class AiSidebarController extends GetxController {
         );
       }
     }
-    _conversation.markLayoutNeedsSync();
-    _scheduleMessageLayoutSync();
   }
 
   void _finishLastAiMessage() {
@@ -493,8 +481,6 @@ class AiSidebarController extends GetxController {
       isLoading: false,
       reasoning: previousMessage.reasoning,
     );
-    _conversation.markLayoutNeedsSync();
-    _scheduleMessageLayoutSync();
   }
 
   _ResultUpdateMode _resultUpdateMode(String result) {
@@ -544,8 +530,6 @@ class AiSidebarController extends GetxController {
         isLoading: true,
       ),
     );
-    _conversation.markLayoutNeedsSync();
-    _scheduleMessageLayoutSync();
   }
 
   void _replaceLoadingOrAdd({
@@ -570,8 +554,6 @@ class AiSidebarController extends GetxController {
     } else {
       _updateLastAiMessage(text, reasoning: reasoning, isLoading: isLoading);
     }
-    _conversation.markLayoutNeedsSync();
-    _scheduleMessageLayoutSync();
   }
 
   /// 更新最后一条 AI 消息内容（流式增量或替换）；不存在则新增。
@@ -599,21 +581,6 @@ class AiSidebarController extends GetxController {
         ),
       );
     }
-    _conversation.markLayoutNeedsSync();
-    _scheduleMessageLayoutSync();
-  }
-
-  void _scheduleMessageLayoutSync() {
-    if (_conversation.layoutState != _MessageLayoutState.needsPostFrameSync ||
-        _conversation.messages.isEmpty) {
-      return;
-    }
-    _conversation.layoutState = _MessageLayoutState.clean;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!isClosed) {
-        update();
-      }
-    });
   }
 
   void _resetConversation({required bool notify}) {

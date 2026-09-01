@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import '../models/ai_chat_history_message.dart';
@@ -128,6 +129,12 @@ class AiAgentSession {
 
   /// 累积一段流式响应：逐块回调预览，结束后解析正文与追问建议。
   ///
+  /// 网络层 chunk 频率可达每秒上百次，逐个回调会让 UI 刷新与全量
+  /// Markdown 重解析一起打满主线程。这里以 ~40ms 窗口合并 preview
+  /// 回调（首块后 40ms 触发，之后每窗口至多一次），肉眼仍是流式，
+  /// 主线程压力大幅下降；流结束后取消待发回调，终态由调用方直接
+  /// 写入完整结果。
+  ///
   /// [isStale] 返回 true 时停止消费流（取消底层订阅）并提前结束；
   /// 正文为空视为失败，抛出 [DeepSeekException] 由调用方处理。
   Future<AiStreamResult> _runStream(
@@ -137,14 +144,31 @@ class AiAgentSession {
   }) async {
     final StringBuffer textBuffer = StringBuffer();
     final StringBuffer reasoningBuffer = StringBuffer();
+
+    Timer? previewTimer;
+    bool previewDirty = false;
+    void schedulePreview() {
+      previewDirty = true;
+      previewTimer ??= Timer(const Duration(milliseconds: 40), () {
+        previewTimer = null;
+        if (!previewDirty) {
+          return;
+        }
+        previewDirty = false;
+        onPreview(textBuffer.toString(), reasoningBuffer.toString());
+      });
+    }
+
     await for (final DeepSeekStreamChunk chunk in stream()) {
       if (isStale != null && isStale()) {
         break;
       }
       textBuffer.write(chunk.text);
       reasoningBuffer.write(chunk.reasoning);
-      onPreview(textBuffer.toString(), reasoningBuffer.toString());
+      schedulePreview();
     }
+    previewTimer?.cancel();
+
     final AiResponse response = AiResponseParser.parse(textBuffer.toString());
     final String content = response.content.trim();
     if (content.isEmpty) {
