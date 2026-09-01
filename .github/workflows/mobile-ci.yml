@@ -2,7 +2,7 @@ name: Mobile CI
 
 on:
   push:
-    branches: [feat/mobile-ios-android]
+    branches: [main, feat/mobile-ios-android]
   pull_request:
     paths:
       - 'lib/**'
