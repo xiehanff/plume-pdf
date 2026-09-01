@@ -45,8 +45,17 @@ void main() {
     expect(saved, isFalse);
     expect(find.text('设置'), findsOneWidget);
 
+    // 精确定位设置弹窗里的 DeepSeek API Key 输入框，避免页面底部聊天输入框
+    // 同时存在时 `find.byType(TextField)` 命中多个元素。
+    final Finder apiKeyField = find.byWidgetPredicate(
+      (Widget widget) =>
+          widget is TextField &&
+          widget.decoration?.hintText == '输入 DeepSeek API Key',
+    );
+    expect(apiKeyField, findsOneWidget);
+
     // 非空时等待持久化完成，然后关闭底部弹窗，给用户明确的成功反馈。
-    await tester.enterText(find.byType(TextField), '  sk-test-key  ');
+    await tester.enterText(apiKeyField, '  sk-test-key  ');
     tester.testTextInput.hide();
     await tester.pump();
     await tester.tap(find.text('保存'));
