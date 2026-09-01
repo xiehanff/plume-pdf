@@ -27,7 +27,7 @@ env:
 
 jobs:
   verify:
-    name: Test + Analyze + Android/iOS build
+    name: Test + Analyze + Android arm64/iOS build
     runs-on: macos-latest
     timeout-minutes: 40
 
@@ -51,8 +51,8 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
-      - name: Build Android debug APK
-        run: flutter build apk --debug
+      - name: Build Android arm64 debug APK
+        run: flutter build apk --debug --target-platform android-arm64
 
       - name: Build iOS simulator app
         run: flutter build ios --simulator

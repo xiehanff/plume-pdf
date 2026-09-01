@@ -203,7 +203,7 @@ jobs:
           retention-days: 30
 
   android:
-    name: Android release APK
+    name: Android release APK (arm64-v8a)
     needs: release_meta
     if: needs.release_meta.outputs.is_release == 'true'
     runs-on: ubuntu-latest
@@ -225,17 +225,17 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build Android release APK
-        run: flutter build apk --release
+      - name: Build Android arm64 release APK
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Prepare Android APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk "plume-pdf-android-${RELEASE_TAG}.apk"
+        run: cp build/app/outputs/flutter-apk/app-release.apk "plume-pdf-android-arm64-v8a-${RELEASE_TAG}.apk"
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: plume-pdf-android-${{ needs.release_meta.outputs.tag }}
-          path: plume-pdf-android-*.apk
+          name: plume-pdf-android-arm64-v8a-${{ needs.release_meta.outputs.tag }}
+          path: plume-pdf-android-arm64-v8a-*.apk
           if-no-files-found: error
           retention-days: 30
 
