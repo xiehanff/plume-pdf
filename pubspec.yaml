@@ -16,12 +16,12 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.0.19+20
+version: 0.0.20+21
 
 environment:
   sdk: ^3.8.0
 
-# Dependencies specify other packages that your package needs in order to work.
+# Dependencies specify other packages that your package depends on.
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
 # dependencies can be manually updated by changing the version numbers below to the latest version available on pub.dev. To see which dependencies have newer
@@ -70,13 +70,13 @@ msix_config:
   display_name: Plume PDF
   publisher_display_name: xiehan
   identity_name: com.xiehan.plumepdf
-  msix_version: 0.0.19.0
+  msix_version: 0.0.20.0
   logo_path: assets/windows_app_icon_1024.png
   capabilities: internetClient
   file_extension: .pdf
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
+# For information on the generic Dart part of this file, see the following page:
+# https://dart.dev/tools/pubspec
 
 # The following section is specific to Flutter packages.
 flutter:
@@ -110,5 +110,20 @@ flutter:
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
-  # "family" key and a "fonts" key with the font family name and font assets.
-  # See Flutter documentation for additional font configuration options.
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  #     fonts:
+  #       - asset: fonts/TrajanPro.ttf
+  #       - asset: fonts/TrajanPro_Bold.ttf
+  #         weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package

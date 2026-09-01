@@ -13,8 +13,64 @@ env:
   FLUTTER_VERSION: '3.41.9'
 
 jobs:
+  release_meta:
+    name: Resolve release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      is_release: ${{ steps.meta.outputs.is_release }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve or create release tag
+        id: meta
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERSION="$(awk '/^version:/ { print $2; exit }' pubspec.yaml)"
+          VERSION_NAME="${VERSION%%+*}"
+          TAG="v${VERSION_NAME}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" \
+             && "${GITHUB_REF}" == "refs/heads/main" \
+             && "${COMMIT_MESSAGE}" == "release: ${TAG}" ]]; then
+            if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+              TAG_SHA="$(git rev-list -n 1 "${TAG}")"
+              if [[ "${TAG_SHA}" != "${GITHUB_SHA}" ]]; then
+                echo "Tag ${TAG} already exists at ${TAG_SHA}, expected ${GITHUB_SHA}." >&2
+                exit 1
+              fi
+            else
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git tag "${TAG}" "${GITHUB_SHA}"
+              git push origin "${TAG}"
+            fi
+
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
+
   linux:
     name: Linux (.deb + .rpm)
+    needs: release_meta
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -69,6 +125,7 @@ jobs:
 
   windows:
     name: Windows (.exe)
+    needs: release_meta
     runs-on: windows-2022
     timeout-minutes: 30
 
@@ -110,6 +167,7 @@ jobs:
 
   macos:
     name: macOS (.dmg)
+    needs: release_meta
     runs-on: macos-latest
     timeout-minutes: 30
 
@@ -146,9 +204,12 @@ jobs:
 
   android:
     name: Android release APK
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release_meta
+    if: needs.release_meta.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ needs.release_meta.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -168,24 +229,26 @@ jobs:
         run: flutter build apk --release
 
       - name: Prepare Android APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk "plume-pdf-android-${GITHUB_REF_NAME}.apk"
+        run: cp build/app/outputs/flutter-apk/app-release.apk "plume-pdf-android-${RELEASE_TAG}.apk"
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: plume-pdf-android-${{ github.ref_name }}
+          name: plume-pdf-android-${{ needs.release_meta.outputs.tag }}
           path: plume-pdf-android-*.apk
           if-no-files-found: error
           retention-days: 30
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows, macos, android]
+    if: needs.release_meta.outputs.is_release == 'true'
+    needs: [release_meta, linux, windows, macos, android]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ needs.release_meta.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -199,23 +262,23 @@ jobs:
 
       - name: Extract release notes from CHANGELOG
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${RELEASE_TAG#v}"
           awk -v ver="$TAG" '
             index($0, "## " ver " ") == 1 { found = 1; next }
             found && /^## / { exit }
             found { print }
           ' CHANGELOG.md | sed -e '/./,$!d' > RELEASE_NOTES.md
           if [ ! -s RELEASE_NOTES.md ]; then
-            echo "Release ${GITHUB_REF_NAME}" > RELEASE_NOTES.md
+            echo "Release ${RELEASE_TAG}" > RELEASE_NOTES.md
           fi
 
       - name: Create release and upload packages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
+          gh release create "${RELEASE_TAG}" \
+            --title "${RELEASE_TAG}" \
             --notes-file RELEASE_NOTES.md \
             --verify-tag \
             dist/* \
-          || gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+          || gh release upload "${RELEASE_TAG}" dist/* --clobber

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - 2026-09-01
+## 0.0.20 - 2026-09-01
 
 ### Android / iOS
 
