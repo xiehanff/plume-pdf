@@ -13,6 +13,7 @@ import '../models/ai_chat_input.dart';
 import '../models/pdf_ai_panel_state.dart';
 import '../models/pdf_ai_context.dart';
 import 'ai_sidebar_controller.dart';
+import 'streaming_ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
@@ -271,8 +272,8 @@ class HomeController extends GetxController {
       return;
     }
     if (state.aiSidebarVisible) {
-      Get.put(
-        AiSidebarController(
+      Get.put<AiSidebarController>(
+        StreamingAiSidebarController(
           state: state.aiPanelState,
           onApiKeyChanged: updateAiApiKey,
           onSaveApiKey: saveAiApiKey,
