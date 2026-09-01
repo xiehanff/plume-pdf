@@ -58,16 +58,6 @@ class AiSelectablePdfViewer extends StatefulWidget {
 
 class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.surfaceBg),
@@ -135,23 +125,15 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
                 );
               },
             ),
-        ],
-        pageOverlaysBuilder: (
-          BuildContext context,
-          Rect pageRect,
-          PdfPage page,
-        ) {
-          return <Widget>[
-            PdfPageAreaSelectionOverlay(
-              page: page,
-              pageRect: pageRect,
-              aiSelectionEnabled: widget.aiSelectionEnabled,
+          if (widget.aiSelectionEnabled)
+            PdfViewerAreaSelectionOverlay(
+              controller: widget.controller,
+              viewportSize: size,
               onSelectionChanged: widget.onSelectionChanged,
               onActionSelected: widget.onActionSelected,
               avoidTopRightControls: widget.onExitAiSelection != null,
             ),
-          ];
-        },
+        ],
         pageBackgroundPaintCallbacks: colorFilter == null
             ? null
             : <PdfViewerPagePaintCallback>[
@@ -188,7 +170,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
     List<PdfPage> pages,
     PdfViewerParams params,
   ) {
-    const double innerGap = 8;
+    const double verticalGap = 0;
     final double outerMargin = params.margin;
     final double maxWidth = pages.fold<double>(
       0,
@@ -197,8 +179,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
     final List<Rect> pageLayouts = <Rect>[];
     double y = outerMargin;
 
-    for (int i = 0; i < pages.length; i++) {
-      final PdfPage page = pages[i];
+    for (final PdfPage page in pages) {
       pageLayouts.add(
         Rect.fromLTWH(
           (maxWidth + outerMargin * 2 - page.width) / 2,
@@ -207,15 +188,15 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
           page.height,
         ),
       );
-      y += page.height + innerGap;
+      y += page.height + verticalGap;
     }
 
+    final double documentHeight = pages.isEmpty
+        ? outerMargin * 2
+        : y - verticalGap + outerMargin;
     return PdfPageLayout(
       pageLayouts: pageLayouts,
-      documentSize: Size(
-        outerMargin * 2 + maxWidth,
-        y - innerGap + outerMargin,
-      ),
+      documentSize: Size(outerMargin * 2 + maxWidth, documentHeight),
     );
   }
 
@@ -223,7 +204,8 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
     List<PdfPage> pages,
     PdfViewerParams params,
   ) {
-    const double innerGap = 8;
+    const double horizontalGap = 8;
+    const double verticalGap = 0;
     final double outerMargin = params.margin;
     final double maxWidth = pages.fold<double>(
       0,
@@ -244,7 +226,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
         Rect.fromLTWH(
           isLeft
               ? outerMargin + maxWidth - page.width
-              : outerMargin + maxWidth + innerGap,
+              : outerMargin + maxWidth + horizontalGap,
           y + (pairHeight - page.height) / 2,
           page.width,
           page.height,
@@ -252,15 +234,18 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
       );
 
       if (!isLeft || i + 1 == pages.length) {
-        y += pairHeight + innerGap;
+        y += pairHeight + verticalGap;
       }
     }
 
+    final double documentHeight = pages.isEmpty
+        ? outerMargin * 2
+        : y - verticalGap + outerMargin;
     return PdfPageLayout(
       pageLayouts: pageLayouts,
       documentSize: Size(
-        outerMargin + maxWidth + innerGap + maxWidth + outerMargin,
-        y,
+        outerMargin + maxWidth + horizontalGap + maxWidth + outerMargin,
+        documentHeight,
       ),
     );
   }
