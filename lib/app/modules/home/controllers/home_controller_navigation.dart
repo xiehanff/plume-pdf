@@ -108,32 +108,36 @@ extension HomeControllerNavigation on HomeController {
     }
   }
 
+  void onPageChanged(int? pageNumber) {
+    if (pageNumber == null || !state.hasDocument) {
+      return;
+    }
+    final int currentPage = state.pageCount > 0
+        ? pageNumber.clamp(1, state.pageCount)
+        : pageNumber;
+    if (currentPage == state.currentPage) {
+      return;
+    }
+    _applyState(
+      state.copyWith(
+        currentPage: currentPage,
+        selectedOutlineId: _selectedOutlineIdForPage(currentPage),
+      ),
+    );
+    _setPageText('$currentPage');
+    _scheduleProgressSave();
+  }
+
   void _handleViewerChanged() {
     if (!_isViewerReady()) {
       return;
     }
 
-    final int currentPage = pdfViewerController.pageNumber ?? state.currentPage;
     final double zoom = pdfViewerController.currentZoom;
-    final bool pageChanged = currentPage != state.currentPage;
-    final bool zoomChanged = (zoom - state.zoom).abs() >= 0.001;
-    if (!pageChanged && !zoomChanged) {
+    if ((zoom - state.zoom).abs() < 0.001) {
       return;
     }
-
-    _applyState(
-      state.copyWith(
-        currentPage: currentPage,
-        zoom: zoom,
-        selectedOutlineId: pageChanged
-            ? _selectedOutlineIdForPage(currentPage)
-            : state.selectedOutlineId,
-      ),
-    );
-    if (pageChanged) {
-      _setPageText('$currentPage');
-      _scheduleProgressSave();
-    }
+    _applyState(state.copyWith(zoom: zoom));
   }
 
   void updateRenderAreaWidth(
