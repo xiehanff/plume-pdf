@@ -51,7 +51,14 @@ class _PdfViewerAreaSelectionOverlayState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller ||
         oldWidget.viewportSize != widget.viewportSize) {
-      _clearSelection(notify: true);
+      final bool hadCommittedSelection = _selectedRect != null;
+      _resetSelectionState();
+      if (hadCommittedSelection) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          widget.onSelectionChanged(null);
+        });
+      }
     }
   }
 
@@ -215,18 +222,21 @@ class _PdfViewerAreaSelectionOverlayState
   }
 
   void _clearSelection({bool notify = true}) {
+    final bool hadCommittedSelection = _selectedRect != null;
     if (mounted) {
-      setState(() {
-        _selectedRect = null;
-        _dragRect = null;
-        _dragStart = null;
-        _dragPointerOffset = null;
-        _dragMode = DragMode.none;
-      });
+      setState(_resetSelectionState);
     }
-    if (notify) {
+    if (notify && hadCommittedSelection) {
       widget.onSelectionChanged(null);
     }
+  }
+
+  void _resetSelectionState() {
+    _selectedRect = null;
+    _dragRect = null;
+    _dragStart = null;
+    _dragPointerOffset = null;
+    _dragMode = DragMode.none;
   }
 
   Offset _clampToViewport(Offset point) {
