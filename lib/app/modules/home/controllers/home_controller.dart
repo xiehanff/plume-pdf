@@ -58,6 +58,7 @@ class HomeController extends GetxController {
   );
   int _aiSessionId = 0;
   int _aiActionId = 0;
+  int _outlineLoadId = 0;
   String? _pinnedOutlineId;
   int? _pinnedOutlinePage;
   int? _pendingOutlineTargetPage;
@@ -72,6 +73,7 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _registerAiSidebarController();
     _pendingStartupFilePath = _resolveStartupPdfPath();
     unawaited(
       _loadRecentFiles().then((_) => _openPendingStartupFileIfNeeded()),
@@ -98,14 +100,21 @@ class HomeController extends GetxController {
     super.onClose();
   }
 
-  void onDocumentChanged(PdfDocument? document) {
-    if (document == null) {
+  void onDocumentChanged(String filePath, PdfDocument? document) {
+    if (document == null || state.filePath != filePath) {
       return;
     }
+    final int loadId = ++_outlineLoadId;
     _applyState(
       state.copyWith(pageCount: document.pages.length, errorMessage: null),
     );
-    unawaited(_loadOutline(document));
+    unawaited(
+      _loadOutline(
+        document,
+        sourceFilePath: filePath,
+        loadId: loadId,
+      ),
+    );
   }
 
   void onViewerReady(PdfDocument document, PdfViewerController controller) {
@@ -118,18 +127,6 @@ class HomeController extends GetxController {
   void onLoadError(Object error, StackTrace? stackTrace) {
     debugPrint('[plume_pdf] onLoadError: $error');
     _showError('打开失败：$error');
-  }
-
-  void onPageChanged(int? pageNumber) {
-    final int safePage = pageNumber ?? 1;
-    _applyState(
-      state.copyWith(
-        currentPage: safePage,
-        selectedOutlineId: _selectedOutlineIdForPage(safePage),
-      ),
-    );
-    _setPageText('$safePage');
-    _scheduleProgressSave();
   }
 
   void toggleSidebar() {
@@ -206,13 +203,24 @@ class HomeController extends GetxController {
   void _applyState(PdfReaderState nextState) {
     final PdfReaderState previousState = state;
     state = nextState;
-    _syncAiSidebarController();
+    if (_shouldSyncAiSidebarController(previousState, nextState)) {
+      _syncAiSidebarController();
+    }
 
     final bool aiPanelChanged =
         !identical(previousState.aiPanelState, nextState.aiPanelState);
     if (!aiPanelChanged || _readerViewStateChanged(previousState, nextState)) {
       update(<Object>[viewId]);
     }
+  }
+
+  bool _shouldSyncAiSidebarController(
+    PdfReaderState previousState,
+    PdfReaderState nextState,
+  ) {
+    return !identical(previousState.aiPanelState, nextState.aiPanelState) ||
+        previousState.filePath != nextState.filePath ||
+        previousState.sidebarVisible != nextState.sidebarVisible;
   }
 
   bool _readerViewStateChanged(
@@ -244,11 +252,12 @@ class HomeController extends GetxController {
         );
   }
 
-  void _syncAiSidebarController() {
+  void _registerAiSidebarController() {
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
-      Get.find<AiSidebarController>(
-        tag: AiSidebarController.tag,
-      ).updateExternalState(
+      return;
+    }
+    Get.put<AiSidebarController>(
+      AiSidebarController(
         state: state.aiPanelState,
         onApiKeyChanged: updateAiApiKey,
         onSaveApiKey: saveAiApiKey,
@@ -256,23 +265,26 @@ class HomeController extends GetxController {
         onNewSession: startNewAiSession,
         documentPath: state.filePath,
         leftSidebarWidth: state.sidebarVisible ? 260 : 0,
-      );
+      ),
+      tag: AiSidebarController.tag,
+    );
+  }
+
+  void _syncAiSidebarController() {
+    if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       return;
     }
-    if (state.aiSidebarVisible) {
-      Get.put<AiSidebarController>(
-        AiSidebarController(
-          state: state.aiPanelState,
-          onApiKeyChanged: updateAiApiKey,
-          onSaveApiKey: saveAiApiKey,
-          onSendChat: sendAiChat,
-          onNewSession: startNewAiSession,
-          documentPath: state.filePath,
-          leftSidebarWidth: state.sidebarVisible ? 260 : 0,
-        ),
-        tag: AiSidebarController.tag,
-      );
-    }
+    Get.find<AiSidebarController>(
+      tag: AiSidebarController.tag,
+    ).updateExternalState(
+      state: state.aiPanelState,
+      onApiKeyChanged: updateAiApiKey,
+      onSaveApiKey: saveAiApiKey,
+      onSendChat: sendAiChat,
+      onNewSession: startNewAiSession,
+      documentPath: state.filePath,
+      leftSidebarWidth: state.sidebarVisible ? 260 : 0,
+    );
   }
 
   void _setPageText(String text) {
