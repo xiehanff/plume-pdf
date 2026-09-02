@@ -72,6 +72,7 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _registerAiSidebarController();
     _pendingStartupFilePath = _resolveStartupPdfPath();
     unawaited(
       _loadRecentFiles().then((_) => _openPendingStartupFileIfNeeded()),
@@ -118,18 +119,6 @@ class HomeController extends GetxController {
   void onLoadError(Object error, StackTrace? stackTrace) {
     debugPrint('[plume_pdf] onLoadError: $error');
     _showError('打开失败：$error');
-  }
-
-  void onPageChanged(int? pageNumber) {
-    final int safePage = pageNumber ?? 1;
-    _applyState(
-      state.copyWith(
-        currentPage: safePage,
-        selectedOutlineId: _selectedOutlineIdForPage(safePage),
-      ),
-    );
-    _setPageText('$safePage');
-    _scheduleProgressSave();
   }
 
   void toggleSidebar() {
@@ -244,11 +233,12 @@ class HomeController extends GetxController {
         );
   }
 
-  void _syncAiSidebarController() {
+  void _registerAiSidebarController() {
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
-      Get.find<AiSidebarController>(
-        tag: AiSidebarController.tag,
-      ).updateExternalState(
+      return;
+    }
+    Get.put<AiSidebarController>(
+      AiSidebarController(
         state: state.aiPanelState,
         onApiKeyChanged: updateAiApiKey,
         onSaveApiKey: saveAiApiKey,
@@ -256,23 +246,26 @@ class HomeController extends GetxController {
         onNewSession: startNewAiSession,
         documentPath: state.filePath,
         leftSidebarWidth: state.sidebarVisible ? 260 : 0,
-      );
+      ),
+      tag: AiSidebarController.tag,
+    );
+  }
+
+  void _syncAiSidebarController() {
+    if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       return;
     }
-    if (state.aiSidebarVisible) {
-      Get.put<AiSidebarController>(
-        AiSidebarController(
-          state: state.aiPanelState,
-          onApiKeyChanged: updateAiApiKey,
-          onSaveApiKey: saveAiApiKey,
-          onSendChat: sendAiChat,
-          onNewSession: startNewAiSession,
-          documentPath: state.filePath,
-          leftSidebarWidth: state.sidebarVisible ? 260 : 0,
-        ),
-        tag: AiSidebarController.tag,
-      );
-    }
+    Get.find<AiSidebarController>(
+      tag: AiSidebarController.tag,
+    ).updateExternalState(
+      state: state.aiPanelState,
+      onApiKeyChanged: updateAiApiKey,
+      onSaveApiKey: saveAiApiKey,
+      onSendChat: sendAiChat,
+      onNewSession: startNewAiSession,
+      documentPath: state.filePath,
+      leftSidebarWidth: state.sidebarVisible ? 260 : 0,
+    );
   }
 
   void _setPageText(String text) {
