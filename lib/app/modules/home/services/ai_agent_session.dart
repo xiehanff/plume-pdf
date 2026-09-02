@@ -58,7 +58,7 @@ class AiAgentSession {
   }) async {
     final int requestGeneration = _generation;
     final AiStreamResult result = await _runStream(
-      () => _deepSeekService.performStreamWithReasoning(
+      () => _deepSeekService.performStream(
         action: action,
         apiKey: apiKey,
         selectionText: selectionText,
@@ -108,7 +108,7 @@ class AiAgentSession {
     _history.add(userMessage);
     try {
       final AiStreamResult result = await _runStream(
-        () => _deepSeekService.chatStreamWithReasoning(
+        () => _deepSeekService.chatStream(
           apiKey: apiKey,
           history: _history,
           documentContext: documentContext,
