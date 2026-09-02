@@ -10,7 +10,6 @@ import 'package:plume_pdf/app/modules/home/models/pdf_ai_context.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_outline_entry.dart';
 import 'package:plume_pdf/app/modules/home/services/deepseek_service.dart';
 
-/// 构造 OpenAI 兼容 SSE 响应体（UTF-8 bytes）。
 http.Response sseResponse(
   List<String> chunks, {
   int statusCode = 200,
@@ -45,7 +44,6 @@ http.Response sseResponse(
   );
 }
 
-/// 从 user 消息 content（可能为 String 或 parts 数组）中提取文本。
 String _extractUserText(Map<String, dynamic> message) {
   final Object? content = message['content'];
   if (content is String) {
@@ -54,11 +52,8 @@ String _extractUserText(Map<String, dynamic> message) {
   if (content is List) {
     final StringBuffer buffer = StringBuffer();
     for (final Object? part in content) {
-      if (part is Map<String, dynamic>) {
-        final Object? type = part['type'];
-        if (type == 'text') {
-          buffer.write(part['text'] as String? ?? '');
-        }
+      if (part is Map<String, dynamic> && part['type'] == 'text') {
+        buffer.write(part['text'] as String? ?? '');
       }
     }
     return buffer.toString();
@@ -68,7 +63,7 @@ String _extractUserText(Map<String, dynamic> message) {
 
 void main() {
   group('DeepSeekService performStream', () {
-    test('文本模式：流式分块返回并发送正确的 payload', () async {
+    test('文本模式：单一 SSE 通道返回正文并发送正确 payload', () async {
       late Map<String, dynamic> capturedPayload;
       late String capturedAuth;
       late Uri capturedUrl;
@@ -81,7 +76,7 @@ void main() {
       });
 
       final DeepSeekService service = DeepSeekService(httpClient: client);
-      final List<String> chunks = await service
+      final List<DeepSeekStreamChunk> chunks = await service
           .performStream(
             action: AiToolAction.translate,
             apiKey: 'sk-test-123',
@@ -89,10 +84,15 @@ void main() {
           )
           .toList();
 
-      expect(chunks, <String>['你好', '，', '世界']);
+      expect(
+        chunks.map((DeepSeekStreamChunk chunk) => chunk.text),
+        <String>['你好', '，', '世界'],
+      );
       expect(capturedUrl.path, '/v1/chat/completions');
       expect(capturedAuth, 'Bearer sk-test-123');
       expect(capturedPayload['model'], DeepSeekService.model);
+      expect(capturedPayload['stream'], isTrue);
+      expect(capturedPayload['reasoning_effort'], 'low');
 
       final List<dynamic> messages =
           capturedPayload['messages'] as List<dynamic>;
@@ -105,9 +105,35 @@ void main() {
       );
     });
 
-    test('vision 模式：发送图片 data URI', () async {
-      late Map<String, dynamic> capturedPayload;
+    test('流式同时保留 reasoning_content 和正文', () async {
+      final MockClient client = MockClient((http.Request request) async {
+        return sseResponse(
+          <String>['正文第一段', '正文第二段'],
+          reasoningChunks: <String>['先分析', '再回答'],
+        );
+      });
 
+      final DeepSeekService service = DeepSeekService(httpClient: client);
+      final List<DeepSeekStreamChunk> chunks = await service
+          .performStream(
+            action: AiToolAction.explain,
+            apiKey: 'sk-test-123',
+            selectionText: '状态机',
+          )
+          .toList();
+
+      expect(
+        chunks.map((DeepSeekStreamChunk chunk) => chunk.text),
+        <String>['正文第一段', '正文第二段'],
+      );
+      expect(
+        chunks.map((DeepSeekStreamChunk chunk) => chunk.reasoning),
+        <String>['先分析', '再回答'],
+      );
+    });
+
+    test('vision 模式：直接构造 OpenAI image_url data URI', () async {
+      late Map<String, dynamic> capturedPayload;
       final MockClient client = MockClient((http.Request request) async {
         capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
         return sseResponse(<String>['识别结果']);
@@ -130,8 +156,8 @@ void main() {
           messages.last as Map<String, dynamic>;
       final List<dynamic> content = userMessage['content'] as List<dynamic>;
       expect(content, hasLength(2));
-      expect((content[0] as Map<String, dynamic>)['type'], 'text');
-      final Map<String, dynamic> image = content[1] as Map<String, dynamic>;
+      expect((content.first as Map<String, dynamic>)['type'], 'text');
+      final Map<String, dynamic> image = content.last as Map<String, dynamic>;
       expect(image['type'], 'image_url');
       expect(
         (image['image_url'] as Map<String, dynamic>)['url'],
@@ -139,12 +165,30 @@ void main() {
       );
     });
 
-    test('缺少 API Key 时抛 DeepSeekException', () async {
+    test('深度理解保留 32768 max_tokens 且不降低 reasoning effort', () async {
+      late Map<String, dynamic> capturedPayload;
       final MockClient client = MockClient((http.Request request) async {
-        return sseResponse(<String>['x']);
+        capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
+        return sseResponse(<String>['深入回答']);
       });
 
       final DeepSeekService service = DeepSeekService(httpClient: client);
+      await service
+          .performStream(
+            action: AiToolAction.deepDive,
+            apiKey: 'sk-test-123',
+            selectionText: '解释状态机',
+          )
+          .toList();
+
+      expect(capturedPayload['max_tokens'], 32768);
+      expect(capturedPayload.containsKey('reasoning_effort'), isFalse);
+    });
+
+    test('缺少 API Key 时抛 DeepSeekException', () async {
+      final DeepSeekService service = DeepSeekService(
+        httpClient: MockClient((_) async => sseResponse(<String>['x'])),
+      );
       expect(
         () => service
             .performStream(
@@ -157,7 +201,7 @@ void main() {
       );
     });
 
-    test('API Key 无效时返回认证错误', () async {
+    test('401 认证错误不可触发 vision 文本重试', () async {
       final MockClient client = MockClient((http.Request request) async {
         return http.Response(
           jsonEncode(<String, dynamic>{
@@ -168,47 +212,74 @@ void main() {
       });
 
       final DeepSeekService service = DeepSeekService(httpClient: client);
-      expect(
-        () => service
+      try {
+        await service
             .performStream(
               action: AiToolAction.translate,
               apiKey: 'sk-bad',
               selectionText: 'hello',
             )
-            .toList(),
-        throwsA(
-          isA<DeepSeekException>().having(
-            (DeepSeekException e) => e.message,
-            'message',
-            contains('认证失败'),
-          ),
-        ),
-      );
+            .toList();
+        fail('expected DeepSeekException');
+      } on DeepSeekException catch (error) {
+        expect(error.message, contains('认证失败'));
+        expect(error.statusCode, 401);
+        expect(error.canFallbackToText, isFalse);
+      }
+    });
+
+    test('400 图片能力拒绝允许回退文本', () async {
+      final MockClient client = MockClient((http.Request request) async {
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'error': <String, dynamic>{
+              'message': 'This model does not support image input',
+            },
+          }),
+          400,
+        );
+      });
+
+      final DeepSeekService service = DeepSeekService(httpClient: client);
+      try {
+        await service
+            .performStream(
+              action: AiToolAction.explain,
+              apiKey: 'sk-test',
+              selectionText: '',
+              imageBytes: Uint8List.fromList(<int>[1]),
+            )
+            .toList();
+        fail('expected DeepSeekException');
+      } on DeepSeekException catch (error) {
+        expect(error.statusCode, 400);
+        expect(error.canFallbackToText, isTrue);
+      }
     });
   });
 
   group('DeepSeekService chatStream', () {
-    test('多轮历史角色映射正确', () async {
+    test('多轮历史角色映射正确且对话使用 low reasoning effort', () async {
       late Map<String, dynamic> capturedPayload;
-
       final MockClient client = MockClient((http.Request request) async {
         capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
         return sseResponse(<String>['回答']);
       });
 
       final DeepSeekService service = DeepSeekService(httpClient: client);
-      final List<String> chunks = await service
+      final List<DeepSeekStreamChunk> chunks = await service
           .chatStream(
             apiKey: 'sk-test-123',
             history: <AiChatHistoryMessage>[
               const AiChatHistoryMessage.user(content: '你好'),
-              const AiChatHistoryMessage.assistant(content: '你好，请问有什么可以帮你？'),
+              const AiChatHistoryMessage.assistant(content: '你好，有什么可以帮你？'),
               const AiChatHistoryMessage.user(content: '介绍下 PDF'),
             ],
           )
           .toList();
 
-      expect(chunks, <String>['回答']);
+      expect(chunks.single.text, '回答');
+      expect(capturedPayload['reasoning_effort'], 'low');
       final List<dynamic> messages =
           capturedPayload['messages'] as List<dynamic>;
       expect(messages, hasLength(4));
@@ -220,7 +291,6 @@ void main() {
 
     test('发送对话时将 PDF 上下文注入 system prompt', () async {
       late Map<String, dynamic> capturedPayload;
-
       final MockClient client = MockClient((http.Request request) async {
         capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
         return sseResponse(<String>['回答']);
@@ -258,51 +328,7 @@ void main() {
       expect(systemPrompt, isNot(contains('文件目录')));
     });
 
-    test('chat 聚合流式结果', () async {
-      final MockClient client = MockClient((http.Request request) async {
-        return sseResponse(<String>['多', '轮', '回复']);
-      });
-
-      final DeepSeekService service = DeepSeekService(httpClient: client);
-      final String result = await service.chat(
-        apiKey: 'sk-test-123',
-        history: <AiChatHistoryMessage>[
-          const AiChatHistoryMessage.user(content: '你好'),
-        ],
-      );
-
-      expect(result, '多轮回复');
-    });
-
-    test('chatStreamWithReasoning 同时返回推理和正文增量', () async {
-      final MockClient client = MockClient((http.Request request) async {
-        return sseResponse(
-          <String>['正文第一段', '正文第二段'],
-          reasoningChunks: <String>['先分析上下文', '再组织答案'],
-        );
-      });
-
-      final DeepSeekService service = DeepSeekService(httpClient: client);
-      final List<DeepSeekStreamChunk> chunks = await service
-          .chatStreamWithReasoning(
-            apiKey: 'sk-test-123',
-            history: <AiChatHistoryMessage>[
-              const AiChatHistoryMessage.user(content: '你好'),
-            ],
-          )
-          .toList();
-
-      expect(chunks.map((DeepSeekStreamChunk chunk) => chunk.text), <String>[
-        '正文第一段',
-        '正文第二段',
-      ]);
-      expect(
-        chunks.map((DeepSeekStreamChunk chunk) => chunk.reasoning),
-        <String>['先分析上下文', '再组织答案'],
-      );
-    });
-
-    test('后续对话会继续发送历史消息中的图片', () async {
+    test('后续对话继续发送历史图片并保留 MIME 类型', () async {
       late Map<String, dynamic> capturedPayload;
       final Uint8List imageBytes = Uint8List.fromList(<int>[1, 2, 3]);
       final MockClient client = MockClient((http.Request request) async {
@@ -312,7 +338,7 @@ void main() {
 
       final DeepSeekService service = DeepSeekService(httpClient: client);
       await service
-          .chatStreamWithReasoning(
+          .chatStream(
             apiKey: 'sk-test-123',
             history: <AiChatHistoryMessage>[
               AiChatHistoryMessage.user(
@@ -342,74 +368,6 @@ void main() {
         'data:image/png;base64,${base64Encode(imageBytes)}',
       );
       expect((messages.last as Map<String, dynamic>)['content'], '第二列是什么意思？');
-    });
-  });
-
-  group('DeepSeekService performStreamWithReasoning', () {
-    test('深度理解为思考过程和正式答案预留 32768 max_tokens', () async {
-      late Map<String, dynamic> capturedPayload;
-      final MockClient client = MockClient((http.Request request) async {
-        capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
-        return sseResponse(<String>['深入回答']);
-      });
-
-      final DeepSeekService service = DeepSeekService(httpClient: client);
-      await service
-          .performStreamWithReasoning(
-            action: AiToolAction.deepDive,
-            apiKey: 'sk-test-123',
-            selectionText: '解释状态机',
-          )
-          .toList();
-
-      expect(capturedPayload['max_tokens'], 32768);
-    });
-
-    test('翻译/解释降低推理深度，深度理解保持默认档位', () async {
-      late Map<String, dynamic> capturedPayload;
-      final MockClient client = MockClient((http.Request request) async {
-        capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
-        return sseResponse(<String>['回答']);
-      });
-
-      final DeepSeekService service = DeepSeekService(httpClient: client);
-      await service
-          .performStreamWithReasoning(
-            action: AiToolAction.translate,
-            apiKey: 'sk-test-123',
-            selectionText: 'Hello',
-          )
-          .toList();
-      expect(capturedPayload['reasoning_effort'], 'low');
-
-      await service
-          .performStreamWithReasoning(
-            action: AiToolAction.deepDive,
-            apiKey: 'sk-test-123',
-            selectionText: '解释状态机',
-          )
-          .toList();
-      expect(capturedPayload.containsKey('reasoning_effort'), isFalse);
-    });
-
-    test('多轮对话降低推理深度（reasoning_effort=low）', () async {
-      late Map<String, dynamic> capturedPayload;
-      final MockClient client = MockClient((http.Request request) async {
-        capturedPayload = jsonDecode(request.body) as Map<String, dynamic>;
-        return sseResponse(<String>['回答']);
-      });
-
-      final DeepSeekService service = DeepSeekService(httpClient: client);
-      await service
-          .chatStreamWithReasoning(
-            apiKey: 'sk-test-123',
-            history: <AiChatHistoryMessage>[
-              const AiChatHistoryMessage.user(content: '你好'),
-            ],
-          )
-          .toList();
-
-      expect(capturedPayload['reasoning_effort'], 'low');
     });
   });
 }
