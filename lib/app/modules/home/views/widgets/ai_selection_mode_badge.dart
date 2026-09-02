@@ -20,7 +20,7 @@ class _AiSelectionModeBadgeState extends State<AiSelectionModeBadge>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 2400),
     )..repeat();
   }
 
@@ -33,7 +33,7 @@ class _AiSelectionModeBadgeState extends State<AiSelectionModeBadge>
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _RotatingGradientBorderPainter(
+      painter: _GoldFlowBorderPainter(
         animation: _controller,
         borderRadius: 999,
         borderWidth: 2,
@@ -42,12 +42,20 @@ class _AiSelectionModeBadgeState extends State<AiSelectionModeBadge>
         padding: const EdgeInsets.all(2),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(997),
-          child: DecoratedBox(
+          child: const DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xFF301A4E),
-              borderRadius: BorderRadius.circular(997),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[
+                  Color(0xFF1A1A1A),
+                  Color(0xFF050505),
+                  Color(0xFF111111),
+                ],
+                stops: <double>[0, 0.58, 1],
+              ),
             ),
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Text(
                 'AI 选择模式',
@@ -65,8 +73,8 @@ class _AiSelectionModeBadgeState extends State<AiSelectionModeBadge>
   }
 }
 
-class _RotatingGradientBorderPainter extends CustomPainter {
-  _RotatingGradientBorderPainter({
+class _GoldFlowBorderPainter extends CustomPainter {
+  _GoldFlowBorderPainter({
     required this.animation,
     required this.borderRadius,
     required this.borderWidth,
@@ -78,52 +86,56 @@ class _RotatingGradientBorderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final outerRect = Offset.zero & size;
-    final outerRRect =
-        RRect.fromRectAndRadius(outerRect, Radius.circular(borderRadius));
+    if (size.isEmpty) return;
 
-    final sweepGradient = SweepGradient(
+    final Rect borderRect = (Offset.zero & size).deflate(borderWidth / 2);
+    final RRect borderRRect = RRect.fromRectAndRadius(
+      borderRect,
+      Radius.circular(borderRadius),
+    );
+
+    final SweepGradient goldFlow = SweepGradient(
       startAngle: 0,
       endAngle: math.pi * 2,
-      colors: const [
-        Color(0xFFB39DDB),
-        Color(0xFF7C4DFF),
-        Color(0xFFE040FB),
-        Color(0xFF536DFE),
-        Color(0xFFB39DDB),
+      colors: const <Color>[
+        Color(0xFF4A3510),
+        Color(0xFF6E4F16),
+        Color(0xFF8B661E),
+        Color(0xFFD8A83A),
+        Color(0xFFFFF1A8),
+        Color(0xFFFFC84A),
+        Color(0xFF8B661E),
+        Color(0xFF6E4F16),
+        Color(0xFF4A3510),
       ],
+      stops: const <double>[0, 0.38, 0.58, 0.69, 0.735, 0.78, 0.87, 0.94, 1],
       transform: GradientRotation(animation.value * math.pi * 2),
     );
+    final Shader shader = goldFlow.createShader(borderRect);
 
+    // 一层很轻的金色辉光，只跟随边框，不改变组件本身的尺寸。
     canvas.drawRRect(
-      outerRRect,
-      Paint()..shader = sweepGradient.createShader(outerRect),
-    );
-
-    final innerRect = Rect.fromLTWH(
-      borderWidth,
-      borderWidth,
-      size.width - borderWidth * 2,
-      size.height - borderWidth * 2,
-    );
-    final innerRRect = RRect.fromRectAndRadius(
-      innerRect,
-      Radius.circular(borderRadius - borderWidth),
-    );
-
-    const bgGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF3D2A5C), Color(0xFF2A1A3E)],
+      borderRRect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth + 1.2
+        ..shader = shader
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
 
     canvas.drawRRect(
-      innerRRect,
-      Paint()..shader = bgGradient.createShader(innerRect),
+      borderRRect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth
+        ..shader = shader,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _RotatingGradientBorderPainter oldDelegate) =>
-      true;
+  bool shouldRepaint(covariant _GoldFlowBorderPainter oldDelegate) {
+    return oldDelegate.animation != animation ||
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.borderWidth != borderWidth;
+  }
 }
