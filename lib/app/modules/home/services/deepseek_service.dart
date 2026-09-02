@@ -121,8 +121,9 @@ class DeepSeekService {
       final http.StreamedResponse response = await client.send(request);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final String body = await response.stream.bytesToString();
+        final String rawError = 'HTTP ${response.statusCode}: $body';
         throw DeepSeekException(
-          _normalizeError('HTTP ${response.statusCode}: $body'),
+          _normalizeError(rawError, statusCode: response.statusCode),
           statusCode: response.statusCode,
         );
       }
@@ -296,13 +297,12 @@ class DeepSeekService {
 
   String _stringValue(Object? value) => value is String ? value : '';
 
-  String _normalizeError(Object error) {
+  String _normalizeError(Object error, {int? statusCode}) {
     final String message = error.toString();
     final String lowercased = message.toLowerCase();
-    if (lowercased.contains('authentication') ||
-        lowercased.contains('api key') ||
-        lowercased.contains('invalid') ||
-        lowercased.contains('401')) {
+    if (statusCode == 401 ||
+        lowercased.contains('authentication') ||
+        lowercased.contains('api key')) {
       return 'DeepSeek 认证失败：API Key 无效或授权不足。';
     }
     return 'DeepSeek 请求失败：$message';
