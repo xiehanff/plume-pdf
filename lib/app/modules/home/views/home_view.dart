@@ -216,6 +216,7 @@ class HomeView extends GetView<HomeController> {
       backgroundTheme: state.backgroundTheme,
       aiSelectionEnabled: state.aiSelectionMode,
       onDocumentChanged: controller.onDocumentChanged,
+      onPageChanged: controller.onPageChanged,
       onViewerReady: controller.onViewerReady,
       onLoadError: controller.onLoadError,
       onSelectionChanged: controller.onAiSelectionChanged,
