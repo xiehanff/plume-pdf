@@ -19,10 +19,11 @@ class DebugGalleryView extends StatefulWidget {
 }
 
 class _DebugGalleryViewState extends State<DebugGalleryView> {
+  static const String _aiControllerTag = 'debug-gallery-ai-sidebar';
+
   @override
   void initState() {
     super.initState();
-    // AiSidebar 不再接收参数，展示前需要注册示例 Controller。
     Get.put(
       AiSidebarController(
         state: const PdfAiPanelState(
@@ -36,14 +37,14 @@ class _DebugGalleryViewState extends State<DebugGalleryView> {
         onNewSession: () {},
         documentPath: '/path/to/sample.pdf',
       ),
-      tag: AiSidebarController.tag,
+      tag: _aiControllerTag,
     );
   }
 
   @override
   void dispose() {
-    if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
-      Get.delete<AiSidebarController>(tag: AiSidebarController.tag);
+    if (Get.isRegistered<AiSidebarController>(tag: _aiControllerTag)) {
+      Get.delete<AiSidebarController>(tag: _aiControllerTag);
     }
     super.dispose();
   }
@@ -121,7 +122,7 @@ class _DebugGalleryViewState extends State<DebugGalleryView> {
           _sectionTitle('AiSidebar'),
           _previewCard(
             height: 320,
-            child: const AiSidebar(),
+            child: const AiSidebar(controllerTag: _aiControllerTag),
           ),
         ],
       ),
