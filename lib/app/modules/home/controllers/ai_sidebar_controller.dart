@@ -26,7 +26,6 @@ enum _ResultUpdateMode { replace, incremental }
 class FollowTailScrollController extends ScrollController {
   FollowTailScrollController({required this.isFollowingTail});
 
-  /// 当前是否处于贴底跟随态，由侧栏控制器的跟随状态机提供。
   final ValueGetter<bool> isFollowingTail;
 
   @override
@@ -61,10 +60,6 @@ class _FollowTailScrollPosition extends ScrollPositionWithSingleContext {
   ) {
     if (isFollowingTail() &&
         newDimensions.maxScrollExtent - pixels > 0.5) {
-      // 跟随态下内容增长后落后于底部：修正 offset 并返回 false，
-      // viewport 会在同一帧内用新 offset 重新布局（correction pass），
-      // 渲染前已经贴底，不产生跨帧跳动。内容收缩导致的越界仍由
-      // 基类边界修正处理。
       correctPixels(newDimensions.maxScrollExtent);
       return false;
     }
@@ -90,8 +85,6 @@ class _ConversationState {
 }
 
 class AiSidebarController extends GetxController {
-  /// 在 GetX 容器中的注册键。由 `HomeController` 负责创建与同步，
-  /// 侧栏开关期间实例常驻，会话历史不会因收起侧栏而丢失。
   static const String tag = 'ai-sidebar';
 
   static const double _kMinWidth = 240;
@@ -143,6 +136,7 @@ class AiSidebarController extends GetxController {
   _ScrollFollowState _scrollFollowState = _ScrollFollowState.followingTail;
   ScrollDirection _userScrollDirection = ScrollDirection.idle;
   int _scrollRequestId = 0;
+  bool _hasDeferredStreamingUpdate = false;
 
   PdfAiPanelState get state => _panelState;
 
@@ -151,10 +145,8 @@ class AiSidebarController extends GetxController {
   AiSidebarFollowUpState get followUpState {
     if (_panelState.loading ||
         _panelState.errorMessage != null ||
-        _panelState.followUpSuggestions.isEmpty) {
-      return AiSidebarFollowUpState.hidden;
-    }
-    if (_conversation.messages.isEmpty) {
+        _panelState.followUpSuggestions.isEmpty ||
+        _conversation.messages.isEmpty) {
       return AiSidebarFollowUpState.hidden;
     }
     final ChatMessage last = _conversation.messages.last;
@@ -187,7 +179,8 @@ class AiSidebarController extends GetxController {
 
   VoidCallback get onNewSession => _onNewSession;
 
-  /// 接收父组件的新面板状态，并同步控制器内部的会话状态。
+  /// 同步外部面板状态。用户滚离底部阅读历史且模型仍在流式输出时，
+  /// 数据继续同步，但暂缓 GetBuilder rebuild；回到底部或流结束后一次刷新。
   void updateExternalState({
     required PdfAiPanelState state,
     required String? documentPath,
@@ -200,6 +193,9 @@ class AiSidebarController extends GetxController {
     final bool sessionChanged =
         _panelState.sessionId != state.sessionId ||
         _documentPath != documentPath;
+    final bool startsNewRound =
+        sessionChanged ||
+        (state.actionId != null && state.actionId != _panelState.actionId);
     final bool apiKeyChanged = _panelState.apiKey != state.apiKey;
 
     _panelState = state;
@@ -212,12 +208,21 @@ class AiSidebarController extends GetxController {
 
     if (sessionChanged) {
       _resetConversation(notify: false);
+    } else if (startsNewRound) {
+      _resumeScrollFollowing();
+      _hasDeferredStreamingUpdate = false;
     }
     if (apiKeyChanged && _deepSeekController.text != state.apiKey) {
       _deepSeekController.text = state.apiKey;
     }
 
     _syncConversationWithPanelState();
+    if (_scrollFollowState == _ScrollFollowState.userControlled &&
+        state.loading) {
+      _hasDeferredStreamingUpdate = true;
+      return;
+    }
+    _hasDeferredStreamingUpdate = false;
     update();
   }
 
@@ -231,7 +236,6 @@ class AiSidebarController extends GetxController {
     update();
   }
 
-  /// 用户开始滚动后，立即取消已排队的自动跟随请求。
   void _markUserScrolled() {
     if (_scrollFollowState == _ScrollFollowState.userControlled) {
       return;
@@ -244,15 +248,10 @@ class AiSidebarController extends GetxController {
     _scrollFollowState = _ScrollFollowState.followingTail;
   }
 
-  /// 处理 ListView 滚动通知。
-  ///
-  /// 不能在 ScrollEndNotification 中仅按距离恢复跟随：鼠标滚轮的每个
-  /// PointerScrollEvent 都会同步产生 ScrollEndNotification，从底部附近
-  /// 上滚时会因此立刻重新开启自动跟随。只有用户向底部滚动并进入阈值，
-  /// 才恢复跟随；恢复后由 [FollowTailScrollController] 保持帧内贴底。
   bool handleScrollNotification(ScrollNotification notification) {
     if (notification.depth != 0) return false;
 
+    bool resumedFollowing = false;
     if (notification is UserScrollNotification) {
       _userScrollDirection = notification.direction;
       if (notification.direction == ScrollDirection.idle) {
@@ -263,21 +262,22 @@ class AiSidebarController extends GetxController {
       if (notification.direction == ScrollDirection.reverse &&
           notification.metrics.extentAfter <= _kBottomFollowThreshold) {
         _resumeScrollFollowing();
-        _scheduleScrollToBottom();
+        resumedFollowing = true;
       }
     } else if (notification is ScrollUpdateNotification &&
         _userScrollDirection == ScrollDirection.reverse &&
         notification.metrics.extentAfter <= _kBottomFollowThreshold) {
-      // UserScrollNotification 只在方向变化时发送；持续向下滚动时，
-      // 需要在后续更新中捕获进入底部阈值的时刻。
       _resumeScrollFollowing();
+      resumedFollowing = true;
+    }
+
+    if (resumedFollowing) {
+      _flushDeferredStreamingUpdate();
       _scheduleScrollToBottom();
     }
     return false;
   }
 
-  /// 在 Scrollable 处理鼠标滚轮之前取消自动跟随，避免同一帧中已经排队
-  /// 的 post-frame 回调抢先把用户刚开始的滚动跳回底部。
   void handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent || !_scrollController.hasClients) {
       return;
@@ -292,14 +292,14 @@ class AiSidebarController extends GetxController {
     _markUserScrolled();
   }
 
-  /// 仅当用户仍在跟随尾部时滚动到底部，避免打断用户阅读。
   void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
-    if (_scrollFollowState != _ScrollFollowState.followingTail) return;
+    if (!_scrollController.hasClients ||
+        _scrollFollowState != _ScrollFollowState.followingTail) {
+      return;
+    }
     _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
-  /// 下一帧滚动到底部（仅在用户已停留底部时生效）。
   void _scheduleScrollToBottom() {
     final int requestId = _scrollRequestId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -307,6 +307,14 @@ class AiSidebarController extends GetxController {
         _scrollToBottom();
       }
     });
+  }
+
+  void _flushDeferredStreamingUpdate() {
+    if (!_hasDeferredStreamingUpdate || isClosed) {
+      return;
+    }
+    _hasDeferredStreamingUpdate = false;
+    update();
   }
 
   Future<void> handleSend(AiChatInput input) async {
@@ -331,8 +339,8 @@ class AiSidebarController extends GetxController {
     );
     _ensureLoadingPlaceholder();
     _resumeScrollFollowing();
+    _hasDeferredStreamingUpdate = false;
     update();
-    // 流式首个 chunk 直接 jumpTo 跟随，避免动画被后续更新打断。
     _scheduleScrollToBottom();
     await _onSendChat(AiChatInput(text: trimmedText, image: image));
   }
@@ -350,8 +358,6 @@ class AiSidebarController extends GetxController {
     _syncAction(_panelState);
 
     if (_panelState.loading) {
-      // 贴底由 FollowTailScrollController 在 layout 内保持，
-      // 无需逐次调度滚动。
       _ensureLoadingPlaceholder();
     }
 
@@ -401,7 +407,6 @@ class AiSidebarController extends GetxController {
       ),
     );
     _resumeScrollFollowing();
-    // 动作触发后流式输出立即开始，直接 jumpTo 跟随尾部。
     _scheduleScrollToBottom();
   }
 
@@ -493,8 +498,6 @@ class AiSidebarController extends GetxController {
     return _ResultUpdateMode.replace;
   }
 
-  /// 构建动作轮次的用户气泡文本：如 "翻译 xxx" / "解释 xxx"。
-  /// 带选区截图时返回空串，仅展示图片。
   String _buildActionUserText(PdfAiPanelState state) {
     final Uint8List? image = state.actionSelectionImage;
     if (image != null && image.isNotEmpty) {
@@ -556,8 +559,6 @@ class AiSidebarController extends GetxController {
     }
   }
 
-  /// 更新最后一条 AI 消息内容（流式增量或替换）；不存在则新增。
-  /// 仅负责消息更新，滚动调度由调用方控制。
   void _updateLastAiMessage(String text, {String? reasoning, bool? isLoading}) {
     final int lastIndex = _conversation.messages.length - 1;
     if (lastIndex >= 0 &&
@@ -589,6 +590,7 @@ class AiSidebarController extends GetxController {
     _resumeScrollFollowing();
     _userScrollDirection = ScrollDirection.idle;
     _scrollRequestId++;
+    _hasDeferredStreamingUpdate = false;
     if (notify) {
       update();
     }

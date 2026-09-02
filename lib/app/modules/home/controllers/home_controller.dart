@@ -13,7 +13,6 @@ import '../models/ai_chat_input.dart';
 import '../models/pdf_ai_panel_state.dart';
 import '../models/pdf_ai_context.dart';
 import 'ai_sidebar_controller.dart';
-import 'streaming_ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
@@ -53,8 +52,6 @@ class HomeController extends GetxController {
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
   final AiAgentSession _aiAgentSession = AiAgentSession();
-  // 历史与流式请求由会话层持有；PDF 提取依赖 viewerController，
-  // 因此在字段初始化时绑定。
   late final PdfAiContextService _pdfAiContextService = PdfAiContextService(
     viewerController: pdfViewerController,
     ocrService: _macosOcrService,
@@ -218,11 +215,6 @@ class HomeController extends GetxController {
     }
   }
 
-  /// 判断是否有 AI 面板之外、会影响 Reader Shell/PDF 区域的状态变化。
-  ///
-  /// 流式 preview 只替换 [PdfAiPanelState]，这种高频更新只需要通知
-  /// [AiSidebarController]，不应让被 AI 路由覆盖的 MobileHomeView 或
-  /// 桌面 PDF Reader 每 ~40ms 跟着 rebuild。
   bool _readerViewStateChanged(
     PdfReaderState previousState,
     PdfReaderState nextState,
@@ -252,10 +244,6 @@ class HomeController extends GetxController {
         );
   }
 
-  /// 唯一的侧栏状态同步入口：控制器已注册则无条件同步最新状态；
-  /// 未注册时仅在侧栏需要展示（桌面可见或移动端 AI 路由 ensure 后）
-  /// 才首次创建。流式期间每个状态变更只经由本方法同步一次，
-  /// 视图层（MobileAiView）不再各自 post-frame 重复同步。
   void _syncAiSidebarController() {
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       Get.find<AiSidebarController>(
@@ -273,7 +261,7 @@ class HomeController extends GetxController {
     }
     if (state.aiSidebarVisible) {
       Get.put<AiSidebarController>(
-        StreamingAiSidebarController(
+        AiSidebarController(
           state: state.aiPanelState,
           onApiKeyChanged: updateAiApiKey,
           onSaveApiKey: saveAiApiKey,
