@@ -20,7 +20,7 @@ class _AiSelectionModeBadgeState extends State<AiSelectionModeBadge>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
+      duration: const Duration(milliseconds: 1500),
     )..repeat();
   }
 
@@ -48,11 +48,11 @@ class _AiSelectionModeBadgeState extends State<AiSelectionModeBadge>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: <Color>[
-                  Color(0xFF1A1A1A),
-                  Color(0xFF050505),
-                  Color(0xFF111111),
+                  Color(0xFF343434),
+                  Color(0xFF171717),
+                  Color(0xFF000000),
                 ],
-                stops: <double>[0, 0.58, 1],
+                stops: <double>[0, 0.48, 1],
               ),
             ),
             child: Padding(
@@ -113,7 +113,6 @@ class _GoldFlowBorderPainter extends CustomPainter {
     );
     final Shader shader = goldFlow.createShader(borderRect);
 
-    // 一层很轻的金色辉光，只跟随边框，不改变组件本身的尺寸。
     canvas.drawRRect(
       borderRRect,
       Paint()
