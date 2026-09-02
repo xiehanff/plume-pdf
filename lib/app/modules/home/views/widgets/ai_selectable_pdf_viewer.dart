@@ -66,7 +66,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
           _buildPdfViewer(),
           if (widget.aiSelectionEnabled)
             Positioned(
-              right: 20,
+              right: 28,
               top: 20,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
