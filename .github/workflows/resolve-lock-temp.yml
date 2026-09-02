@@ -4,15 +4,17 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   resolve:
     runs-on: macos-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Checkout PR branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -24,9 +26,15 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      - name: Upload resolved lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: resolved-pubspec-lock
-          path: pubspec.lock
-          if-no-files-found: error
+      - name: Commit resolved lockfile
+        shell: bash
+        run: |
+          if git diff --quiet -- pubspec.lock; then
+            echo "pubspec.lock is already resolved"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pubspec.lock
+          git commit -m "chore: refresh dependency lockfile"
+          git push origin HEAD:${{ github.head_ref }}
