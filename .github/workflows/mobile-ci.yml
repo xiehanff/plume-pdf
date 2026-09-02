@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           APK="build/app/outputs/flutter-apk/app-debug.apk"
-          ABIS="$(unzip -Z1 "$APK" | awk -F/ '/^lib\/[^/]+\/.*\.so$/ { print $2 }' | sort -u)"
+          ABIS="$(unzip -Z1 "$APK" | awk -F/ '$1 == "lib" && $3 ~ /\.so$/ { print $2 }' | sort -u)"
           echo "Native ABIs in APK:"
           printf '%s\n' "$ABIS"
           if [[ "$ABIS" != "arm64-v8a" ]]; then
