@@ -115,7 +115,9 @@ extension HomeControllerNavigation on HomeController {
 
     final int currentPage = pdfViewerController.pageNumber ?? state.currentPage;
     final double zoom = pdfViewerController.currentZoom;
-    if (currentPage == state.currentPage && (zoom - state.zoom).abs() < 0.001) {
+    final bool pageChanged = currentPage != state.currentPage;
+    final bool zoomChanged = (zoom - state.zoom).abs() >= 0.001;
+    if (!pageChanged && !zoomChanged) {
       return;
     }
 
@@ -123,10 +125,15 @@ extension HomeControllerNavigation on HomeController {
       state.copyWith(
         currentPage: currentPage,
         zoom: zoom,
-        selectedOutlineId: _selectedOutlineIdForPage(currentPage),
+        selectedOutlineId: pageChanged
+            ? _selectedOutlineIdForPage(currentPage)
+            : state.selectedOutlineId,
       ),
     );
-    _setPageText('$currentPage');
+    if (pageChanged) {
+      _setPageText('$currentPage');
+      _scheduleProgressSave();
+    }
   }
 
   void updateRenderAreaWidth(
