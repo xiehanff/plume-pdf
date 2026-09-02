@@ -5,7 +5,7 @@ import 'package:plume_pdf/app/modules/home/models/pdf_reader_state.dart';
 
 void main() {
   testWidgets(
-    'page callback updates page state and stale progress debounce is ignored',
+    'page callback is source-bound and stale progress debounce is ignored',
     (WidgetTester tester) async {
       final HomeController controller = HomeController();
       controller.state = const PdfReaderState(
@@ -28,16 +28,26 @@ void main() {
         ],
       );
 
-      controller.onPageChanged(3);
+      controller.onPageChanged('/tmp/a.pdf', 3);
 
       expect(controller.state.currentPage, 3);
       expect(controller.state.selectedOutlineId, 'chapter-2');
       expect(controller.pageTextController.text, '3');
 
-      controller.showRecentFiles();
+      controller.state = controller.state.copyWith(
+        filePath: '/tmp/b.pdf',
+        currentPage: 1,
+        selectedOutlineId: null,
+      );
+      controller.onPageChanged('/tmp/a.pdf', 5);
+
+      expect(controller.state.filePath, '/tmp/b.pdf');
+      expect(controller.state.currentPage, 1);
+      expect(controller.state.selectedOutlineId, isNull);
+
       await tester.pump(const Duration(milliseconds: 450));
 
-      expect(controller.state.filePath, isNull);
+      expect(controller.state.filePath, '/tmp/b.pdf');
       expect(controller.state.currentPage, 1);
 
       controller.onClose();
