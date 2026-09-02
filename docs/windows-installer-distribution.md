@@ -1,6 +1,8 @@
 # Windows 安装包生成与分发
 
-本文记录当前 Windows Release / Inno Setup 安装包生成方式，以及 GitHub Actions 发布行为。
+> 文档基线：Plume PDF `v0.1.0`，更新于 2026-09-02。
+
+本文记录 Windows Release / Inno Setup 安装包生成方式，以及当前 GitHub Actions 自动发布行为。
 
 ## 1. 前置条件
 
@@ -30,13 +32,22 @@ fvm flutter build windows --release
 & .\windows\installer\build_installer.ps1
 ```
 
-## 3. 输出位置
+## 3. 版本与输出位置
+
+v0.1.0 对应：
+
+```text
+pubspec version: 0.1.0+24
+msix_version:     0.1.0.0
+```
+
+Inno Setup 输出格式：
 
 ```text
 windows/installer/dist/PlumePDF_Setup_<version>.exe
 ```
 
-版本来自 `pubspec.yaml`，不要在文档中固定旧版本文件名。
+版本来自 `pubspec.yaml`，不要在脚本或文档里额外维护第二份业务版本号。
 
 ## 4. 安装器行为
 
@@ -61,20 +72,54 @@ Checkout
 → upload-artifact *.exe
 ```
 
-普通 `main` push 会生成 Actions Artifact。
+普通 `main` push 会生成 Windows Actions Artifact。
 
-当明确推送 `v*` tag 时，Windows EXE 会和 Linux DEB/RPM、macOS DMG、Android APK 一起进入同一个 GitHub Release。
+## 6. v0.1.0 正式发布
 
-## 6. 发布前自查
+发布不需要手工打包或上传 EXE。
+
+当 `main` 出现：
+
+```text
+version: 0.1.0+24
+commit message: release: v0.1.0
+```
+
+工作流会自动创建/校验 `v0.1.0` tag。Windows EXE 会与：
+
+- Linux DEB
+- Linux RPM
+- macOS DMG
+- Android arm64 APK
+
+一起进入同一个 GitHub Release。
+
+Release 文案自动从 `CHANGELOG.md` 的 `0.1.0` 章节提取，因此版本文案、tag 和安装包都绑定同一 release commit。
+
+## 7. 发布前 / 发布后自查
 
 - Windows Release 构建通过
 - Inno Setup 成功输出 EXE
+- EXE 已进入 Actions Artifact
+- GitHub Release 页面已上传 EXE
 - 安装后主程序存在
-- 桌面/开始菜单快捷方式存在
+- 桌面 / 开始菜单快捷方式存在
 - PDF “打开方式”中可以选择 Plume PDF
 - 双击 PDF 可以把文件路径传给应用并打开
+- 应用版本为 `0.1.0`
 - 卸载行为正常
 
-## 7. 当前 CI 状态
+## 8. 常见发布问题
 
-移动端合并前已重新跑过完整 Windows release + installer + Artifact 上传，链路通过。
+### Release 没有创建
+
+确认：
+
+```text
+pubspec.yaml == 0.1.0+24
+head commit message == release: v0.1.0
+```
+
+### 普通 main push 只有 Artifact，没有 Release
+
+这是预期行为。普通开发提交只验证桌面打包；只有 release commit / release tag 才进入 GitHub Release 聚合流程。

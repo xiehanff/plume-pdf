@@ -1,5 +1,180 @@
 # Changelog
 
+## 0.1.0 - 2026-09-02
+
+> `v0.1.0` 是 Plume PDF 从早期 `0.0.x` 快速迭代进入第一个稳定里程碑的版本。本次发布不只是版本号提升：移动端阅读骨架、跨页 AI 框选、流式 AI 对话、桌面/Android 自动发布已经形成完整链路，同时对 Reader 状态源、AI Sidebar 生命周期和 DeepSeek transport 做了系统性收敛，删除了一批重复机制和历史兼容路径。
+
+### 本次版本定位
+
+Plume PDF 目前是一套以 Flutter + PDFium (`pdfrx`) 为基础的跨平台 PDF + AI 阅读器：
+
+- Windows / macOS / Linux 继续使用桌面阅读 Shell
+- Android 使用独立移动阅读 Shell，并发布 `arm64-v8a` APK
+- iOS 工程继续保留在仓库中，但当前阶段不进入 CI，也不发布 iOS 二进制
+- 桌面端和移动端共享同一套 `HomeController`、`PdfReaderState`、`PdfViewerController` 与 AI 会话层
+- 当前生产 AI Provider 仍为 DeepSeek，但 `AiModelRegistry` / `AiModelConfig` 保留，为后续多模型扩展预留配置层
+
+### Android / 移动阅读基础
+
+- 标准 Flutter Android/iOS 工程已经进入主仓库；移动端启动路径与桌面的 `window_manager` 初始化隔离。
+- Android/iOS 使用 `MobileHomeView`，桌面 Windows/macOS/Linux 继续使用 `HomeView`，没有复制第二套 Reader Controller。
+- 移动 PDF 区域真实让出顶部 SafeArea、底部工具栏和系统底部安全区，避免内容被刘海、手势条或固定工具栏覆盖。
+- 目录、AI、WiFi 传书使用全屏移动路由，同时复用桌面端已有的 Reader / AI 业务状态。
+- 移动 AI 输入区在系统底部 inset 基础上额外保留 20 px，兼容底部安全区为 0 的设备。
+- Android 当前只构建 ARMv8-A / `arm64-v8a`，CI 会检查 APK 内原生库 ABI，防止意外混入其他架构。
+- WiFi 传书在页面打开期间启动临时本地 HTTP 服务：只允许 PDF、限制最大 512 MB、检查 `%PDF-` 文件头，上传完成后自动打开；离开页面后服务关闭。
+
+### Viewer 级跨页 AI 框选
+
+- AI 框选从“每页一个 overlay”升级为整个 `PdfViewer` 唯一一份 `PdfViewerAreaSelectionOverlay`。
+- 全局任何时刻最多只有一个框选区域和一组 `翻译 / 解释 / 深度理解` 操作，不再出现不同页残留多组选区。
+- 一个选区可连续跨越多页，并转换为多个 `PdfAiSelectionRegion`；文字按页顺序合并，截图/OCR 回退按命中页裁剪后聚合为一次 AI 上下文。
+- PDF 连续阅读的纵向 page gap 收敛为 0，使跨页框选和视觉连续性更自然。
+- AI 动作工具条按真实 viewport 屏幕空间决定放在选区上方或下方；上下都不足屏幕高度 20% 时回退到选区垂直中心，并保持屏幕水平居中。
+
+### AI 流式体验与滚动稳定性
+
+- `AiAgentSession` 将原始 SSE preview 合并到约 40 ms 节奏，避免每个 token 都触发昂贵 GetBuilder / Markdown rebuild。
+- `FollowTailScrollController` 在 `correctForNewDimensions` 中进行同帧 viewport correction：不仅滚动数值贴底，最新气泡也在当前 frame 内完成重新 layout，修复“数值正确但画面下一帧才跳”的闪烁。
+- 用户主动上滚阅读历史时不再被流式输出强制拉回底部；回到底部阈值后恢复自动跟随。
+- 原独立 `StreamingAiSidebarController` 已删除，其“用户离开底部时延后 streaming rebuild、回到底部或终态时 flush”的职责并入 `AiSidebarController`。
+- 未闭合的流式代码围栏优先使用轻量文本展示，reasoning 折叠态避免无意义的完整 Markdown 重解析；展开后再使用完整 Markdown。
+- 保留 render-level 回归断言，确保未来 Flutter ScrollPosition 行为变化时能检测“offset 对但画面晚一帧”的问题。
+
+### Reader 状态源与异步竞态收敛
+
+- 页码不再由 `PdfViewerController` listener 与 `onPageChanged` 两条路径重复写入。
+- 当前语义明确拆分为：
+  - `PdfViewerParams.onPageChanged`：唯一页码事件源，负责 `currentPage`、目录选中项、页码输入框和阅读进度
+  - `PdfViewerController` listener：只同步 zoom
+- 这样避免 pdfrx transformation listener 与 layout 后页码计算之间的时序差异。
+- Viewer page callback / document callback 都携带来源 `filePath`；切换 PDF 后，旧 Viewer 的延迟回调不会污染当前文档。
+- Outline 加入 `loadId + filePath` 双重失效保护，旧 PDF 的慢异步结果无法覆盖新 PDF 目录。
+- 阅读进度 debounce 捕获触发当时的 file/page 快照，并在执行时确认仍是同一文件，避免快速切文档或回到最近阅读页时保存错误路径/页码。
+- 原本多套快捷键输入路径收敛为 `CallbackShortcuts + Focus`，保留 Escape、打开文件、翻页、缩放、复位等行为，删除重叠的 HardwareKeyboard/Focus 处理。
+
+### AI Sidebar 生命周期统一
+
+- `AiSidebarController` 只由 `HomeController` 创建、注册和销毁。
+- `MobileAiView` 删除第二套 `_ensureAiController()` / `Get.put()` 创建路径，恢复为纯展示 View。
+- HomeController 只在 `aiPanelState`、当前文档路径或左侧栏可见性真正影响 AI Sidebar 时同步外部状态，page/zoom/recent 等无关 Reader 更新不会再让 AI Markdown 区重复 rebuild。
+- Debug Gallery 使用独立 Controller tag，避免预览页复用并删除 Home 正在使用的 AI Controller。
+
+### DeepSeek transport：移除 Genkit 双通道
+
+- 删除 `genkit` 与 `genkit_openai` runtime 依赖，以及 Genkit 实例缓存、`Message/Part/Media` 中间转换和历史兼容 API。
+- `DeepSeekService` 当前只有一条 OpenAI-compatible HTTP/SSE transport：
+
+  ```text
+  AiAgentSession
+      ↓
+  DeepSeekService.performStream / chatStream
+      ↓
+  POST https://api.deepseek.com/v1/chat/completions
+      ↓
+  SSE
+      ├─ reasoning_content
+      └─ content
+  ```
+
+- 文本、历史、多模态图片直接生成 OpenAI-compatible message JSON，不再先构造 Genkit 对象再转换一次。
+- 保留 `deepseek-v4-flash-vision-exp`、多轮历史、历史图片/MIME 类型、日常动作 `reasoning_effort=low` 和“深度理解”32768 completion token budget。
+- SSE 继续保留 HTTP 状态检查、JSON 类型检查、无效 chunk 跳过和客户端生命周期清理。
+
+### Vision fallback 正确性
+
+- 过去视觉请求只要抛出 `DeepSeekException` 就可能再次发送纯文本请求，认证失败或网络错误也可能导致一次用户操作发出第二次请求。
+- v0.1.0 只允许在 HTTP 400/422 且服务端错误明确包含 image / vision / media / multimodal 能力拒绝时回退文本。
+- 401 API Key 错误、限流、普通网络错误直接展示原错误，不重复消耗请求/token。
+- 修复 `invalid image input` / `invalid_request_error` 被通用 `invalid` 关键字误归类成“API Key 认证失败”的问题：400/422 保留真实服务端详情，因此仍能正确判断是否允许 vision → text fallback。
+
+### AI 隐私与请求代数继续保持
+
+- AI 文档上下文不发送本机文件目录和文件大小，避免泄露用户名、公司目录或本地路径结构。
+- PDF 正文以不可信数据边界传给模型，并清理可能伪造边界标签的文档内容。
+- `HomeControllerAiSession` 的 action id 与 `AiAgentSession` generation 继续阻止旧 stream 在新会话/新请求后覆盖 UI 或 history。
+- stale stream 会停止消费后续增量；preview timer 在完成、失败、取消时清理。
+
+### CI 调整
+
+- `Mobile CI` 从 `macos-latest` 切换到 `ubuntu-latest`。
+- 当前 Mobile CI 只执行：
+
+  ```text
+  flutter pub get
+  flutter test
+  flutter analyze --no-fatal-infos
+  flutter build apk --debug --target-platform android-arm64
+  verify APK native ABIs == arm64-v8a
+  ```
+
+- 暂时移除 iOS simulator build。当前没有发布 iOS App 的计划，不再让 iOS 编译占用每个 PR/main push 的 CI 时间。
+- iOS 工程本身没有删除；未来恢复 iOS 发布时再恢复 simulator/release/signing 验证。
+
+### 自动打包与 GitHub Release
+
+- 普通 `main` push 继续构建：
+  - Linux DEB + RPM
+  - Windows Inno Setup EXE
+  - macOS DMG
+- 正式发布使用 `pubspec.yaml` 版本与 release commit 驱动：
+
+  ```text
+  version: 0.1.0+24
+  commit message: release: v0.1.0
+  ```
+
+- `Build Packages` 会自动解析版本并创建/校验 `v0.1.0` tag。
+- Release 模式额外构建 Android `arm64-v8a` release APK。
+- Linux / Windows / macOS / Android 全部成功后，工作流从本章节提取 Release Notes，创建 GitHub Release，并上传全部安装包。
+
+### v0.1.0 发布产物
+
+预期 Release 页面包含：
+
+- Linux `.deb`
+- Linux `.rpm`
+- Windows `.exe`
+- macOS `.dmg`
+- Android `plume-pdf-android-arm64-v8a-v0.1.0.apk`
+
+iOS 当前不生成二进制发布资产。
+
+### 代码健康度
+
+以 `release: v0.0.22` 的 `14685f5` 为重构前基线，到第四轮重构完成的 `42b17e9`（不含本次 v0.1.0 文档扩充）：
+
+```text
+生产 Dart 代码 lib/**   -392 行
+测试 test/**            +55 行
+依赖 pubspec*           -138 行
+CI                       -3 行
+全仓库净变化            -478 行
+```
+
+这次减少的重点不是“为了数字删代码”，而是删除重复状态源、重复 Controller、历史 transport 和不再使用的依赖；测试代码反而净增加，覆盖了 page source、跨文件 debounce、旧 outline 竞态、AI streaming、vision fallback 等行为。
+
+### 验证
+
+重构合并前后已多轮通过：
+
+- Flutter 全量测试
+- `flutter analyze --no-fatal-infos`
+- Android arm64 debug APK
+- APK ABI 校验只包含 `arm64-v8a`
+- Linux Release + DEB + RPM 打包链路
+- Windows Release + Inno Setup installer 链路
+- macOS Release + DMG 链路
+
+v0.1.0 release commit 将再次触发完整 `Build Packages`，最终以 GitHub Release 页面实际上传的安装包作为发布完成标准。
+
+### 已知限制 / 发布说明
+
+- Android release build 当前仍使用 debug signing，只适合自测和自托管分发；正式 Play Store / 生产分发前必须配置 production keystore。
+- WiFi 传书当前假设处于受信任局域网，尚未增加随机 session/upload token。
+- iOS 当前暂停 CI 和正式分发，仓库保留 iOS 工程但本版本不提供 IPA。
+- 当前生产 AI Provider 仍为 DeepSeek；多模型 registry 被保留，但 Provider 抽象将在真正接入第二个模型时再完成，避免当前阶段过度设计。
+
 ## 0.0.20 - 2026-09-01
 
 ### Android / iOS

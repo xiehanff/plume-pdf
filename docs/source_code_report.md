@@ -1,18 +1,20 @@
 # Plume PDF 源码报告
 
-> 更新于 2026-09-01。本文描述当前 `main`/移动端合并后的目标结构，不再以早期“macOS MVP”视角描述项目。
+> 文档基线：`v0.1.0`，更新于 2026-09-02。本文描述当前 `main` 的实际结构。
 
 ## 1. 项目定位
 
-`plume_pdf` 是独立 Flutter App，不是 Flutter Module。当前目标平台包括：
+`plume_pdf` 是独立 Flutter App，不是 Flutter Module。当前仓库包含 Windows、macOS、Linux、Android、iOS 工程；正式 GitHub Release 当前发布 Windows/macOS/Linux/Android，iOS 保留源码支持但暂不进入 CI 与发布链路。
 
-- Windows
-- macOS
-- Linux
-- Android
-- iOS
+核心能力：
 
-核心能力包括 PDF 阅读、目录/最近文件、阅读进度、AI 多轮对话、Viewer 级跨页区域框选、文本/截图/OCR 上下文提取，以及移动端 WiFi 传书。
+- PDF 阅读、目录、最近文件、阅读进度
+- 单页 / 双页、缩放、适宽、背景主题
+- AI 多轮对话与 reasoning 流式展示
+- Viewer 级跨页区域框选
+- PDF 文本 / 截图 / OCR 上下文提取
+- 移动端 WiFi 传书
+- 桌面多平台安装包自动打包
 
 ## 2. 顶层结构
 
@@ -37,16 +39,15 @@ macos/     macOS Runner + Vision OCR + 文件打开桥接
 linux/     Linux Runner + desktop entry + icons
 scripts/   桌面打包脚本
 packaging/ RPM spec
+packages/  本地 gpt_markdown fork
 .github/workflows/
 ├─ mobile-ci.yml
 └─ build-desktop-packages.yml
 ```
 
-## 3. 平台启动隔离
+## 3. 平台启动与 Shell
 
 `lib/main.dart` 只在 Windows/macOS/Linux 初始化 `window_manager`。Android/iOS 不进入桌面窗口初始化流程。
-
-`app/routes/app_pages.dart` 根据运行平台决定 Home Shell：
 
 ```text
 Android / iOS
@@ -56,58 +57,63 @@ Windows / macOS / Linux / Web fallback
     → HomeView
 ```
 
-这意味着移动端适配没有复制第二套业务 controller，而是只拆 UI Shell 和导航表现。
-
-## 4. Home 模块
-
-### HomeController
-
-`HomeController` 仍是阅读模块编排入口，但职责已经拆到多个文件/服务：
-
-- 文件打开、最近文件与持久化
-- 页码、缩放、单双页、适宽
-- Outline 跳转
-- AI 动作/对话编排
-- `PdfViewerController` 生命周期
-
-移动端和桌面端共用：
+移动适配没有复制业务 Controller，而是共享：
 
 ```text
 HomeController
 PdfReaderState
 PdfViewerController
-AiSidebarController / StreamingAiSidebarController
+AiSidebarController
 AiAgentSession
 PdfAiContextService
 ```
 
-### 桌面 Shell
+## 4. HomeController 与 Reader 状态
 
-`home_view.dart` 保留桌面三栏/工具栏结构，负责桌面拖拽、标题栏、左右 Sidebar 和状态栏。
+`HomeController` 是阅读模块的编排入口，职责分散在 extension / service 中，不承担所有底层实现。
 
-### 移动 Shell
+主要职责：
 
-`mobile_home_view.dart` 使用移动端布局：
+- 文件打开、最近文件、阅读进度
+- 页码、缩放、单双页、适宽
+- Outline 加载与跳转
+- AI 动作 / 对话编排
+- `PdfViewerController` 与 AI Sidebar 生命周期
 
-- PDF 内容避开顶部 SafeArea
-- 固定移动工具栏占用底部布局空间
-- 底部系统安全区继续保留
-- Outline、AI、WiFi 传书进入独立全屏路由
+### 4.1 页码与缩放事件源
 
-相关页面：
+v0.1.0 后不再让两个不同事件源同时写 `currentPage`。
 
-- `mobile_outline_view.dart`
-- `mobile_ai_view.dart`
-- `mobile_wifi_transfer_view.dart`
-- `mobile_reader_floating_toolbar.dart`
+```text
+PdfViewerParams.onPageChanged
+    ↓
+currentPage / selectedOutlineId / pageText / progress save
+
+PdfViewerController listener
+    ↓
+zoom
+```
+
+页码使用 pdfrx 明确的 `onPageChanged` 语义；Controller listener 只负责 zoom，避免 transformation listener 与 layout 后页码计算存在时序差异。
+
+### 4.2 文档切换竞态保护
+
+Viewer/document/outline 回调都绑定来源文档：
+
+- page callback 携带 source `filePath`
+- document callback 校验 source `filePath`
+- outline 使用 `loadId + filePath` 双重失效保护
+- recent-file progress debounce 捕获触发时的 file/page 快照，并在执行前确认仍是同一文件
+
+因此快速切换 PDF 时，旧文档的异步结果不能覆盖新文档状态。
 
 ## 5. AI 架构
 
-当前核心调用链：
+当前调用链：
 
 ```text
 HomeController
-    ↓ 编排 / state
+    ↓
 HomeControllerAiSession
     ├───────────────┐
     ↓               ↓
@@ -119,10 +125,12 @@ AiAgentSession   PdfAiContextService
     │               ├─ 截图裁剪
     │               └─ OCR fallback
     ↓
-DeepSeekService / Genkit
+DeepSeekService
+    ↓
+OpenAI-compatible HTTP/SSE
 ```
 
-### AiAgentSession
+### 5.1 AiAgentSession
 
 负责：
 
@@ -135,29 +143,91 @@ DeepSeekService / Genkit
 - history commit / rollback
 - request generation / stale stream 防护
 
-### PdfAiContextService
+### 5.2 PdfAiContextService
 
 负责：
 
-- 单页/跨页 selection 文本提取
+- 单页 / 跨页 selection 文本提取
 - 页面上下文
 - selection 截图
 - 跨页截图纵向合并
 - OCR fallback
 - 文档上下文边界处理
 
-隐私边界：本机目录和文件大小不发送给 DeepSeek；PDF 文本按不可信文档内容处理。
+隐私边界：本机目录和文件大小不发送给模型；PDF 内容通过 `<document_context>` 等边界作为不可信数据处理。
 
-## 6. Viewer 级跨页 AI 框选
+### 5.3 DeepSeekService
 
-旧结构是 `pageOverlaysBuilder` 每页维护一份 Stateful selection overlay，导致不同页可以同时残留选区。
+v0.1.0 删除 Genkit runtime 双通道，当前只有一套直接 HTTP/SSE transport：
 
-当前结构改为：
+```text
+AiAgentSession
+    ↓
+DeepSeekService.performStream / chatStream
+    ↓
+POST /v1/chat/completions
+    ↓
+SSE LineSplitter
+    ├─ reasoning_content
+    └─ content
+```
+
+保留：
+
+- `deepseek-v4-flash-vision-exp`
+- 日常动作 `reasoning_effort=low`
+- 深度理解 32768 completion token budget
+- 多轮历史
+- 历史图片 / MIME 类型
+- SSE JSON 类型与状态码边界检查
+
+视觉回退只在 HTTP 400/422 且错误明确表示 image / vision / media / multimodal 能力拒绝时成立。401、限流、网络错误不会重复发送纯文本请求。
+
+`AiModelRegistry` / `AiModelConfig` 继续保留，为后续多模型/provider 扩展提供配置层，但当前生产 transport 仍是 DeepSeek。
+
+## 6. AiSidebar 生命周期与流式 UI
+
+### 6.1 单一 Controller owner
+
+生产环境只有 `HomeController` 创建和销毁 `AiSidebarController`：
+
+```text
+HomeController.onInit
+    → register AiSidebarController
+
+HomeController.onClose
+    → delete AiSidebarController
+```
+
+`MobileAiView` 只负责展示，不再自行 `Get.put`。
+
+Debug Gallery 使用独立 tag，避免预览页面删除 Home 正在使用的 Controller。
+
+### 6.2 Streaming rebuild suppression
+
+旧的 `StreamingAiSidebarController` 已删除，其职责并入 `AiSidebarController`。
+
+当模型仍在输出、用户主动离开底部阅读历史时：
+
+- 高频 preview 状态继续更新
+- 昂贵 UI rebuild 延后
+- 回到底部后 flush
+- complete/error 等终态立即刷新
+
+### 6.3 FollowTailScrollController
+
+`FollowTailScrollPosition.correctForNewDimensions(...)` 在内容增长时通过 `correctPixels()` 修正位置，并返回 `false` 让 viewport 在同一 frame 重新 layout，避免“数值已贴底但画面下一帧才跳”的闪烁。
+
+该行为有 render-level 回归测试，不应在 Flutter 升级时随意删除。
+
+## 7. Viewer 级跨页 AI 框选
+
+当前结构：
 
 ```text
 PdfViewer
    ↓ viewerOverlayBuilder
-PdfViewerAreaSelectionOverlay  ← 全局唯一
+PdfViewerAreaSelectionOverlay
    ↓
 viewer-local Rect
    ↓ globalToDocument
@@ -171,51 +241,25 @@ PdfAiSelection
 特性：
 
 - 全局最多一个 selection
-- 可跨多页
-- PDF 页纵向 gap 为 0
-- selection 结束后映射为多个 page region
-- AI 文本/截图按同一个 selection 处理
+- 一个 selection 可跨连续多页
+- 页面纵向 gap 为 0
+- selection 映射为多个 page region
+- 文本、截图、OCR 都围绕同一个 selection 聚合
 
-### 工具条定位
-
-`selection_toolbar_placement.dart` 使用屏幕可视区域而不是 PDF page 坐标决定动作按钮位置：
-
-1. 计算选区顶部到 viewport 顶部空间
-2. 计算选区底部到 viewport 底部空间
-3. 能完整容纳工具条的一侧优先
-4. 两侧都可用时选择空间更大的一侧
-5. 上下空间都低于 `screenHeight * 20%` 时，将工具条放到选区垂直中心
-6. X 始终按 viewport 水平中心对齐
-7. 移动端避让右上角 AI 模式控件
-
-## 7. AI 流式 UI
-
-### FollowTailScrollController
-
-流式气泡高度增长时，在 `correctForNewDimensions` 中使用 `correctPixels()` 并返回 `false`，让 viewport 在同一 frame 重新 layout，避免“offset 已正确但画面下一帧才跳”的闪烁。
-
-### StreamingAiSidebarController
-
-当用户上滚阅读历史且模型仍在流式输出时，临时延后高频昂贵 rebuild；用户回到底部或进入完成/错误终态时再 flush。
-
-### Markdown 成本控制
-
-- stream preview 约 40 ms 合并
-- 未闭合代码围栏先使用纯文本
-- reasoning 折叠态避免完整 Markdown 解析
+工具条按真实 viewport 空间布局，不依赖“当前页坐标”；上下空间都不足屏幕高度 20% 时回到选区垂直中心，并保持 viewport 水平居中。
 
 ## 8. WiFi 传书
 
-`WifiTransferService` 在移动传书页面生命周期内启动 `HttpServer`：
+`WifiTransferService` 只在移动传书页面生命周期内启动 `HttpServer`：
 
-- 默认端口 8080，被占用时回退随机端口
+- 默认端口 8080；占用时回退随机端口
 - 只接受 `.pdf`
 - 最大 512 MB
 - 校验 `%PDF-` header
 - 上传先写临时文件，再 rename commit
 - 页面销毁时停止 server
 
-当前安全假设是“受信任同一局域网”。后续若公开分发，建议增加随机 session token / upload token。
+当前安全假设仍是“受信任同一局域网”。公开分发前建议加入随机 session/upload token。
 
 ## 9. 平台层
 
@@ -227,7 +271,7 @@ PdfAiSelection
 
 ### Windows
 
-- Windows.Media.Ocr
+- `Windows.Media.Ocr`
 - `.pdf` 文件关联
 - Inno Setup EXE installer
 
@@ -239,30 +283,33 @@ PdfAiSelection
 ### Android
 
 - 标准 Flutter Android Runner
-- Mobile CI debug APK
-- `v*` tag 时 release-mode APK
-- 当前 release 使用 debug signing，生产分发前需正式 keystore
+- `arm64-v8a` only
+- Mobile CI 构建 arm64 debug APK 并检查 ABI
+- 正式 tag/release 构建 arm64 release APK
+- 当前 release 使用 debug signing，生产分发前需要 production keystore
 
 ### iOS
 
-- 标准 Flutter iOS Runner
+- 标准 Flutter iOS Runner 仍保留
 - 本地网络用途说明用于 WiFi 传书
-- CI 验证 simulator build
-- 尚未配置生产签名/IPA 发布链路
+- 当前不进入 Mobile CI，也不生成 GitHub Release iOS 产物
+- 未来恢复发布时再补生产签名 / IPA 流程
 
 ## 10. CI / Release
 
 ### Mobile CI
 
-执行：
+当前运行在 `ubuntu-latest`：
 
 ```text
 flutter pub get
 flutter test
 flutter analyze --no-fatal-infos
-flutter build apk --debug
-flutter build ios --simulator
+flutter build apk --debug --target-platform android-arm64
+verify native ABIs == arm64-v8a
 ```
+
+不执行 iOS build。
 
 ### Build Packages
 
@@ -272,33 +319,38 @@ flutter build ios --simulator
 - Windows EXE
 - macOS DMG
 
-明确推送 `v*` tag：
+发布提交：
 
-- 上述三平台
-- Android release-mode APK
-- 四个平台成功后统一 Publish GitHub Release
+```text
+pubspec.yaml version: 0.1.0+24
+commit message: release: v0.1.0
+```
 
-## 11. 测试现状
+`release_meta` 会读取版本并创建/校验 `v0.1.0` tag。发布模式额外构建 Android arm64 APK，并在 Linux/Windows/macOS/Android 全部成功后创建 GitHub Release；Release Notes 自动取自 `CHANGELOG.md` 的 `0.1.0` 章节。
 
-当前已覆盖的重点包括：
+## 11. v0.1.0 重构结果
 
-- AI response/session
-- stale stream / clear during stream
-- AI Sidebar state sync
-- 流式 scroll 与同帧渲染断言
-- streaming rebuild suppression
-- API Key bottom sheet
-- PDF AI context / selection model
-- 跨页 selection model
-- selection toolbar 屏幕定位
-- reader state / toolbar layout
-- WiFi transfer service
+以 `release: v0.0.22` 的 `14685f5` 为基线，到第四轮重构合并完成的 `42b17e9`：
 
-因此测试已经不再是早期“启动空态 + outline mapper”的轻覆盖状态。
+```text
+生产 Dart 代码 lib/**   -392 行
+测试 test/**            +55 行
+依赖 pubspec*           -138 行
+CI                       -3 行
+全仓库净变化            -478 行
+```
+
+重点不是单纯缩行，而是删除重复机制：
+
+- 三套快捷键输入路径 → 一套 `CallbackShortcuts + Focus`
+- 独立 Streaming AI Controller → 合并到 `AiSidebarController`
+- Page 多状态写入口 → `onPageChanged` 单一页码事件源
+- Desktop/Mobile AI Controller 双创建路径 → `HomeController` 单一 owner
+- Genkit + direct HTTP 双 transport → 单 HTTP/SSE transport
+
+同时增加了竞态、fallback、流式滚动和状态源回归测试。
 
 ## 12. Agent 阅读顺序
-
-建议按下面顺序进入仓库：
 
 ```text
 lib/main.dart
@@ -315,11 +367,11 @@ AiSelectablePdfViewer
   ↓
 PdfViewerAreaSelectionOverlay
   ↓
-AiSidebarController / StreamingAiSidebarController
+AiSidebarController + FollowTailScrollController
   ↓
 AiAgentSession + PdfAiContextService
   ↓
 DeepSeekService
 ```
 
-若问题是桌面平台行为，再进入 `windows/` / `macos/` / `linux/`；若问题是移动 Runner/权限，再进入 `android/` / `ios/`。
+桌面平台行为继续进入 `windows/` / `macos/` / `linux/`；Android Runner/权限进入 `android/`；iOS 当前仅在需要本地开发时进入 `ios/`。

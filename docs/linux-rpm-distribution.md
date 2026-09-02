@@ -1,6 +1,8 @@
 # Linux RPM Package Distribution
 
-本文记录 Plume PDF 的 Fedora/Linux RPM release 打包方式。
+> 文档基线：Plume PDF `v0.1.0`，更新于 2026-09-02。
+
+本文记录 Fedora/Linux RPM release 打包方式，以及 Hosted runner 上的特殊处理。
 
 ## 1. 本地前置条件
 
@@ -19,6 +21,12 @@ make package-rpm
 ```
 
 脚本先构建 Linux Release，再使用 `packaging/plume-pdf.spec` 生成 RPM。
+
+当前应用版本：
+
+```text
+0.1.0+24
+```
 
 输出格式类似：
 
@@ -50,26 +58,43 @@ sudo dnf remove plume-pdf
 - 应用可启动并打开 PDF
 - 桌面窗口控制正常
 - 文件管理器“打开方式”链路正常
+- 安装包版本与 `pubspec.yaml` 一致
 
-## 4. GitHub Actions 特殊说明
+## 4. GitHub Hosted runner 特殊说明
 
-GitHub Hosted Linux runner 使用 Ubuntu，因此 `patchelf` 是通过 apt/dpkg 安装，而 `rpmbuild` 的 `BuildRequires` 只查看 RPM 自己的数据库。
+Hosted Linux runner 使用 Ubuntu，因此 `patchelf` 通过 apt/dpkg 安装，而 `rpmbuild` 的 `BuildRequires` 只查看 RPM 自己的数据库。
 
-当前脚本会：
+当前脚本流程：
 
 ```text
-先检查 rpmbuild / patchelf 命令真实存在
+确认 rpmbuild 命令存在
+确认 patchelf 命令存在
 → rpmbuild --nodeps
 ```
 
-`--nodeps` 只用于绕过“RPM 数据库看不到 apt 已安装 patchelf”的误判，并不是无条件忽略系统依赖。
+`--nodeps` 只绕过“RPM 数据库看不到 apt 已安装 patchelf”的误判，并不是无条件忽略系统依赖。
 
 ## 5. CI / Release
 
-普通 `main` push 会自动生成 DEB + RPM Actions Artifact。
+普通 `main` push 会生成 DEB + RPM Actions Artifact。
 
-明确 `v*` tag 时，RPM 会和 DEB、Windows EXE、macOS DMG、Android APK 一起进入 GitHub Release，不需要手动执行 `gh release upload`。
+正式发布时使用单一 release commit：
 
-## 6. 当前验证状态
+```text
+version: 0.1.0+24
+commit: release: v0.1.0
+```
 
-移动端合并前已在 Hosted runner 上重新验证 Linux Release、DEB、RPM、Artifact 上传整条链路通过。
+工作流会自动创建/校验 `v0.1.0` tag；RPM 与 DEB、Windows EXE、macOS DMG、Android arm64 APK 一起进入同一个 GitHub Release，不需要手动执行 `gh release upload`。
+
+## 6. v0.1.0 发布验收
+
+- Linux release bundle 构建成功
+- DEB 打包成功
+- RPM 打包成功
+- Artifact 上传成功
+- Release job 能下载两种 Linux 包
+- GitHub Release 页面能看到 RPM 与 DEB
+- RPM 在 Fedora 上可安装、启动、卸载
+
+若 `rpmbuild` 报 `patchelf` BuildRequires 缺失，先检查脚本是否仍使用当前 `--nodeps` 兼容路径，不要改成在 Ubuntu 上尝试伪造 RPM package database。

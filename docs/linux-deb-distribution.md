@@ -1,6 +1,8 @@
 # Linux Debian Package Distribution
 
-本文记录 Plume PDF 的 Linux Release Bundle 与 Debian `.deb` 打包方式。
+> 文档基线：Plume PDF `v0.1.0`，更新于 2026-09-02。
+
+本文记录 Linux Release Bundle、Debian `.deb` 打包方式，以及当前 GitHub Release 自动化行为。
 
 ## 1. 前置条件
 
@@ -14,6 +16,12 @@ make package-deb
 ```
 
 脚本读取 `pubspec.yaml` 的版本号，必要时构建 Linux Release Bundle，并组装 Debian 元数据、desktop entry 与图标。
+
+当前 v0.1.0 应用版本：
+
+```text
+0.1.0+24
+```
 
 输出格式：
 
@@ -57,8 +65,9 @@ sudo apt install -f
 - 图标正确
 - 应用可启动并打开 PDF
 - `.pdf` desktop integration 正常
+- 应用内版本号与 `pubspec.yaml` 一致
 
-## 5. 图标/桌面入口
+## 5. 图标 / 桌面入口
 
 当前 desktop entry 与图标使用 `com.example.plume_pdf` 名称，二者必须保持一致。安装脚本会刷新图标缓存和 desktop database。
 
@@ -72,21 +81,54 @@ sudo apt install -f
 
 ## 6. GitHub Actions
 
-`.github/workflows/build-desktop-packages.yml` 在普通 `main` push 时会自动：
+`.github/workflows/build-desktop-packages.yml` 在普通 `main` push 时自动：
 
 ```text
 flutter build linux --release
 → build_linux_deb.sh --skip-build
 → build_linux_rpm.sh --skip-build
-→ upload DEB + RPM Artifact
+→ upload DEB + RPM Actions Artifact
 ```
 
-RPM 在 Ubuntu runner 上使用已验证的 `rpmbuild --nodeps` 路径，只跳过 RPM 数据库无法识别 apt 安装依赖的问题；实际 `rpmbuild` / `patchelf` 命令仍会先检查存在。
+RPM 在 Ubuntu runner 上使用已验证的 `rpmbuild --nodeps` 路径，只绕过 RPM 数据库无法识别 apt 安装依赖的问题；实际 `rpmbuild` / `patchelf` 命令仍会先检查存在。
 
-## 7. Tag Release
+## 7. v0.1.0 自动发布流程
 
-明确推送 `v*` tag 时，DEB 会和 RPM、Windows EXE、macOS DMG、Android APK 一起被发布到同一个 GitHub Release，无需手动执行 `gh release upload`。
+正式版本不需要手工上传 DEB。
 
-## 8. 当前验证状态
+当 `main` 的发布提交满足：
 
-移动端合并前已重新验证 Linux release、DEB、RPM 和 Actions Artifact 上传全部成功。
+```text
+pubspec.yaml: version: 0.1.0+24
+commit message: release: v0.1.0
+```
+
+`Build Packages` 会：
+
+```text
+解析 0.1.0
+→ 创建/校验 v0.1.0 tag
+→ 构建 Linux DEB + RPM
+→ 构建 Windows EXE
+→ 构建 macOS DMG
+→ 构建 Android arm64 APK
+→ 等待所有 release jobs 成功
+→ 从 CHANGELOG.md 提取 0.1.0 Release Notes
+→ 创建 GitHub Release
+→ 上传全部安装包
+```
+
+因此正式 Release 页面中的 DEB 与其他平台包来自同一个发布提交和同一个 tag。
+
+## 8. 发布验收
+
+v0.1.0 发布后至少确认：
+
+- Linux job 成功
+- DEB Artifact 存在
+- RPM Artifact 存在
+- GitHub Release 中 DEB/RPM 均已上传
+- DEB 文件中的版本与 `0.1.0+24` 对应
+- 安装后应用可启动并打开 PDF
+
+如果 Release job 未执行，优先检查发布提交消息是否严格为 `release: v0.1.0`，以及 `pubspec.yaml` 版本是否为 `0.1.0+24`。

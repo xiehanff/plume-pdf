@@ -1,5 +1,9 @@
 # 📦 GPT Markdown & LaTeX for Flutter
 
+> **Plume PDF local fork note — app v0.1.0 / 2026-09-02**
+>
+> This directory is vendored into Plume PDF and consumed through a local path dependency. The package keeps the upstream `gpt_markdown` API/version line, while Plume PDF carries project-specific integration adjustments for AI output rendering, host-provided fonts, divider behavior, selectable content, and current Flutter compatibility. App releases do **not** imply a new upstream `gpt_markdown` release.
+
 [![Pub Version](https://img.shields.io/pub/v/gpt_markdown)](https://pub.dev/packages/gpt_markdown) [![Pub Likes](https://img.shields.io/pub/likes/gpt_markdown)](https://pub.dev/packages/gpt_markdown) [![Pub Points](https://img.shields.io/pub/points/gpt_markdown)](https://pub.dev/packages/gpt_markdown) [![GitHub](https://img.shields.io/badge/github-gpt__markdown-blue?logo=github)](https://github.com/Infinitix-LLC/gpt_markdown)
 
 A Flutter package for rendering rich Markdown and LaTeX in your app — built for AI outputs like ChatGPT and Gemini. Drop-in replacement for flutter_markdown with full LaTeX support and better AI integration.
@@ -10,7 +14,7 @@ A Flutter package for rendering rich Markdown and LaTeX in your app — built fo
 
 ## 🚀 Why Use GPT Markdown?
 
-- **Optimized for AI Outputs**: Render ChatGPT and Gemini responses flawlessly in your Flutter apps.
+- **Optimized for AI Outputs**: Render ChatGPT and Gemini responses flawlessly in your apps.
 - **LaTeX out of the box**: No extra setup — math rendering works from the first line.
 - **Rich Customization**: Easily apply custom styles using Flutter widgets like `TextStyle`.
 - **Selectable Content**: Pass `selectable: true` to make text highlightable and copyable on desktop and web.
@@ -184,7 +188,7 @@ Welcome to ChatGPT! Below is an example of a response with Markdown and LaTeX co
 You can use Markdown to format text easily. Here are some examples:
 
 - **Bold Text**: **This text is bold**
-- *Italic Text*: *This text is italicized*
+- *Italic Text*: **This text is italicized**
 - [Link](https://www.example.com): [This is a link](https://www.example.com)
 - Lists:
   1. Item 1
