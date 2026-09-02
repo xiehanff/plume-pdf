@@ -4,7 +4,6 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dart';
-import 'package:plume_pdf/app/modules/home/controllers/streaming_ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 
@@ -24,16 +23,15 @@ void main() {
       result: initialResult,
     );
 
-    final StreamingAiSidebarController streamingController =
-        StreamingAiSidebarController(
-          state: state,
-          onApiKeyChanged: (_) {},
-          onSaveApiKey: () async {},
-          onSendChat: (_) async {},
-          onNewSession: () {},
-        );
+    final AiSidebarController sidebarController = AiSidebarController(
+      state: state,
+      onApiKeyChanged: (_) {},
+      onSaveApiKey: () async {},
+      onSendChat: (_) async {},
+      onNewSession: () {},
+    );
     Get.put<AiSidebarController>(
-      streamingController,
+      sidebarController,
       tag: AiSidebarController.tag,
     );
     addTearDown(() {
@@ -47,16 +45,16 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    final ScrollPosition position = streamingController.scrollController.position;
+    final ScrollPosition position = sidebarController.scrollController.position;
     expect(position.maxScrollExtent, greaterThan(300));
 
-    streamingController.scrollController.jumpTo(
+    sidebarController.scrollController.jumpTo(
       (position.maxScrollExtent - 300).clamp(
         position.minScrollExtent,
         position.maxScrollExtent,
       ),
     );
-    streamingController.handlePointerSignal(
+    sidebarController.handlePointerSignal(
       const PointerScrollEvent(
         timeStamp: Duration.zero,
         scrollDelta: Offset(0, -120),
@@ -65,7 +63,7 @@ void main() {
 
     const String marker = 'LATEST_STREAM_MARKER';
     state = state.copyWith(result: '$initialResult\n\n$marker');
-    streamingController.updateExternalState(
+    sidebarController.updateExternalState(
       state: state,
       onApiKeyChanged: (_) {},
       onSaveApiKey: () async {},
@@ -76,14 +74,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(streamingController.messages.last.text, contains(marker));
+    expect(sidebarController.messages.last.text, contains(marker));
     expect(
       find.textContaining(marker, findRichText: true),
       findsNothing,
       reason: '用户滚离底部时，数据应继续累积，但昂贵的聊天 UI 不应重建',
     );
 
-    streamingController.handleScrollNotification(
+    sidebarController.handleScrollNotification(
       UserScrollNotification(
         direction: ScrollDirection.reverse,
         metrics: FixedScrollMetrics(
