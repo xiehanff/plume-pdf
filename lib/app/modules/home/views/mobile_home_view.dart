@@ -222,7 +222,6 @@ class _MobileHomeViewState extends State<MobileHomeView> {
         aiSelectionEnabled: state.aiSelectionMode,
         pageMargin: 0,
         showScrollThumb: false,
-        onPageChanged: _controller.onPageChanged,
         onDocumentChanged: _controller.onDocumentChanged,
         onViewerReady: _controller.onViewerReady,
         onLoadError: _controller.onLoadError,
