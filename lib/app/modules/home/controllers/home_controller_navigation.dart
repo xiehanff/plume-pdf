@@ -108,8 +108,8 @@ extension HomeControllerNavigation on HomeController {
     }
   }
 
-  void onPageChanged(int? pageNumber) {
-    if (pageNumber == null || !state.hasDocument) {
+  void onPageChanged(String filePath, int? pageNumber) {
+    if (pageNumber == null || !state.hasDocument || state.filePath != filePath) {
       return;
     }
     final int currentPage = state.pageCount > 0
