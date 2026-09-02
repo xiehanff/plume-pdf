@@ -32,7 +32,6 @@ class ReaderShortcuts extends StatelessWidget {
     final bool useMeta = usesMetaModifier();
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.escape): onEscape,
         SingleActivator(
           LogicalKeyboardKey.keyO,
           meta: useMeta,
@@ -77,7 +76,18 @@ class ReaderShortcuts extends StatelessWidget {
           control: !useMeta,
         ): onZoomOut,
       },
-      child: Focus(autofocus: true, child: child),
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (_, KeyEvent event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape) {
+            onEscape();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: child,
+      ),
     );
   }
 }
