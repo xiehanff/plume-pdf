@@ -58,6 +58,7 @@ class HomeController extends GetxController {
   );
   int _aiSessionId = 0;
   int _aiActionId = 0;
+  int _outlineLoadId = 0;
   String? _pinnedOutlineId;
   int? _pinnedOutlinePage;
   int? _pendingOutlineTargetPage;
@@ -99,14 +100,21 @@ class HomeController extends GetxController {
     super.onClose();
   }
 
-  void onDocumentChanged(PdfDocument? document) {
-    if (document == null) {
+  void onDocumentChanged(String filePath, PdfDocument? document) {
+    if (document == null || state.filePath != filePath) {
       return;
     }
+    final int loadId = ++_outlineLoadId;
     _applyState(
       state.copyWith(pageCount: document.pages.length, errorMessage: null),
     );
-    unawaited(_loadOutline(document));
+    unawaited(
+      _loadOutline(
+        document,
+        sourceFilePath: filePath,
+        loadId: loadId,
+      ),
+    );
   }
 
   void onViewerReady(PdfDocument document, PdfViewerController controller) {
@@ -195,13 +203,24 @@ class HomeController extends GetxController {
   void _applyState(PdfReaderState nextState) {
     final PdfReaderState previousState = state;
     state = nextState;
-    _syncAiSidebarController();
+    if (_shouldSyncAiSidebarController(previousState, nextState)) {
+      _syncAiSidebarController();
+    }
 
     final bool aiPanelChanged =
         !identical(previousState.aiPanelState, nextState.aiPanelState);
     if (!aiPanelChanged || _readerViewStateChanged(previousState, nextState)) {
       update(<Object>[viewId]);
     }
+  }
+
+  bool _shouldSyncAiSidebarController(
+    PdfReaderState previousState,
+    PdfReaderState nextState,
+  ) {
+    return !identical(previousState.aiPanelState, nextState.aiPanelState) ||
+        previousState.filePath != nextState.filePath ||
+        previousState.sidebarVisible != nextState.sidebarVisible;
   }
 
   bool _readerViewStateChanged(
