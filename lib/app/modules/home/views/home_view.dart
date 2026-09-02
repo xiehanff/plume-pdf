@@ -215,7 +215,6 @@ class HomeView extends GetView<HomeController> {
       lockHorizontalPan: controller.shouldLockHorizontalPan,
       backgroundTheme: state.backgroundTheme,
       aiSelectionEnabled: state.aiSelectionMode,
-      onPageChanged: controller.onPageChanged,
       onDocumentChanged: controller.onDocumentChanged,
       onViewerReady: controller.onViewerReady,
       onLoadError: controller.onLoadError,
