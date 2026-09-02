@@ -20,7 +20,6 @@ class AiSelectablePdfViewer extends StatefulWidget {
     required this.lockHorizontalPan,
     required this.backgroundTheme,
     required this.aiSelectionEnabled,
-    required this.onPageChanged,
     required this.onDocumentChanged,
     required this.onViewerReady,
     required this.onLoadError,
@@ -38,7 +37,6 @@ class AiSelectablePdfViewer extends StatefulWidget {
   final bool lockHorizontalPan;
   final PdfBackgroundTheme backgroundTheme;
   final bool aiSelectionEnabled;
-  final ValueChanged<int?> onPageChanged;
   final ValueChanged<PdfDocument?> onDocumentChanged;
   final void Function(PdfDocument, PdfViewerController) onViewerReady;
   final void Function(Object, StackTrace?) onLoadError;
@@ -106,7 +104,6 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
           blurRadius: 18,
           offset: Offset(0, 8),
         ),
-        onPageChanged: widget.onPageChanged,
         onDocumentChanged: widget.onDocumentChanged,
         onViewerReady: widget.onViewerReady,
         viewerOverlayBuilder: (context, size, handleLinkTap) => <Widget>[
