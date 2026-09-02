@@ -39,7 +39,7 @@ class AiSelectablePdfViewer extends StatefulWidget {
   final PdfBackgroundTheme backgroundTheme;
   final bool aiSelectionEnabled;
   final void Function(String filePath, PdfDocument? document) onDocumentChanged;
-  final ValueChanged<int?> onPageChanged;
+  final void Function(String filePath, int? pageNumber) onPageChanged;
   final void Function(PdfDocument, PdfViewerController) onViewerReady;
   final void Function(Object, StackTrace?) onLoadError;
   final ValueChanged<PdfAiSelection?> onSelectionChanged;
@@ -109,7 +109,9 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
         onDocumentChanged: (PdfDocument? document) {
           widget.onDocumentChanged(widget.filePath, document);
         },
-        onPageChanged: widget.onPageChanged,
+        onPageChanged: (int? pageNumber) {
+          widget.onPageChanged(widget.filePath, pageNumber);
+        },
         onViewerReady: widget.onViewerReady,
         viewerOverlayBuilder: (context, size, handleLinkTap) => <Widget>[
           if (widget.showScrollThumb)
