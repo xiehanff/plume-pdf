@@ -11,16 +11,21 @@ import 'chat_input_bar.dart';
 import 'chat_message.dart';
 
 class AiSidebar extends StatelessWidget {
-  const AiSidebar({super.key, this.fullWidth = false});
+  const AiSidebar({
+    super.key,
+    this.fullWidth = false,
+    this.controllerTag = AiSidebarController.tag,
+  });
 
   final bool fullWidth;
+  final String controllerTag;
 
   @override
   Widget build(BuildContext context) {
-    // Controller 由 HomeController（桌面）或 MobileAiView（移动端）创建并注册。
-    // 侧栏/路由开关期间实例常驻，会话历史保留。
+    // 正常阅读界面由 HomeController 持有 Controller；调试预览可通过
+    // controllerTag 使用独立实例，避免共享或误删生产会话状态。
     return GetBuilder<AiSidebarController>(
-      tag: AiSidebarController.tag,
+      tag: controllerTag,
       builder: (AiSidebarController controller) {
         return _AiSidebarView(controller: controller, fullWidth: fullWidth);
       },
