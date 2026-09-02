@@ -13,7 +13,7 @@ class _FakeDeepSeekService extends DeepSeekService {
       StreamController<DeepSeekStreamChunk>.broadcast();
 
   @override
-  Stream<DeepSeekStreamChunk> performStreamWithReasoning({
+  Stream<DeepSeekStreamChunk> performStream({
     required AiToolAction action,
     required String apiKey,
     required String selectionText,
@@ -23,7 +23,7 @@ class _FakeDeepSeekService extends DeepSeekService {
   }) => chunks.stream;
 
   @override
-  Stream<DeepSeekStreamChunk> chatStreamWithReasoning({
+  Stream<DeepSeekStreamChunk> chatStream({
     required String apiKey,
     required List<AiChatHistoryMessage> history,
     PdfAiContext? documentContext,

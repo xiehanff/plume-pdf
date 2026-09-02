@@ -48,8 +48,6 @@ dependencies:
   window_manager: ^0.4.3
   highlight: ^0.7.0
   flutter_highlight: ^0.7.0
-  genkit: ^0.15.1
-  genkit_openai: ^0.3.7
   loading_indicator: ^3.1.1
   super_clipboard: ^0.8.24
 

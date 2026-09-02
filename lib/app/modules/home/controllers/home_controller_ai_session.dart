@@ -177,8 +177,8 @@ extension HomeControllerAiSession on HomeController {
     );
   }
 
-  /// 视觉模式：携带选区截图请求。流式失败（如模型不支持图片）时
-  /// 回退到纯文本动作。
+  /// 视觉模式只在服务端明确拒绝图片/多模态输入时回退纯文本；
+  /// 认证、限流和网络错误直接展示，避免同一动作重复请求。
   Future<void> _runVisionAction({
     required AiToolAction action,
     required PdfAiSelection selection,
@@ -187,16 +187,6 @@ extension HomeControllerAiSession on HomeController {
     required Uint8List imageBytes,
     required String selectionText,
   }) async {
-    if (imageBytes.isEmpty) {
-      return _runTextAction(
-        action: action,
-        selection: selection,
-        apiKey: apiKey,
-        currentActionId: currentActionId,
-        extractedText: selectionText,
-      );
-    }
-
     try {
       final AiStreamResult result = await _aiAgentSession.runToolAction(
         action: action,
@@ -210,15 +200,18 @@ extension HomeControllerAiSession on HomeController {
       );
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
-    } on DeepSeekException catch (_) {
+    } on DeepSeekException catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
-      return _runTextAction(
-        action: action,
-        selection: selection,
-        apiKey: apiKey,
-        currentActionId: currentActionId,
-        extractedText: selectionText,
-      );
+      if (error.canFallbackToText && selectionText.trim().isNotEmpty) {
+        return _runTextAction(
+          action: action,
+          selection: selection,
+          apiKey: apiKey,
+          currentActionId: currentActionId,
+          extractedText: selectionText,
+        );
+      }
+      _applyAiErrorState(error.message);
     } catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState('请求失败：$error');
