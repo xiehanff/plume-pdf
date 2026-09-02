@@ -86,6 +86,7 @@ extension HomeControllerFileManager on HomeController {
     if (filePath.isEmpty) {
       return;
     }
+    _outlineLoadId++;
     _aiSessionId++;
     _aiAgentSession.clear();
     _pinnedOutlineId = null;
@@ -111,6 +112,7 @@ extension HomeControllerFileManager on HomeController {
   }
 
   void showRecentFiles() {
+    _outlineLoadId++;
     final PdfAiPanelState aiPanelState = state.aiPanelState;
     _applyState(
       state.copyWith(
@@ -289,18 +291,30 @@ extension HomeControllerFileManager on HomeController {
   }
 
   void _scheduleProgressSave() {
-    if (state.filePath == null) {
+    final String? filePath = state.filePath;
+    if (filePath == null) {
       return;
     }
+    final int page = state.currentPage;
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 400), () async {
-      await _rememberRecentFile(state.filePath!, lastPage: state.currentPage);
+      if (state.filePath != filePath) {
+        return;
+      }
+      await _rememberRecentFile(filePath, lastPage: page);
     });
   }
 
-  Future<void> _loadOutline(PdfDocument document) async {
+  Future<void> _loadOutline(
+    PdfDocument document, {
+    required String sourceFilePath,
+    required int loadId,
+  }) async {
     try {
       final List<PdfOutlineNode> nodes = await document.loadOutline();
+      if (!_isCurrentOutlineLoad(sourceFilePath, loadId)) {
+        return;
+      }
       final List<PdfOutlineEntry> entries = _outlineMapper.flatten(nodes);
       _applyState(
         state.copyWith(
@@ -309,6 +323,9 @@ extension HomeControllerFileManager on HomeController {
         ),
       );
     } catch (_) {
+      if (!_isCurrentOutlineLoad(sourceFilePath, loadId)) {
+        return;
+      }
       _applyState(
         state.copyWith(
           outline: const <PdfOutlineEntry>[],
@@ -316,6 +333,10 @@ extension HomeControllerFileManager on HomeController {
         ),
       );
     }
+  }
+
+  bool _isCurrentOutlineLoad(String sourceFilePath, int loadId) {
+    return loadId == _outlineLoadId && state.filePath == sourceFilePath;
   }
 
   String? _outlineIdForPage(int pageNumber) {
