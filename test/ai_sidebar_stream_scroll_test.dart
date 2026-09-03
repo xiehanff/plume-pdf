@@ -24,6 +24,7 @@ void main() {
           onApiKeyChanged: (_) {},
           onSaveApiKey: () async {},
           onSendChat: (_) async {},
+          onStopChat: () {},
           onNewSession: () {},
         ),
         tag: AiSidebarController.tag,
@@ -43,10 +44,6 @@ void main() {
       tag: AiSidebarController.tag,
     ).updateExternalState(
       state: state,
-      onApiKeyChanged: (_) {},
-      onSaveApiKey: () async {},
-      onSendChat: (_) async {},
-      onNewSession: () {},
       documentPath: null,
       leftSidebarWidth: 0,
     );
