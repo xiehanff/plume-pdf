@@ -80,11 +80,7 @@ class HomeController extends GetxController {
     );
     _loadAiApiKey();
     _loadBackgroundTheme();
-    unawaited(
-      AiModelRegistry.initialize().then((_) {
-        _applyState(state);
-      }),
-    );
+    unawaited(AiModelRegistry.initialize());
     unawaited(_macosFileOpenService.bindOpenHandler(_handleOpenedFiles));
     pdfViewerController.addListener(_handleViewerChanged);
   }
@@ -92,7 +88,7 @@ class HomeController extends GetxController {
   @override
   void onClose() {
     _saveDebounce?.cancel();
-    _aiAgentSession.stopActiveStream();
+    _invalidateAiWork();
     pdfViewerController.removeListener(_handleViewerChanged);
     pageTextController.dispose();
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
@@ -201,6 +197,16 @@ class HomeController extends GetxController {
     _applyState(state.copyWith(loading: false, errorMessage: message));
   }
 
+  /// 使当前文档/会话所属的所有 AI 异步工作失效。
+  ///
+  /// Home 层的 actionId 保护 UI continuation；Agent 层的 generation 保护
+  /// history 并取消 active stream。文档切换、新会话和 Controller 销毁都
+  /// 统一走这里，避免只清 history 却允许旧 Future 回写新界面。
+  void _invalidateAiWork() {
+    _aiActionId++;
+    _aiAgentSession.clear();
+  }
+
   void _applyState(PdfReaderState nextState) {
     final PdfReaderState previousState = state;
     state = nextState;
@@ -280,11 +286,6 @@ class HomeController extends GetxController {
       tag: AiSidebarController.tag,
     ).updateExternalState(
       state: state.aiPanelState,
-      onApiKeyChanged: updateAiApiKey,
-      onSaveApiKey: saveAiApiKey,
-      onSendChat: sendAiChat,
-      onStopChat: stopAiResponse,
-      onNewSession: startNewAiSession,
       documentPath: state.filePath,
       leftSidebarWidth: state.sidebarVisible ? 260 : 0,
     );
