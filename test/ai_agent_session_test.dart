@@ -9,8 +9,16 @@ import 'package:plume_pdf/app/modules/home/services/deepseek_service.dart';
 
 /// 由测试手动放增量的假流服务。
 class _FakeDeepSeekService extends DeepSeekService {
-  final StreamController<DeepSeekStreamChunk> chunks =
-      StreamController<DeepSeekStreamChunk>.broadcast();
+  _FakeDeepSeekService() {
+    chunks = StreamController<DeepSeekStreamChunk>.broadcast(
+      onCancel: () {
+        canceled = true;
+      },
+    );
+  }
+
+  late final StreamController<DeepSeekStreamChunk> chunks;
+  bool canceled = false;
 
   @override
   Stream<DeepSeekStreamChunk> performStream({
@@ -103,6 +111,35 @@ void main() {
     await expectLater(running, throwsA(isA<StateError>()));
     await Future<void>.delayed(const Duration(milliseconds: 60));
     expect(previewCount, 0);
+
+    await fake.chunks.close();
+  });
+
+  test('主动停止会取消底层 subscription 并保留已收到的部分回答', () async {
+    final _FakeDeepSeekService fake = _FakeDeepSeekService();
+    final AiAgentSession session = AiAgentSession(deepSeekService: fake);
+
+    final Future<AiStreamResult> running = session.sendChat(
+      apiKey: 'k',
+      userMessage: const AiChatHistoryMessage.user(content: '你好'),
+      onPreview: (_, _) {},
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    fake.chunks.add(const DeepSeekStreamChunk(text: '部分回答'));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(session.stopActiveStream(), isTrue);
+    final AiStreamResult result = await running.timeout(
+      const Duration(seconds: 1),
+    );
+
+    expect(fake.canceled, isTrue);
+    expect(result.stopped, isTrue);
+    expect(result.content, '部分回答');
+    expect(session.history, hasLength(2));
+    expect(session.history.last.role, AiChatHistoryRole.assistant);
+    expect(session.history.last.content, '部分回答');
 
     await fake.chunks.close();
   });
