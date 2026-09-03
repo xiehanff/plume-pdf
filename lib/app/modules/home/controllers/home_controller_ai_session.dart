@@ -18,9 +18,16 @@ extension HomeControllerAiSession on HomeController {
     );
   }
 
-  void exitAiSelectionMode() {
-    if (!state.aiSelectionMode && state.aiSelection == null) return;
+  /// 尝试退出 AI 框选模式。
+  ///
+  /// 返回 true 表示本次 Escape 确实消费了 Reader 状态；普通阅读状态下
+  /// 返回 false，让键盘事件继续交给输入框、弹窗等后续控件处理。
+  bool exitAiSelectionMode() {
+    if (!state.aiSelectionMode && state.aiSelection == null) {
+      return false;
+    }
     _applyState(state.copyWith(aiSelectionMode: false, aiSelection: null));
+    return true;
   }
 
   void onAiSelectionChanged(PdfAiSelection? selection) {
@@ -68,9 +75,7 @@ extension HomeControllerAiSession on HomeController {
 
   /// 新建 AI 会话：清空对话历史，递增会话 ID（触发侧栏消息清空）。
   void startNewAiSession() {
-    // 先使进行中的旧请求失效，防止其流式回调与终态写入新会话。
-    _aiActionId++;
-    _aiAgentSession.clear();
+    _invalidateAiWork();
     final int nextSessionId = _aiSessionId + 1;
     _aiSessionId = nextSessionId;
     _applyState(
