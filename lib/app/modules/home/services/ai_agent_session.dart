@@ -208,9 +208,14 @@ class AiAgentSession {
           schedulePreview();
         },
         onError: (Object error, StackTrace stackTrace) {
-          if (!active.completion.isCompleted) {
-            active.completion.completeError(error, stackTrace);
+          if (active.completion.isCompleted) {
+            return;
           }
+          if (active.stopped) {
+            active.completion.complete();
+            return;
+          }
+          active.completion.completeError(error, stackTrace);
         },
         onDone: () {
           if (!active.completion.isCompleted) {
