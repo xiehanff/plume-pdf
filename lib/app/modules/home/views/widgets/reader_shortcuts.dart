@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'reader_shortcut_platform.dart';
 
-class ReaderShortcuts extends StatelessWidget {
+class ReaderShortcuts extends StatefulWidget {
   const ReaderShortcuts({
     super.key,
     required this.onOpenFile,
@@ -28,6 +28,54 @@ class ReaderShortcuts extends StatelessWidget {
   final Widget child;
 
   @override
+  State<ReaderShortcuts> createState() => _ReaderShortcutsState();
+}
+
+class _ReaderShortcutsState extends State<ReaderShortcuts> {
+  final FocusNode _readerFocusNode = FocusNode(debugLabel: 'ReaderShortcuts');
+
+  @override
+  void initState() {
+    super.initState();
+    // pdfrx puts its own Focus node around the viewer. On Linux that node can
+    // consume the event before it bubbles to the Reader Focus node, so handle
+    // Escape at the beginning of the focus dispatch while the Reader owns the
+    // focus path.
+    FocusManager.instance.addEarlyKeyEventHandler(_handleEarlyKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeEarlyKeyEventHandler(_handleEarlyKeyEvent);
+    _readerFocusNode.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _handleEarlyKeyEvent(KeyEvent event) {
+    if (!_readerFocusNode.hasFocus) {
+      return KeyEventResult.ignored;
+    }
+    return _handleEscape(event)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
+
+  KeyEventResult _handleFocusKeyEvent(FocusNode _, KeyEvent event) {
+    return _handleEscape(event)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
+
+  bool _handleEscape(KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.escape) {
+      return false;
+    }
+    widget.onEscape();
+    return true;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool useMeta = usesMetaModifier();
     return CallbackShortcuts(
@@ -36,57 +84,52 @@ class ReaderShortcuts extends StatelessWidget {
           LogicalKeyboardKey.keyO,
           meta: useMeta,
           control: !useMeta,
-        ): onOpenFile,
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): onPreviousPage,
-        const SingleActivator(LogicalKeyboardKey.arrowRight): onNextPage,
+        ): widget.onOpenFile,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft):
+            widget.onPreviousPage,
+        const SingleActivator(LogicalKeyboardKey.arrowRight): widget.onNextPage,
         SingleActivator(
           LogicalKeyboardKey.digit0,
           meta: useMeta,
           control: !useMeta,
-        ): onActualSize,
+        ): widget.onActualSize,
         SingleActivator(
           LogicalKeyboardKey.keyB,
           meta: useMeta,
           control: !useMeta,
-        ): onToggleSidebar,
+        ): widget.onToggleSidebar,
         SingleActivator(
           LogicalKeyboardKey.equal,
           meta: useMeta,
           control: !useMeta,
-        ): onZoomIn,
+        ): widget.onZoomIn,
         SingleActivator(
           LogicalKeyboardKey.equal,
           shift: true,
           meta: useMeta,
           control: !useMeta,
-        ): onZoomIn,
+        ): widget.onZoomIn,
         SingleActivator(
           LogicalKeyboardKey.numpadAdd,
           meta: useMeta,
           control: !useMeta,
-        ): onZoomIn,
+        ): widget.onZoomIn,
         SingleActivator(
           LogicalKeyboardKey.minus,
           meta: useMeta,
           control: !useMeta,
-        ): onZoomOut,
+        ): widget.onZoomOut,
         SingleActivator(
           LogicalKeyboardKey.numpadSubtract,
           meta: useMeta,
           control: !useMeta,
-        ): onZoomOut,
+        ): widget.onZoomOut,
       },
       child: Focus(
+        focusNode: _readerFocusNode,
         autofocus: true,
-        onKeyEvent: (_, KeyEvent event) {
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.escape) {
-            onEscape();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: child,
+        onKeyEvent: _handleFocusKeyEvent,
+        child: widget.child,
       ),
     );
   }

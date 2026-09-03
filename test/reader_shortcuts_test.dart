@@ -40,6 +40,49 @@ void main() {
 
     expect(escapeCalls, 1);
   });
+
+  testWidgets('Escape reaches reader handler before a descendant consumes it', (
+    WidgetTester tester,
+  ) async {
+    final FocusNode childFocusNode = FocusNode();
+    addTearDown(childFocusNode.dispose);
+    int escapeCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReaderShortcuts(
+          onOpenFile: _noop,
+          onPreviousPage: _noop,
+          onNextPage: _noop,
+          onZoomIn: _noop,
+          onZoomOut: _noop,
+          onActualSize: _noop,
+          onToggleSidebar: _noop,
+          onEscape: () => escapeCalls++,
+          child: Focus(
+            focusNode: childFocusNode,
+            onKeyEvent: (_, KeyEvent event) {
+              if (event.logicalKey == LogicalKeyboardKey.escape) {
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    childFocusNode.requestFocus();
+    await tester.pump();
+    expect(childFocusNode.hasFocus, isTrue);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.escape);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(escapeCalls, 1);
+  });
 }
 
 void _noop() {}
