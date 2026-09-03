@@ -28,6 +28,7 @@ void main() {
       onApiKeyChanged: (_) {},
       onSaveApiKey: () async {},
       onSendChat: (_) async {},
+      onStopChat: () {},
       onNewSession: () {},
     );
     Get.put<AiSidebarController>(
@@ -65,10 +66,6 @@ void main() {
     state = state.copyWith(result: '$initialResult\n\n$marker');
     sidebarController.updateExternalState(
       state: state,
-      onApiKeyChanged: (_) {},
-      onSaveApiKey: () async {},
-      onSendChat: (_) async {},
-      onNewSession: () {},
       documentPath: null,
       leftSidebarWidth: 0,
     );
