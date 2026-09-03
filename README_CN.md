@@ -2,21 +2,21 @@
 
 [English](./README.md) | 中文
 
-**当前版本：v0.1.0**
+**当前版本：v0.1.2**
 
 Plume PDF 是一个基于 Flutter + PDFium（`pdfrx`）的跨平台 PDF 阅读器，并集成 DeepSeek AI 辅助阅读。桌面端与移动端共用阅读状态/控制层，只在 UI Shell 和导航交互上按平台拆分。
 
-## v0.1.0 重点更新
+## v0.1.2 重点更新
 
-- 完成 Android/iOS 移动端 Shell：SafeArea 阅读布局、全屏目录/AI 路由、WiFi 传书
-- AI 区域框选升级为 Viewer 级全局选区，可连续跨越多页 PDF
-- 支持流式多轮 AI 对话、reasoning 展示、贴底跟随，以及用户上滚阅读历史时的 rebuild 抑制
-- 阅读状态收敛：页码与缩放按语义拆分事件源，旧文档异步回调不会污染新 PDF，阅读进度 debounce 使用触发时快照
-- `AiSidebarController` 生命周期统一由 `HomeController` 管理；原独立 `StreamingAiSidebarController` 已删除并合并职责
-- DeepSeek 调用链收敛为一条 OpenAI-compatible HTTP/SSE 通道，移除 Genkit runtime 与相关依赖
-- 视觉请求仅在服务端明确拒绝 image/multimodal 输入时回退纯文本；认证、限流、网络错误不再重复请求
-- 本轮代码清理中，生产 Dart 代码净减少 392 行，同时回归测试代码反而增加
-- `Mobile CI` 已切到 Ubuntu，只验证测试、静态分析、Android arm64 构建和 ABI；当前有意停止 iOS CI 构建
+- AI 流式输出期间，原“发送”按钮不再处于不可点击状态，而是切换为可点击的“停止生成”按钮。
+- 点击停止会真正取消当前 `StreamSubscription`，让 DeepSeek SSE 立即停止继续消费，而不是只在 UI 层忽略后续 token。
+- 已经收到的部分正文与 reasoning 会保留，停止后直接作为本轮部分回复收尾。
+- 第一个 token 尚未返回时停止，会移除空的 loading 占位，不留下空白 AI 消息。
+- 如果仍处在 PDF / 文档上下文准备阶段，则复用现有 action generation 保护让本轮请求失效，不继续进入模型 stream。
+- 新建 AI 会话或销毁 `HomeController` 时也会主动取消当前 stream。
+- 新增停止按钮、底层 subscription cancel、部分回答保留与空 loading 清理回归测试。
+
+`v0.1.1` 仍是较大的阅读器/AI 基线版本：Android 移动 Shell、Viewer 级跨页 AI 框选、流式多轮对话、Reader 状态收敛、唯一 `AiSidebarController` owner 与单一 DeepSeek HTTP/SSE transport 都已在该版本形成稳定基础。
 
 完整发布说明见 [CHANGELOG.md](./CHANGELOG.md)。
 
@@ -35,6 +35,7 @@ Plume PDF 是一个基于 Flutter + PDFium（`pdfrx`）的跨平台 PDF 阅读�
 ### AI 辅助阅读
 
 - 配置 DeepSeek API Key，支持流式多轮对话
+- 流式生成期间可直接点击发送位的停止按钮；停止后保留已经收到的部分回复
 - AI 区域框选动作：`翻译`、`解释`、`深度理解`
 - 框选属于整个 PDF Viewer，而不是某一页，因此一个框选可以连续跨越多页
 - 全局任何时刻最多存在一个框选框和一组动作按钮
@@ -43,7 +44,7 @@ Plume PDF 是一个基于 Flutter + PDFium（`pdfrx`）的跨平台 PDF 阅读�
 - PDF 提取内容按“不可信文档数据”处理；不会把本机文件目录和文件大小发送给模型
 - 流式返回中 reasoning 与正式正文分离展示
 - `FollowTailScrollController` 使用同帧 viewport correction，避免贴底输出时画面晚一帧跳动
-- 用户上滚阅读历史时，AI Sidebar 会延后高频昂贵 rebuild；回到底部或进入完成/错误终态后统一 flush
+- 用户上滚阅读历史时，AI Sidebar 会延后高频昂贵 rebuild；回到底部或进入完成/错误/停止终态后统一 flush
 - Markdown 使用本地 fork 的 `gpt_markdown`，代码块支持语法高亮
 
 ### 桌面端
@@ -123,13 +124,13 @@ flutter build apk --debug --target-platform android-arm64
 
 当 `main` 出现提交消息严格为 `release: v<version>` 的发布提交时，工作流会自动识别版本、创建/校验对应 tag，额外构建 Android arm64 release APK，等待所有发布 job 成功后创建 GitHub Release 并上传所有安装包。
 
-v0.1.0 预期发布资产：
+v0.1.2 预期发布资产：
 
 ```text
 Linux   .deb + .rpm
 Windows .exe
 macOS   .dmg
-Android plume-pdf-android-arm64-v8a-v0.1.0.apk
+Android plume-pdf-android-arm64-v8a-v0.1.2.apk
 ```
 
 GitHub Release 文案会自动从 `CHANGELOG.md` 中同版本章节提取。
@@ -167,7 +168,7 @@ OpenAI-compatible HTTP/SSE
 - 桌面 Shell：`HomeView`
 - 移动 Shell：`MobileHomeView`，目录 / AI / WiFi 传书使用独立全屏路由
 - AI Sidebar 生命周期：唯一 `AiSidebarController` 由 `HomeController` 管理
-- AI 会话、历史与流式累积：`AiAgentSession`
+- AI 会话、历史、流式累积与当前 stream 取消：`AiAgentSession`
 - PDF 文本 / 截图 / OCR 上下文：`PdfAiContextService`
 - 当前 AI transport：`DeepSeekService` 直接 HTTP/SSE
 - 为后续多模型接入保留 `AiModelRegistry` / `AiModelConfig`

@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.1.2 - 2026-09-03
+
+### AI 流式停止
+
+- AI 流式输出期间，原“发送”按钮不再 disabled，而是切换为可点击的“停止生成”状态；点击后 UI 立即结束 loading 并恢复普通发送按钮。
+- 停止不是只忽略后续 token：`HomeController.stopAiResponse()` 会调用 `AiAgentSession.stopActiveStream()`，直接取消当前 `StreamSubscription`，让 DeepSeek SSE 停止继续消费并进入 transport 资源释放路径。
+- 用户停止前已经收到的正文与 reasoning 会保留，并作为本轮部分回复收尾；停止后不再追加后续增量。
+- 第一个 token 尚未返回时停止，会移除空的 AI loading 占位；对话 history 不留下悬空的 user 请求。
+- 如果点击停止时请求仍处于 PDF / document context 准备阶段，则复用现有 `_aiActionId` 失效保护，阻止本轮继续进入模型 stream。
+- 新建 AI 会话与 `HomeController.onClose()` 都会主动取消当前 stream，避免旧请求在新会话或页面销毁后继续占用网络资源。
+- 取消过程中 transport 恰好抛错时，以用户主动停止语义为准，不再让取消收尾异常反向覆盖已经停止的 UI 状态。
+
+### UI 与状态收尾
+
+- `ChatInputBar` 在生成期间继续禁用文本输入与“新建会话”，但发送按钮位置始终可操作，并切换为 stop 图标和“停止生成”提示。
+- `AiSidebarController` 在 loading 结束时统一结束最后一条 AI 消息的 loading 状态；若该消息既没有正文也没有 reasoning，则直接移除空占位。
+- 主动停止会清空本轮尚未完成的 follow-up suggestions，避免把未完成响应的建议暴露为可继续追问的终态结果。
+- 既有流式滚动策略保持不变：用户在底部时继续同帧 follow-tail；主动上滚阅读历史时不被新 token 强制拉回；stop 属于终态刷新，不会被 deferred streaming rebuild 吞掉。
+
+### 测试与验证
+
+- 新增 ChatInputBar 回归测试：`loading=true` 时发送按钮切换为可点击“停止生成”。
+- 新增 `AiAgentSession` 回归测试：主动停止会真实触发底层 stream subscription cancel，并保留已经收到的部分 assistant 回复。
+- 新增 AI Sidebar 停止状态测试：首 token 前停止会移除空 loading；已有部分正文时停止只结束 loading、不删除内容。
+- PR #8 最终 Mobile CI Run #108 已通过完整 `flutter test`、`flutter analyze --no-fatal-infos`、Android arm64 debug build 与 APK ABI 校验。
+
+### 发布
+
+本版本发布元数据：
+
+```text
+version:      0.1.2+26
+msix_version: 0.1.2.0
+commit:       release: v0.1.2
+tag:          v0.1.2
+```
+
+GitHub Release 预期包含：
+
+- Linux `.deb`
+- Linux `.rpm`
+- Windows `.exe`
+- macOS `.dmg`
+- Android `plume-pdf-android-arm64-v8a-v0.1.2.apk`
+
+当前仍不生成 iOS 二进制发布资产。
+
 ## 0.1.1 - 2026-09-03
 
 > `v0.1.1` 是 Plume PDF 从早期 `0.0.x` 快速迭代进入第一个稳定里程碑的版本。本次发布不只是版本号提升：移动端阅读骨架、跨页 AI 框选、流式 AI 对话、桌面/Android 自动发布已经形成完整链路，同时对 Reader 状态源、AI Sidebar 生命周期和 DeepSeek transport 做了系统性收敛，删除了一批重复机制和历史兼容路径。

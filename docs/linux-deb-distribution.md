@@ -1,6 +1,6 @@
 # Linux Debian Package Distribution
 
-> 文档基线：Plume PDF `v0.1.0`，更新于 2026-09-02。
+> 文档基线：Plume PDF `v0.1.2`，更新于 2026-09-03。
 
 本文记录 Linux Release Bundle、Debian `.deb` 打包方式，以及当前 GitHub Release 自动化行为。
 
@@ -17,10 +17,10 @@ make package-deb
 
 脚本读取 `pubspec.yaml` 的版本号，必要时构建 Linux Release Bundle，并组装 Debian 元数据、desktop entry 与图标。
 
-当前 v0.1.0 应用版本：
+当前 v0.1.2 应用版本：
 
 ```text
-0.1.0+24
+0.1.2+26
 ```
 
 输出格式：
@@ -66,6 +66,7 @@ sudo apt install -f
 - 应用可启动并打开 PDF
 - `.pdf` desktop integration 正常
 - 应用内版本号与 `pubspec.yaml` 一致
+- AI 流式生成时发送按钮可切换为停止，并能立即终止当前输出
 
 ## 5. 图标 / 桌面入口
 
@@ -92,28 +93,28 @@ flutter build linux --release
 
 RPM 在 Ubuntu runner 上使用已验证的 `rpmbuild --nodeps` 路径，只绕过 RPM 数据库无法识别 apt 安装依赖的问题；实际 `rpmbuild` / `patchelf` 命令仍会先检查存在。
 
-## 7. v0.1.0 自动发布流程
+## 7. v0.1.2 自动发布流程
 
 正式版本不需要手工上传 DEB。
 
 当 `main` 的发布提交满足：
 
 ```text
-pubspec.yaml: version: 0.1.0+24
-commit message: release: v0.1.0
+pubspec.yaml: version: 0.1.2+26
+commit message: release: v0.1.2
 ```
 
 `Build Packages` 会：
 
 ```text
-解析 0.1.0
-→ 创建/校验 v0.1.0 tag
+解析 0.1.2
+→ 创建/校验 v0.1.2 tag
 → 构建 Linux DEB + RPM
 → 构建 Windows EXE
 → 构建 macOS DMG
 → 构建 Android arm64 APK
 → 等待所有 release jobs 成功
-→ 从 CHANGELOG.md 提取 0.1.0 Release Notes
+→ 从 CHANGELOG.md 提取 0.1.2 Release Notes
 → 创建 GitHub Release
 → 上传全部安装包
 ```
@@ -122,13 +123,13 @@ commit message: release: v0.1.0
 
 ## 8. 发布验收
 
-v0.1.0 发布后至少确认：
+v0.1.2 发布后至少确认：
 
 - Linux job 成功
 - DEB Artifact 存在
 - RPM Artifact 存在
 - GitHub Release 中 DEB/RPM 均已上传
-- DEB 文件中的版本与 `0.1.0+24` 对应
+- DEB 文件中的版本与 `0.1.2+26` 对应
 - 安装后应用可启动并打开 PDF
 
-如果 Release job 未执行，优先检查发布提交消息是否严格为 `release: v0.1.0`，以及 `pubspec.yaml` 版本是否为 `0.1.0+24`。
+如果 Release job 未执行，优先检查发布提交消息是否严格为 `release: v0.1.2`，以及 `pubspec.yaml` 版本是否为 `0.1.2+26`。

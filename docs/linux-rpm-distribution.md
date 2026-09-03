@@ -1,6 +1,6 @@
 # Linux RPM Package Distribution
 
-> 文档基线：Plume PDF `v0.1.0`，更新于 2026-09-02。
+> 文档基线：Plume PDF `v0.1.2`，更新于 2026-09-03。
 
 本文记录 Fedora/Linux RPM release 打包方式，以及 Hosted runner 上的特殊处理。
 
@@ -25,7 +25,7 @@ make package-rpm
 当前应用版本：
 
 ```text
-0.1.0+24
+0.1.2+26
 ```
 
 输出格式类似：
@@ -59,6 +59,7 @@ sudo dnf remove plume-pdf
 - 桌面窗口控制正常
 - 文件管理器“打开方式”链路正常
 - 安装包版本与 `pubspec.yaml` 一致
+- AI 流式生成可通过发送位停止按钮立即终止并保留部分回复
 
 ## 4. GitHub Hosted runner 特殊说明
 
@@ -81,13 +82,13 @@ Hosted Linux runner 使用 Ubuntu，因此 `patchelf` 通过 apt/dpkg 安装，�
 正式发布时使用单一 release commit：
 
 ```text
-version: 0.1.0+24
-commit: release: v0.1.0
+version: 0.1.2+26
+commit: release: v0.1.2
 ```
 
-工作流会自动创建/校验 `v0.1.0` tag；RPM 与 DEB、Windows EXE、macOS DMG、Android arm64 APK 一起进入同一个 GitHub Release，不需要手动执行 `gh release upload`。
+工作流会自动创建/校验 `v0.1.2` tag；RPM 与 DEB、Windows EXE、macOS DMG、Android arm64 APK 一起进入同一个 GitHub Release，不需要手动执行 `gh release upload`。
 
-## 6. v0.1.0 发布验收
+## 6. v0.1.2 发布验收
 
 - Linux release bundle 构建成功
 - DEB 打包成功

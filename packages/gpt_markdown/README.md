@@ -1,8 +1,8 @@
 # 📦 GPT Markdown & LaTeX for Flutter
 
-> **Plume PDF local fork note — app v0.1.0 / 2026-09-02**
+> **Plume PDF local fork note — app v0.1.2 / 2026-09-03**
 >
-> This directory is vendored into Plume PDF and consumed through a local path dependency. The package keeps the upstream `gpt_markdown` API/version line, while Plume PDF carries project-specific integration adjustments for AI output rendering, host-provided fonts, divider behavior, selectable content, and current Flutter compatibility. App releases do **not** imply a new upstream `gpt_markdown` release.
+> This directory is vendored into Plume PDF and consumed through a local path dependency. The package keeps the upstream `gpt_markdown` API/version line, while Plume PDF carries project-specific integration adjustments for AI output rendering, host-provided fonts, divider behavior, selectable content, and current Flutter compatibility. App releases do **not** imply a new upstream `gpt_markdown` release. Plume PDF v0.1.2 changes active AI stream cancellation in the app/session layer; the local Markdown package API is unchanged.
 
 [![Pub Version](https://img.shields.io/pub/v/gpt_markdown)](https://pub.dev/packages/gpt_markdown) [![Pub Likes](https://img.shields.io/pub/likes/gpt_markdown)](https://pub.dev/packages/gpt_markdown) [![Pub Points](https://img.shields.io/pub/points/gpt_markdown)](https://pub.dev/packages/gpt_markdown) [![GitHub](https://img.shields.io/badge/github-gpt__markdown-blue?logo=github)](https://github.com/Infinitix-LLC/gpt_markdown)
 

@@ -2,23 +2,23 @@
 
 English | [中文](./README_CN.md)
 
-**Current release: v0.1.0**
+**Current release: v0.1.2**
 
 Plume PDF is a cross-platform PDF reader built with Flutter + PDFium (`pdfrx`) with DeepSeek-assisted reading. Desktop and mobile share the same reader/controller layer, while platform-specific shells keep desktop and mobile interaction patterns separate.
 
-## v0.1.0 Highlights
+## v0.1.2 Highlights
 
-- Android/iOS mobile shell with safe-area-aware reader layout, full-screen Outline/AI routes, and WiFi PDF transfer
-- Viewer-level AI area selection that can span consecutive PDF pages
-- Streaming multi-turn AI chat with reasoning display, follow-tail scrolling, and rebuild suppression while reading history
-- Reader state cleanup: page/zoom sources are separated by semantics, stale document callbacks are rejected, and recent-file progress saves use immutable snapshots
-- AI sidebar lifecycle unified under `HomeController`; the former standalone streaming controller has been removed
-- DeepSeek transport simplified to one OpenAI-compatible HTTP/SSE implementation; Genkit runtime dependencies were removed
-- Vision fallback now retries as text only when the server explicitly rejects image/multimodal input; authentication, rate-limit, and network errors are not duplicated
-- Production Dart code was reduced by 392 lines during the cleanup while regression-test code increased
-- Mobile CI now runs on Ubuntu and validates tests, analysis, Android arm64 build, and APK ABI only; iOS is intentionally not built in CI for now
+- Streaming AI output can now be stopped from the send button: while a response is generating, the send icon becomes an active stop control instead of a disabled button.
+- Stopping cancels the active `StreamSubscription` so the DeepSeek SSE stream stops being consumed immediately; this is not just a UI-side ignore flag.
+- Partial answer/reasoning already received is preserved when generation is stopped.
+- Stopping before the first token removes the empty loading placeholder instead of leaving a blank AI message.
+- If the request is still preparing PDF/document context, the existing action-generation guard invalidates the request before a model stream is started.
+- Starting a new AI session or closing `HomeController` also cancels the active stream.
+- Regression coverage now checks stop-button interaction, stream subscription cancellation, partial-response preservation, and loading-placeholder cleanup.
 
-See [CHANGELOG.md](./CHANGELOG.md) for the full v0.1.0 release notes.
+The v0.1.1 baseline remains the larger reader/AI milestone: Android mobile shell, viewer-level cross-page AI selection, streaming multi-turn chat, Reader state cleanup, a single `AiSidebarController` owner, and a single direct DeepSeek HTTP/SSE transport.
+
+See [CHANGELOG.md](./CHANGELOG.md) for the full release notes.
 
 ## Features
 
@@ -35,6 +35,7 @@ See [CHANGELOG.md](./CHANGELOG.md) for the full v0.1.0 release notes.
 ### AI reading
 
 - Configure a DeepSeek API Key and use streaming multi-turn chat
+- Stop an in-progress AI response directly from the send button; already received partial output is preserved
 - Area-selection actions: `Translate`, `Explain`, `Deep Understand`
 - A selection belongs to the whole PDF viewer rather than one page, so one selection can span multiple consecutive pages
 - Only one selection rectangle and one action toolbar can exist globally at a time
@@ -123,13 +124,13 @@ Normal `main` pushes build and upload desktop Actions artifacts:
 
 A release commit whose message is exactly `release: v<version>` is recognized automatically. The workflow creates/verifies the matching tag, additionally builds the Android arm64 release APK, waits for all release jobs, then creates the GitHub Release and uploads all packages.
 
-For v0.1.0 the release assets are expected to include:
+For v0.1.2 the release assets are expected to include:
 
 ```text
 Linux   .deb + .rpm
 Windows .exe
 macOS   .dmg
-Android plume-pdf-android-arm64-v8a-v0.1.0.apk
+Android plume-pdf-android-arm64-v8a-v0.1.2.apk
 ```
 
 Release notes are extracted from the matching version section in `CHANGELOG.md`.
@@ -167,7 +168,7 @@ Key points:
 - Desktop shell: `HomeView`
 - Mobile shell: `MobileHomeView`, with full-screen Outline / AI / WiFi transfer routes
 - AI sidebar lifecycle: one `AiSidebarController` owned by `HomeController`
-- AI session/history/stream aggregation: `AiAgentSession`
+- AI session/history/stream aggregation and active-stream cancellation: `AiAgentSession`
 - PDF text/image/OCR context: `PdfAiContextService`
 - Active AI transport: `DeepSeekService` via direct HTTP/SSE
 - Future multi-model metadata is retained in `AiModelRegistry` / `AiModelConfig`

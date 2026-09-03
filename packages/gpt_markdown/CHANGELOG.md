@@ -1,8 +1,8 @@
-## Plume PDF local integration — 2026-09-02
+## Plume PDF local integration — 2026-09-03
 
-* Plume PDF app `v0.1.0` continues to vendor this package as a local path dependency; this app release does not change the upstream package version.
+* Plume PDF app `v0.1.2` continues to vendor this package as a local path dependency; this app release does not change the upstream package version.
 * The local fork is used for AI-response Markdown rendering and keeps project-specific integration behavior such as host-provided fonts, divider/theme control, selectable content, and compatibility with Plume PDF's streaming rendering path.
-* The package remains intentionally isolated from Plume PDF's DeepSeek transport refactor; removing Genkit from the app does not change the Markdown package API.
+* Plume PDF v0.1.2 adds active AI stream cancellation in the app/session layer (`HomeController` / `AiAgentSession`). The local `gpt_markdown` API, parser behavior, and upstream package version are unchanged by that release.
 
 ## 1.1.7
 
@@ -118,7 +118,7 @@
 ## 1.0.6
 
 * `_italic_` and `>Indentation` syntax added.
-* `linkBuilder` and `highlightBuilder` added [f45132b](https://github.com/saminsohag/flutter_packages/commit/f45132b2cd4b069d3e5703561deb5c7e51d3c560).
+* `linkBuilder` and `highlightBuilder` added [f45132b](https://github.com/saminsohag/flutter_packages/commit/f45132b2cd4c069d3e5703561deb5c7e51d3c560).
 
 ## 1.0.5
 

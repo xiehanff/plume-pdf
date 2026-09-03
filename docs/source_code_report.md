@@ -1,6 +1,6 @@
 # Plume PDF 源码报告
 
-> 文档基线：`v0.1.0`，更新于 2026-09-02。本文描述当前 `main` 的实际结构。
+> 文档基线：`v0.1.2`，更新于 2026-09-03。本文描述当前 `main` 的实际结构。
 
 ## 1. 项目定位
 
@@ -11,6 +11,7 @@
 - PDF 阅读、目录、最近文件、阅读进度
 - 单页 / 双页、缩放、适宽、背景主题
 - AI 多轮对话与 reasoning 流式展示
+- AI 流式生成主动停止与底层 SSE subscription 取消
 - Viewer 级跨页区域框选
 - PDF 文本 / 截图 / OCR 上下文提取
 - 移动端 WiFi 传书
@@ -77,12 +78,12 @@ PdfAiContextService
 - 文件打开、最近文件、阅读进度
 - 页码、缩放、单双页、适宽
 - Outline 加载与跳转
-- AI 动作 / 对话编排
+- AI 动作 / 对话 / 停止编排
 - `PdfViewerController` 与 AI Sidebar 生命周期
 
 ### 4.1 页码与缩放事件源
 
-v0.1.0 后不再让两个不同事件源同时写 `currentPage`。
+当前不再让两个不同事件源同时写 `currentPage`。
 
 ```text
 PdfViewerParams.onPageChanged
@@ -142,6 +143,28 @@ OpenAI-compatible HTTP/SSE
 - response parsing
 - history commit / rollback
 - request generation / stale stream 防护
+- active `StreamSubscription` 生命周期
+- 用户主动停止当前 AI stream
+
+v0.1.2 的停止链路：
+
+```text
+ChatInputBar stop
+    ↓
+AiSidebarController.onStopChat
+    ↓
+HomeController.stopAiResponse
+    ↓
+AiAgentSession.stopActiveStream
+    ↓
+StreamSubscription.cancel
+    ↓
+DeepSeekService async stream 退出
+    ↓
+HTTP client finally / close
+```
+
+停止后不再消费后续 SSE 增量；已经收到的部分正文/reasoning 保留。若在第一个 token 前停止，则回滚悬空 user/history 或删除空 loading 占位。若还在文档上下文准备阶段，则通过 `_aiActionId` 让请求失效，从而不进入实际模型 stream。
 
 ### 5.2 PdfAiContextService
 
@@ -158,7 +181,7 @@ OpenAI-compatible HTTP/SSE
 
 ### 5.3 DeepSeekService
 
-v0.1.0 删除 Genkit runtime 双通道，当前只有一套直接 HTTP/SSE transport：
+当前只有一套直接 HTTP/SSE transport：
 
 ```text
 AiAgentSession
@@ -180,6 +203,7 @@ SSE LineSplitter
 - 多轮历史
 - 历史图片 / MIME 类型
 - SSE JSON 类型与状态码边界检查
+- transport/client 生命周期清理
 
 视觉回退只在 HTTP 400/422 且错误明确表示 image / vision / media / multimodal 能力拒绝时成立。401、限流、网络错误不会重复发送纯文本请求。
 
@@ -196,6 +220,7 @@ HomeController.onInit
     → register AiSidebarController
 
 HomeController.onClose
+    → stop active AI stream
     → delete AiSidebarController
 ```
 
@@ -212,13 +237,28 @@ Debug Gallery 使用独立 tag，避免预览页面删除 Home 正在使用的 C
 - 高频 preview 状态继续更新
 - 昂贵 UI rebuild 延后
 - 回到底部后 flush
-- complete/error 等终态立即刷新
+- complete/error/stop 等终态立即刷新
 
 ### 6.3 FollowTailScrollController
 
 `FollowTailScrollPosition.correctForNewDimensions(...)` 在内容增长时通过 `correctPixels()` 修正位置，并返回 `false` 让 viewport 在同一 frame 重新 layout，避免“数值已贴底但画面下一帧才跳”的闪烁。
 
 该行为有 render-level 回归测试，不应在 Flutter 升级时随意删除。
+
+### 6.4 ChatInputBar loading / stop 状态
+
+```text
+loading = false
+→ 输入可编辑
+→ send 可点击
+
+loading = true
+→ 输入禁用
+→ new session 禁用
+→ send 位置切换为 stop，仍可点击
+```
+
+停止后 `aiPanelState.loading` 同步置为 false，按钮立即恢复普通发送状态。AI 消息中已经收到的内容保留；完全空的 loading message 被移除。
 
 ## 7. Viewer 级跨页 AI 框选
 
@@ -319,16 +359,16 @@ verify native ABIs == arm64-v8a
 - Windows EXE
 - macOS DMG
 
-发布提交：
+v0.1.2 发布提交：
 
 ```text
-pubspec.yaml version: 0.1.0+24
-commit message: release: v0.1.0
+pubspec.yaml version: 0.1.2+26
+commit message: release: v0.1.2
 ```
 
-`release_meta` 会读取版本并创建/校验 `v0.1.0` tag。发布模式额外构建 Android arm64 APK，并在 Linux/Windows/macOS/Android 全部成功后创建 GitHub Release；Release Notes 自动取自 `CHANGELOG.md` 的 `0.1.0` 章节。
+`release_meta` 会读取版本并创建/校验 `v0.1.2` tag。发布模式额外构建 Android arm64 APK，并在 Linux/Windows/macOS/Android 全部成功后创建 GitHub Release；Release Notes 自动取自 `CHANGELOG.md` 的 `0.1.2` 章节。
 
-## 11. v0.1.0 重构结果
+## 11. 结构收敛结果
 
 以 `release: v0.0.22` 的 `14685f5` 为基线，到第四轮重构合并完成的 `42b17e9`：
 
@@ -348,7 +388,7 @@ CI                       -3 行
 - Desktop/Mobile AI Controller 双创建路径 → `HomeController` 单一 owner
 - Genkit + direct HTTP 双 transport → 单 HTTP/SSE transport
 
-同时增加了竞态、fallback、流式滚动和状态源回归测试。
+v0.1.2 在这条单一 AI 会话链上继续补齐“用户主动取消”的完整资源生命周期，而没有再增加第二套 stop/cancel 状态源。
 
 ## 12. Agent 阅读顺序
 
@@ -368,6 +408,8 @@ AiSelectablePdfViewer
 PdfViewerAreaSelectionOverlay
   ↓
 AiSidebarController + FollowTailScrollController
+  ↓
+ChatInputBar
   ↓
 AiAgentSession + PdfAiContextService
   ↓

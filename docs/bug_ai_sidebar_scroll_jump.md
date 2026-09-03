@@ -1,8 +1,8 @@
 # Bug 报告：AI 对话区流式输出与滚动跳动
 
-> **状态：已修复。v0.1.0 已把相关流式刷新策略收敛到 `AiSidebarController`。**
+> **状态：已修复。v0.1.2 在既有滚动稳定性基础上补齐了“用户主动停止流式生成”的完整取消链路。**
 >
-> 本文保留问题演进与最终行为契约，避免未来升级 Flutter、改聊天列表或接入新模型 Provider 时重新引入“用户阅读历史被推走”或“贴底画面晚一帧跳动”。
+> 本文保留问题演进与最终行为契约，避免未来升级 Flutter、改聊天列表或接入新模型 Provider 时重新引入“用户阅读历史被推走”“贴底画面晚一帧跳动”或“停止后仍继续消费 token”等问题。
 
 ## 1. 原始问题
 
@@ -12,8 +12,9 @@ AI 流式输出会持续增加最后一个模型消息的高度。早期实现�
 - 流式气泡变高后，scroll position 数值已修正，但当前 frame 仍按旧 offset 绘制，下一帧出现闪烁/跳动
 - 每个 stream chunk 都触发 GetBuilder + Markdown rebuild，长回答越到后面成本越高
 - 为了解决 rebuild 又曾引入独立 `StreamingAiSidebarController`，导致 AI Sidebar 同时存在两个 Controller 生命周期和额外同步路径
+- 生成期间发送按钮过去只能 disabled，用户无法主动终止已经不需要的长回答
 
-## 2. v0.1.0 当前实现
+## 2. v0.1.2 当前实现
 
 ### 2.1 FollowTailScrollController
 
@@ -53,19 +54,7 @@ userControlled
 
 ### 2.3 独立 Streaming Controller 已删除
 
-v0.1.0 删除：
-
-```text
-lib/app/modules/home/controllers/streaming_ai_sidebar_controller.dart
-```
-
-原来“用户离开底部时延后流式 rebuild”的职责直接合入 `AiSidebarController`，核心状态类似：
-
-```text
-_hasDeferredStreamingUpdate
-```
-
-这样生产环境只剩一个 AI Sidebar Controller：
+生产环境只保留一个 AI Sidebar Controller：
 
 ```text
 HomeController
@@ -87,12 +76,43 @@ AiSidebarController
 
 请求结束、异常、取消或 generation 失效时必须清理 pending timer，避免旧 preview 在终态后再次写回。
 
-### 2.5 Markdown 流式成本控制
+### 2.5 主动停止生成
+
+v0.1.2 把发送按钮的 loading 状态从“不可点击”改成“停止生成”。
+
+```text
+正常
+发送按钮
+   ↓ send
+loading = true
+   ↓
+停止按钮 ■
+   ↓ click
+HomeController.stopAiResponse()
+   ↓
+AiAgentSession.stopActiveStream()
+   ↓
+StreamSubscription.cancel()
+   ↓
+停止继续消费 DeepSeek SSE
+```
+
+停止不是只忽略后续 UI token，而是真正取消当前底层 stream subscription。对于 `DeepSeekService` 内部创建的 HTTP client，取消会使异步生成器退出，并进入 `finally -> client.close()` 的资源释放路径。
+
+停止语义：
+
+- 已有部分正文 / reasoning：保留当前内容，并把 loading 收尾为完成态
+- 第一个 token 尚未返回：移除空 AI loading 占位，不留下空气泡
+- 仍在 PDF/document context 准备阶段：复用 `_aiActionId` 让请求失效，不再进入模型 stream
+- 停止期间 transport 恰好报错：用户主动停止语义优先，不用错误态覆盖已停止 UI
+- 新建会话 / `HomeController.onClose`：主动取消正在进行的 stream
+
+### 2.6 Markdown 流式成本控制
 
 - 未闭合 code fence：暂时按轻量文本处理，闭合后再进入完整高亮
 - reasoning 折叠态：避免不必要的完整 Markdown 成本
 - reasoning 展开态：再使用完整 Markdown
-- 用户离开底部后：延后昂贵 streaming rebuild，但 complete/error 终态不能被延后
+- 用户离开底部后：延后昂贵 streaming rebuild，但 complete/error/stop 终态不能被延后
 
 ## 3. 必须保持的行为契约
 
@@ -109,6 +129,13 @@ AiSidebarController
 用户回到底部
 → flush 最新流式状态
 → 恢复自动跟随
+
+用户点击停止
+→ 立即取消 active StreamSubscription
+→ 不再追加 token
+→ 保留已收到的部分回答
+→ 空 loading 占位被清理
+→ 发送按钮立即恢复
 
 请求结束 / 错误 / 取消
 → pending preview 不得晚写
@@ -132,6 +159,13 @@ AiSidebarController
   - preview 合并
   - timer cleanup
   - stale generation / request 行为
+  - 主动停止实际触发 subscription cancel
+  - 停止后保留已收到的部分回答
+- `test/chat_input_bar_test.dart`
+  - loading 时发送按钮切换为可点击停止按钮
+- `test/ai_sidebar_stop_state_test.dart`
+  - 无正文停止时移除空 loading
+  - 已有部分正文停止时保留内容并结束 loading
 
 ## 5. 修改这部分代码时不要做什么
 
@@ -147,17 +181,23 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
 
 不要重新创建第二个 streaming-only Controller。滚动意图、输入资源、会话展示和 rebuild 策略属于同一个 Sidebar UI 生命周期，拆成两个 GetX Controller 会重新引入 owner/sync 问题。
 
-也不要为了降低 rebuild 丢掉终态刷新。性能优化只能合并/延后 preview，不能吞掉 complete/error/cancel。
+不要把“停止生成”实现成只递增 generation / 忽略 UI callback。已经进入网络 stream 后必须取消 subscription，否则模型响应仍可能继续下载并消耗资源。
+
+也不要为了降低 rebuild 丢掉终态刷新。性能优化只能合并/延后 preview，不能吞掉 complete/error/stop。
 
 ## 6. 相关文件
 
 - `lib/app/modules/home/controllers/ai_sidebar_controller.dart`
+- `lib/app/modules/home/controllers/home_controller_ai_session.dart`
 - `lib/app/modules/home/services/ai_agent_session.dart`
 - `lib/app/modules/home/views/widgets/ai_sidebar.dart`
+- `lib/app/modules/home/views/widgets/chat_input_bar.dart`
 - `test/ai_sidebar_stream_scroll_test.dart`
 - `test/streaming_ai_sidebar_controller_test.dart`
 - `test/ai_agent_session_test.dart`
+- `test/ai_sidebar_stop_state_test.dart`
+- `test/chat_input_bar_test.dart`
 
 ## 7. 版本基线
 
-本文当前对应 Plume PDF `v0.1.0`。后续若 Flutter 的 `ScrollPosition.correctForNewDimensions` 语义发生变化，应优先让 render-level regression test 验证实际画面，而不是只检查 `pixels == maxScrollExtent`。
+本文当前对应 Plume PDF `v0.1.2`，更新于 2026-09-03。后续若 Flutter 的 `ScrollPosition.correctForNewDimensions` 或 Dart Stream cancellation 语义发生变化，应优先让 regression test 验证实际画面与真实 subscription 生命周期，而不是只检查状态字段。

@@ -1,6 +1,6 @@
 # Windows 安装包生成与分发
 
-> 文档基线：Plume PDF `v0.1.0`，更新于 2026-09-02。
+> 文档基线：Plume PDF `v0.1.2`，更新于 2026-09-03。
 
 本文记录 Windows Release / Inno Setup 安装包生成方式，以及当前 GitHub Actions 自动发布行为。
 
@@ -34,11 +34,11 @@ fvm flutter build windows --release
 
 ## 3. 版本与输出位置
 
-v0.1.0 对应：
+v0.1.2 对应：
 
 ```text
-pubspec version: 0.1.0+24
-msix_version:     0.1.0.0
+pubspec version: 0.1.2+26
+msix_version:     0.1.2.0
 ```
 
 Inno Setup 输出格式：
@@ -74,18 +74,18 @@ Checkout
 
 普通 `main` push 会生成 Windows Actions Artifact。
 
-## 6. v0.1.0 正式发布
+## 6. v0.1.2 正式发布
 
 发布不需要手工打包或上传 EXE。
 
 当 `main` 出现：
 
 ```text
-version: 0.1.0+24
-commit message: release: v0.1.0
+version: 0.1.2+26
+commit message: release: v0.1.2
 ```
 
-工作流会自动创建/校验 `v0.1.0` tag。Windows EXE 会与：
+工作流会自动创建/校验 `v0.1.2` tag。Windows EXE 会与：
 
 - Linux DEB
 - Linux RPM
@@ -94,7 +94,7 @@ commit message: release: v0.1.0
 
 一起进入同一个 GitHub Release。
 
-Release 文案自动从 `CHANGELOG.md` 的 `0.1.0` 章节提取，因此版本文案、tag 和安装包都绑定同一 release commit。
+Release 文案自动从 `CHANGELOG.md` 的 `0.1.2` 章节提取，因此版本文案、tag 和安装包都绑定同一 release commit。
 
 ## 7. 发布前 / 发布后自查
 
@@ -106,7 +106,8 @@ Release 文案自动从 `CHANGELOG.md` 的 `0.1.0` 章节提取，因此版本�
 - 桌面 / 开始菜单快捷方式存在
 - PDF “打开方式”中可以选择 Plume PDF
 - 双击 PDF 可以把文件路径传给应用并打开
-- 应用版本为 `0.1.0`
+- 应用版本为 `0.1.2`
+- AI 流式生成期间发送按钮切换为停止；点击后立即停止继续输出并保留已生成内容
 - 卸载行为正常
 
 ## 8. 常见发布问题
@@ -116,8 +117,8 @@ Release 文案自动从 `CHANGELOG.md` 的 `0.1.0` 章节提取，因此版本�
 确认：
 
 ```text
-pubspec.yaml == 0.1.0+24
-head commit message == release: v0.1.0
+pubspec.yaml == 0.1.2+26
+head commit message == release: v0.1.2
 ```
 
 ### 普通 main push 只有 Artifact，没有 Release

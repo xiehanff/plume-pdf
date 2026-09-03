@@ -1,8 +1,8 @@
 # 后续计划
 
-> 基线：Plume PDF `v0.1.0`，更新于 2026-09-02。
+> 基线：Plume PDF `v0.1.2`，更新于 2026-09-03。
 
-v0.1.0 已完成移动端基础、AI 框选、流式体验、状态源/生命周期收敛、DeepSeek transport 清理和桌面/Android 自动发布链路。以下只保留当前仍有效的事项。
+v0.1.2 已在 v0.1.1 的移动端、跨页 AI 框选、流式体验、状态源/生命周期收敛和自动发布链路上补齐“用户主动停止 AI 生成”：停止按钮直接取消底层 stream subscription，保留部分回复，并覆盖首 token 前停止、会话切换和 Controller 销毁边界。以下只保留当前仍有效的事项。
 
 ## P0 — Android 正式分发与局域网安全
 
@@ -43,6 +43,15 @@ v0.1.0 已完成移动端基础、AI 框选、流式体验、状态源/生命周
 - [ ] `sendChat`: 失败/空响应时回滚 user 消息
 - [ ] provider 切换后的 history / image attachment 兼容策略
 
+已完成并持续保留：
+
+- [x] 用户主动停止会取消 active `StreamSubscription`
+- [x] 停止后保留已经收到的部分 assistant 回复
+- [x] 首 token 前停止时回滚/移除空 loading
+- [x] 新建会话会取消旧 stream
+- [x] `HomeController.onClose` 会取消 active stream
+- [x] 停止语义优先于取消收尾阶段的 transport error
+
 ## P2 — 成本与上下文控制
 
 - [ ] `AiAgentSession.history` 改为不可变视图（`List.unmodifiable` / `UnmodifiableListView`）。
@@ -68,7 +77,7 @@ v0.1.0 已完成移动端基础、AI 框选、流式体验、状态源/生命周
 
 未来重新启动 iOS 发布时，再恢复 simulator/release 验证和正式签名链路。
 
-## v0.1.0 已完成的关键项
+## 已完成的关键项
 
 ### 阅读 / 移动
 
@@ -86,6 +95,8 @@ v0.1.0 已完成移动端基础、AI 框选、流式体验、状态源/生命周
 - [x] AI stream preview 合并与 timer 清理
 - [x] 用户阅读历史时延后流式昂贵 rebuild
 - [x] 视觉 fallback 只在明确 image/multimodal 能力拒绝时重试文本
+- [x] 流式输出期间发送按钮切换为可点击停止状态
+- [x] 停止直接取消底层 stream subscription，并保留已输出内容
 
 ### 结构清理
 
@@ -97,6 +108,7 @@ v0.1.0 已完成移动端基础、AI 框选、流式体验、状态源/生命周
 - [x] 阅读进度 debounce 使用 file/page 快照
 - [x] 删除 Genkit runtime 与 `genkit` / `genkit_openai` 依赖
 - [x] DeepSeek 收敛为单一 OpenAI-compatible HTTP/SSE transport
+- [x] stop/cancel 继续复用现有 HomeController → AiAgentSession 单一链路，没有新增第二套生成状态源
 
 ### CI / Release
 
