@@ -3,6 +3,8 @@ import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dar
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   AiSidebarController createController(PdfAiPanelState state) {
     return AiSidebarController(
       state: state,
