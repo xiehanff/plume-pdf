@@ -44,13 +44,13 @@ void main() {
     expect(escapeCalls, 1);
   });
 
-  testWidgets('Escape reaches reader before a descendant consumes it', (
+  testWidgets('Escape key down reaches reader before a descendant consumes it', (
     WidgetTester tester,
   ) async {
     final FocusNode childFocusNode = FocusNode();
     addTearDown(childFocusNode.dispose);
     int escapeCalls = 0;
-    int descendantCalls = 0;
+    int descendantKeyDownCalls = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -69,8 +69,9 @@ void main() {
           child: Focus(
             focusNode: childFocusNode,
             onKeyEvent: (_, KeyEvent event) {
-              if (event.logicalKey == LogicalKeyboardKey.escape) {
-                descendantCalls++;
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.escape) {
+                descendantKeyDownCalls++;
                 return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
@@ -90,7 +91,7 @@ void main() {
     await tester.pump();
 
     expect(escapeCalls, 1);
-    expect(descendantCalls, 0);
+    expect(descendantKeyDownCalls, 0);
   });
 
   testWidgets('Escape stays available to descendants when reader does nothing', (
