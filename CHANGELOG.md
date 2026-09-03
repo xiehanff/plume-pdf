@@ -2,6 +2,8 @@
 
 ## 0.1.1 - 2026-09-03
 
+> `v0.1.1` 是 Plume PDF 从早期 `0.0.x` 快速迭代进入第一个稳定里程碑的版本。本次发布不只是版本号提升：移动端阅读骨架、跨页 AI 框选、流式 AI 对话、桌面/Android 自动发布已经形成完整链路，同时对 Reader 状态源、AI Sidebar 生命周期和 DeepSeek transport 做了系统性收敛，删除了一批重复机制和历史兼容路径。
+
 ### 修复
 
 - 修复 PDF 获得焦点后按 Escape 无法退出 AI 框选的问题，并补充“焦点位于 Reader 后代节点时 Escape 仍可退出”的回归测试。
@@ -10,10 +12,6 @@
 ### 样式
 
 - 细化 AI 框选模式徽标：调整水平位置、强化黑色渐变、加速金色流程动效。
-
-## 0.1.0 - 2026-09-02
-
-> `v0.1.0` 是 Plume PDF 从早期 `0.0.x` 快速迭代进入第一个稳定里程碑的版本。本次发布不只是版本号提升：移动端阅读骨架、跨页 AI 框选、流式 AI 对话、桌面/Android 自动发布已经形成完整链路，同时对 Reader 状态源、AI Sidebar 生命周期和 DeepSeek transport 做了系统性收敛，删除了一批重复机制和历史兼容路径。
 
 ### 本次版本定位
 
@@ -95,7 +93,7 @@ Plume PDF 目前是一套以 Flutter + PDFium (`pdfrx`) 为基础的跨平台 PD
 ### Vision fallback 正确性
 
 - 过去视觉请求只要抛出 `DeepSeekException` 就可能再次发送纯文本请求，认证失败或网络错误也可能导致一次用户操作发出第二次请求。
-- v0.1.0 只允许在 HTTP 400/422 且服务端错误明确包含 image / vision / media / multimodal 能力拒绝时回退文本。
+- 本次发布只允许在 HTTP 400/422 且服务端错误明确包含 image / vision / media / multimodal 能力拒绝时回退文本。
 - 401 API Key 错误、限流、普通网络错误直接展示原错误，不重复消耗请求/token。
 - 修复 `invalid image input` / `invalid_request_error` 被通用 `invalid` 关键字误归类成“API Key 认证失败”的问题：400/422 保留真实服务端详情，因此仍能正确判断是否允许 vision → text fallback。
 
@@ -131,15 +129,15 @@ Plume PDF 目前是一套以 Flutter + PDFium (`pdfrx`) 为基础的跨平台 PD
 - 正式发布使用 `pubspec.yaml` 版本与 release commit 驱动：
 
   ```text
-  version: 0.1.0+24
-  commit message: release: v0.1.0
+  version: 0.1.1+25
+  commit message: release: v0.1.1
   ```
 
-- `Build Packages` 会自动解析版本并创建/校验 `v0.1.0` tag。
+- `Build Packages` 会自动解析版本并创建/校验 `v0.1.1` tag。
 - Release 模式额外构建 Android `arm64-v8a` release APK。
 - Linux / Windows / macOS / Android 全部成功后，工作流从本章节提取 Release Notes，创建 GitHub Release，并上传全部安装包。
 
-### v0.1.0 发布产物
+### 0.1.1 发布产物
 
 预期 Release 页面包含：
 
@@ -147,13 +145,13 @@ Plume PDF 目前是一套以 Flutter + PDFium (`pdfrx`) 为基础的跨平台 PD
 - Linux `.rpm`
 - Windows `.exe`
 - macOS `.dmg`
-- Android `plume-pdf-android-arm64-v8a-v0.1.0.apk`
+- Android `plume-pdf-android-arm64-v8a-v0.1.1.apk`
 
 iOS 当前不生成二进制发布资产。
 
 ### 代码健康度
 
-以 `release: v0.0.22` 的 `14685f5` 为重构前基线，到第四轮重构完成的 `42b17e9`（不含本次 v0.1.0 文档扩充）：
+以 `release: v0.0.22` 的 `14685f5` 为重构前基线，到第四轮重构完成的 `42b17e9`（不含本次 v0.1.1 文档扩充）：
 
 ```text
 生产 Dart 代码 lib/**   -392 行
@@ -177,7 +175,7 @@ CI                       -3 行
 - Windows Release + Inno Setup installer 链路
 - macOS Release + DMG 链路
 
-v0.1.0 release commit 将再次触发完整 `Build Packages`，最终以 GitHub Release 页面实际上传的安装包作为发布完成标准。
+v0.1.1 release commit 已触发完整 `Build Packages`，最终以 GitHub Release 页面实际上传的安装包作为发布完成标准。
 
 ### 已知限制 / 发布说明
 
