@@ -21,11 +21,6 @@ void main() {
       state: state,
       documentPath: null,
       leftSidebarWidth: 0,
-      onApiKeyChanged: (_) {},
-      onSaveApiKey: () async {},
-      onSendChat: (_) async {},
-      onStopChat: () {},
-      onNewSession: () {},
     );
   }
 
