@@ -13,7 +13,7 @@ import 'package:plume_pdf/app/modules/home/views/widgets/chat_message.dart';
 
 void main() {
   Future<void> pumpSidebar(WidgetTester tester, PdfAiPanelState state) async {
-    // 模拟 HomeController：首次注册，之后通过 updateExternalState 同步新状态。
+    // 模拟 HomeController：首次注册时固定行为回调，之后只同步可变数据。
     if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       Get.put(
         AiSidebarController(
@@ -21,6 +21,7 @@ void main() {
           onApiKeyChanged: (_) {},
           onSaveApiKey: () async {},
           onSendChat: (_) async {},
+          onStopChat: () {},
           onNewSession: () {},
         ),
         tag: AiSidebarController.tag,
@@ -40,10 +41,6 @@ void main() {
       tag: AiSidebarController.tag,
     ).updateExternalState(
       state: state,
-      onApiKeyChanged: (_) {},
-      onSaveApiKey: () async {},
-      onSendChat: (_) async {},
-      onNewSession: () {},
       documentPath: null,
       leftSidebarWidth: 0,
     );
