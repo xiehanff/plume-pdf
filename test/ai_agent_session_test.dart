@@ -38,6 +38,43 @@ class _FakeDeepSeekService extends DeepSeekService {
   }) => chunks.stream;
 }
 
+/// 为每次 chat 创建独立流，并故意阻塞第一条流的 cancel。
+/// 用来稳定复现“Stop 后 UI 已允许第二次发送，但旧请求仍在异步收尾”。
+class _DelayedCancelDeepSeekService extends DeepSeekService {
+  final Completer<void> firstCancelGate = Completer<void>();
+  final List<StreamController<DeepSeekStreamChunk>> controllers =
+      <StreamController<DeepSeekStreamChunk>>[];
+
+  @override
+  Stream<DeepSeekStreamChunk> chatStream({
+    required String apiKey,
+    required List<AiChatHistoryMessage> history,
+    PdfAiContext? documentContext,
+  }) {
+    final int index = controllers.length;
+    final StreamController<DeepSeekStreamChunk> controller =
+        StreamController<DeepSeekStreamChunk>(
+          onCancel: index == 0 ? () => firstCancelGate.future : null,
+        );
+    controllers.add(controller);
+    return controller.stream;
+  }
+
+  Future<void> waitForCalls(int count) async {
+    while (controllers.length < count) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  Future<void> closeAll() async {
+    for (final StreamController<DeepSeekStreamChunk> controller in controllers) {
+      if (!controller.isClosed) {
+        await controller.close();
+      }
+    }
+  }
+}
+
 void main() {
   test('正常完成：写入 user/assistant 历史并返回结果', () async {
     final _FakeDeepSeekService fake = _FakeDeepSeekService();
@@ -142,6 +179,93 @@ void main() {
     expect(session.history.last.content, '部分回答');
 
     await fake.chunks.close();
+  });
+
+  test('Stop 后立即再次发送：旧 partial assistant 仍插回旧 user 后面', () async {
+    final _DelayedCancelDeepSeekService fake = _DelayedCancelDeepSeekService();
+    final AiAgentSession session = AiAgentSession(deepSeekService: fake);
+    const AiChatHistoryMessage user1 = AiChatHistoryMessage.user(content: '第一问');
+    const AiChatHistoryMessage user2 = AiChatHistoryMessage.user(content: '第二问');
+
+    final Future<AiStreamResult> first = session.sendChat(
+      apiKey: 'k',
+      userMessage: user1,
+      onPreview: (_, _) {},
+    );
+    await fake.waitForCalls(1);
+    fake.controllers[0].add(const DeepSeekStreamChunk(text: '第一问部分回答'));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(session.stopActiveStream(), isTrue);
+
+    // 不等待第一条 cancel 收尾，模拟 UI 立即恢复发送按钮后的真实操作。
+    final Future<AiStreamResult> second = session.sendChat(
+      apiKey: 'k',
+      userMessage: user2,
+      onPreview: (_, _) {},
+    );
+    await fake.waitForCalls(2);
+    expect(
+      session.history.map((AiChatHistoryMessage m) => m.content).toList(),
+      <String>['第一问', '第二问'],
+    );
+
+    fake.firstCancelGate.complete();
+    final AiStreamResult firstResult = await first;
+    expect(firstResult.stopped, isTrue);
+
+    expect(
+      session.history.map((AiChatHistoryMessage m) => m.content).toList(),
+      <String>['第一问', '第一问部分回答', '第二问'],
+    );
+
+    fake.controllers[1].add(const DeepSeekStreamChunk(text: '第二问回答'));
+    await fake.controllers[1].close();
+    await second;
+
+    expect(
+      session.history.map((AiChatHistoryMessage m) => m.content).toList(),
+      <String>['第一问', '第一问部分回答', '第二问', '第二问回答'],
+    );
+    await fake.closeAll();
+  });
+
+  test('首 token 前 Stop 后立即发送：只移除旧 user，不误删新 user', () async {
+    final _DelayedCancelDeepSeekService fake = _DelayedCancelDeepSeekService();
+    final AiAgentSession session = AiAgentSession(deepSeekService: fake);
+    const AiChatHistoryMessage user1 = AiChatHistoryMessage.user(content: '旧问题');
+    const AiChatHistoryMessage user2 = AiChatHistoryMessage.user(content: '新问题');
+
+    final Future<AiStreamResult> first = session.sendChat(
+      apiKey: 'k',
+      userMessage: user1,
+      onPreview: (_, _) {},
+    );
+    await fake.waitForCalls(1);
+    expect(session.stopActiveStream(), isTrue);
+
+    final Future<AiStreamResult> second = session.sendChat(
+      apiKey: 'k',
+      userMessage: user2,
+      onPreview: (_, _) {},
+    );
+    await fake.waitForCalls(2);
+    expect(session.history, <AiChatHistoryMessage>[user1, user2]);
+
+    fake.firstCancelGate.complete();
+    final AiStreamResult firstResult = await first;
+    expect(firstResult.stopped, isTrue);
+    expect(firstResult.content, isEmpty);
+    expect(session.history, <AiChatHistoryMessage>[user2]);
+
+    fake.controllers[1].add(const DeepSeekStreamChunk(text: '新回答'));
+    await fake.controllers[1].close();
+    await second;
+    expect(
+      session.history.map((AiChatHistoryMessage m) => m.content).toList(),
+      <String>['新问题', '新回答'],
+    );
+    await fake.closeAll();
   });
 
   test('动作流式中途新建会话：旧请求完成后不写入历史', () async {
