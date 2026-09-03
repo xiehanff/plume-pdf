@@ -78,6 +78,7 @@ class _AiSidebarView extends StatelessWidget {
                 }
                 await controller.handleSend(input);
               },
+              onStop: controller.onStopChat,
               onNewSession: controller.onNewSession,
               onSettingsTap: fullWidth
                   ? () => _showSettingsSheet(context)

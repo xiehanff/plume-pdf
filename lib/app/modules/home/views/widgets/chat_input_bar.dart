@@ -18,6 +18,7 @@ class ChatInputBar extends StatefulWidget {
     required this.onSend,
     required this.onNewSession,
     required this.onSettingsTap,
+    this.onStop,
   });
 
   final TextEditingController controller;
@@ -26,6 +27,7 @@ class ChatInputBar extends StatefulWidget {
   final Future<void> Function(AiChatInput input) onSend;
   final VoidCallback onNewSession;
   final VoidCallback onSettingsTap;
+  final VoidCallback? onStop;
 
   @override
   State<ChatInputBar> createState() => _ChatInputBarState();
@@ -110,13 +112,15 @@ class _ChatInputBarState extends State<ChatInputBar> {
                     style: _buttonStyle(32),
                   ),
                   IconButton(
-                    onPressed: widget.isLoading ? null : _submit,
-                    tooltip: '发送',
-                    icon: const HugeIcon(
-                      icon: HugeIcons.strokeRoundedSent,
-                      size: 18,
-                      strokeWidth: 1.5,
-                    ),
+                    onPressed: widget.isLoading ? widget.onStop : _submit,
+                    tooltip: widget.isLoading ? '停止生成' : '发送',
+                    icon: widget.isLoading
+                        ? const Icon(Icons.stop_rounded, size: 18)
+                        : const HugeIcon(
+                            icon: HugeIcons.strokeRoundedSent,
+                            size: 18,
+                            strokeWidth: 1.5,
+                          ),
                     color: AppColors.textSecondary,
                     style: _buttonStyle(32),
                   ),

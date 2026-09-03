@@ -12,6 +12,8 @@ import '../views/widgets/chat_message.dart';
 
 typedef SendChatCallback = Future<void> Function(AiChatInput input);
 
+void _noop() {}
+
 enum AiSidebarMode { conversation, settings }
 
 enum AiSidebarFollowUpState { hidden, visible }
@@ -97,6 +99,7 @@ class AiSidebarController extends GetxController {
     required Future<void> Function() onSaveApiKey,
     required SendChatCallback onSendChat,
     required VoidCallback onNewSession,
+    VoidCallback? onStopChat,
     String? documentPath,
     double leftSidebarWidth = 0,
   }) : _panelState = state,
@@ -105,7 +108,8 @@ class AiSidebarController extends GetxController {
        _onApiKeyChanged = onApiKeyChanged,
        _onSaveApiKey = onSaveApiKey,
        _onSendChat = onSendChat,
-       _onNewSession = onNewSession {
+       _onNewSession = onNewSession,
+       _onStopChat = onStopChat ?? _noop {
     _deepSeekController = TextEditingController(text: state.apiKey);
     _inputController = TextEditingController();
     _scrollController = FollowTailScrollController(
@@ -128,6 +132,7 @@ class AiSidebarController extends GetxController {
   Future<void> Function() _onSaveApiKey;
   SendChatCallback _onSendChat;
   VoidCallback _onNewSession;
+  VoidCallback _onStopChat;
 
   AiSidebarMode _mode = AiSidebarMode.conversation;
   double _sidebarWidth = 320;
@@ -179,6 +184,8 @@ class AiSidebarController extends GetxController {
 
   VoidCallback get onNewSession => _onNewSession;
 
+  VoidCallback get onStopChat => _onStopChat;
+
   /// 同步外部面板状态。用户滚离底部阅读历史且模型仍在流式输出时，
   /// 数据继续同步，但暂缓 GetBuilder rebuild；回到底部或流结束后一次刷新。
   void updateExternalState({
@@ -189,6 +196,7 @@ class AiSidebarController extends GetxController {
     required Future<void> Function() onSaveApiKey,
     required SendChatCallback onSendChat,
     required VoidCallback onNewSession,
+    VoidCallback? onStopChat,
   }) {
     final bool sessionChanged =
         _panelState.sessionId != state.sessionId ||
@@ -205,6 +213,9 @@ class AiSidebarController extends GetxController {
     _onSaveApiKey = onSaveApiKey;
     _onSendChat = onSendChat;
     _onNewSession = onNewSession;
+    if (onStopChat != null) {
+      _onStopChat = onStopChat;
+    }
 
     if (sessionChanged) {
       _resetConversation(notify: false);
@@ -373,12 +384,10 @@ class AiSidebarController extends GetxController {
     }
 
     final String? result = _panelState.result;
-    if (result != null && result.trim().isNotEmpty) {
-      if (result != _conversation.lastResult) {
-        _syncResult(result);
-      } else if (!_panelState.loading) {
-        _finishLastAiMessage();
-      }
+    if (result != null &&
+        result.trim().isNotEmpty &&
+        result != _conversation.lastResult) {
+      _syncResult(result);
     }
 
     final String? reasoning = _panelState.reasoning;
@@ -386,6 +395,10 @@ class AiSidebarController extends GetxController {
         reasoning.trim().isNotEmpty &&
         reasoning != _conversation.lastReasoning) {
       _syncReasoning(reasoning);
+    }
+
+    if (!_panelState.loading) {
+      _finishLastAiMessage();
     }
   }
 
@@ -479,6 +492,13 @@ class AiSidebarController extends GetxController {
       return;
     }
     final ChatMessage previousMessage = _conversation.messages[lastIndex];
+    final bool isEmpty =
+        previousMessage.text.trim().isEmpty &&
+        (previousMessage.reasoning?.trim().isEmpty ?? true);
+    if (isEmpty) {
+      _conversation.messages.removeAt(lastIndex);
+      return;
+    }
     _conversation.messages[lastIndex] = ChatMessage(
       author: MessageAuthor.ai,
       text: previousMessage.text,
