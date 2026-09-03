@@ -209,7 +209,7 @@ class _AiSidebarView extends StatelessWidget {
       );
     }
 
-    final AiSidebarFollowUpState followUpState = controller.followUpState;
+    final bool showFollowUpSuggestions = controller.showFollowUpSuggestions;
     final List<String> followUpSuggestions = controller.followUpSuggestions;
     return NotificationListener<ScrollNotification>(
       onNotification: controller.handleScrollNotification,
@@ -218,12 +218,9 @@ class _AiSidebarView extends StatelessWidget {
         child: ListView.builder(
           controller: controller.scrollController,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-          itemCount:
-              messages.length +
-              (followUpState == AiSidebarFollowUpState.visible ? 1 : 0),
+          itemCount: messages.length + (showFollowUpSuggestions ? 1 : 0),
           itemBuilder: (BuildContext context, int index) {
-            if (followUpState == AiSidebarFollowUpState.visible &&
-                index == messages.length) {
+            if (showFollowUpSuggestions && index == messages.length) {
               return _FollowUpSuggestions(
                 suggestions: followUpSuggestions,
                 onTap: (String text) => controller.sendMessage(text),
