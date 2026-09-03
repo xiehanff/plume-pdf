@@ -92,6 +92,7 @@ class HomeController extends GetxController {
   @override
   void onClose() {
     _saveDebounce?.cancel();
+    _aiAgentSession.stopActiveStream();
     pdfViewerController.removeListener(_handleViewerChanged);
     pageTextController.dispose();
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
@@ -262,6 +263,7 @@ class HomeController extends GetxController {
         onApiKeyChanged: updateAiApiKey,
         onSaveApiKey: saveAiApiKey,
         onSendChat: sendAiChat,
+        onStopChat: stopAiResponse,
         onNewSession: startNewAiSession,
         documentPath: state.filePath,
         leftSidebarWidth: state.sidebarVisible ? 260 : 0,
@@ -281,6 +283,7 @@ class HomeController extends GetxController {
       onApiKeyChanged: updateAiApiKey,
       onSaveApiKey: saveAiApiKey,
       onSendChat: sendAiChat,
+      onStopChat: stopAiResponse,
       onNewSession: startNewAiSession,
       documentPath: state.filePath,
       leftSidebarWidth: state.sidebarVisible ? 260 : 0,
