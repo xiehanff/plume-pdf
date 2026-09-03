@@ -88,7 +88,7 @@ extension HomeControllerFileManager on HomeController {
     }
     _outlineLoadId++;
     _aiSessionId++;
-    _aiAgentSession.clear();
+    _invalidateAiWork();
     _pinnedOutlineId = null;
     _pinnedOutlinePage = null;
     _pendingOutlineTargetPage = null;
@@ -113,6 +113,7 @@ extension HomeControllerFileManager on HomeController {
 
   void showRecentFiles() {
     _outlineLoadId++;
+    _invalidateAiWork();
     final PdfAiPanelState aiPanelState = state.aiPanelState;
     _applyState(
       state.copyWith(
@@ -137,7 +138,6 @@ extension HomeControllerFileManager on HomeController {
         ),
       ),
     );
-    _aiAgentSession.clear();
     unawaited(_refreshRecentFileAvailability(state.recentFiles));
   }
 
