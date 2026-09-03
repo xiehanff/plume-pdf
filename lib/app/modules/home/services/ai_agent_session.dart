@@ -84,6 +84,7 @@ class AiAgentSession {
     required void Function(String text, String reasoning) onPreview,
   }) async {
     final int requestGeneration = _generation;
+    final int historyInsertIndex = _history.length;
     final AiStreamResult result = await _runStream(
       () => _deepSeekService.performStream(
         action: action,
@@ -103,31 +104,33 @@ class AiAgentSession {
     }
 
     final bool isVisionMode = imageBytes != null && imageBytes.isNotEmpty;
-    if (isVisionMode) {
-      _history.add(
-        AiChatHistoryMessage.user(
-          content: AiPrompts.visionUserPrompt(action),
-          image: AiImageAttachment(bytes: imageBytes, mimeType: 'image/png'),
-        ),
-      );
-    } else {
-      _history.add(
-        AiChatHistoryMessage.user(
-          content: AiPrompts.userPrompt(
-            action,
-            selectionText,
-            pageContext: pageContext,
-          ),
-        ),
-      );
-    }
-    _history.add(AiChatHistoryMessage.assistant(content: result.content));
+    final AiChatHistoryMessage userMessage = isVisionMode
+        ? AiChatHistoryMessage.user(
+            content: AiPrompts.visionUserPrompt(action),
+            image: AiImageAttachment(bytes: imageBytes, mimeType: 'image/png'),
+          )
+        : AiChatHistoryMessage.user(
+            content: AiPrompts.userPrompt(
+              action,
+              selectionText,
+              pageContext: pageContext,
+            ),
+          );
+    _insertTurn(
+      historyInsertIndex,
+      userMessage,
+      AiChatHistoryMessage.assistant(content: result.content),
+    );
     return result;
   }
 
   /// 流式发送一轮多轮对话。user 消息先入历史再请求，失败时回滚。
   /// 用户主动停止且已有部分正文时，保留 user 与部分 assistant；如果
   /// 尚未返回正文，则回滚本轮 user，避免历史里留下悬空请求。
+  ///
+  /// assistant 始终插回本轮 user 后面，而不是无条件 append 到历史末尾。
+  /// 因此 Stop 后 UI 立即允许下一次发送时，即使旧请求的 cancel 稍后才
+  /// 完成，也不会形成 user1 → user2 → assistant1 的乱序历史。
   Future<AiStreamResult> sendChat({
     required String apiKey,
     required AiChatHistoryMessage userMessage,
@@ -150,13 +153,16 @@ class AiAgentSession {
         return result;
       }
       if (result.stopped && result.content.trim().isEmpty) {
-        _removePending(userMessage);
+        _removeMessage(userMessage);
         return result;
       }
-      _history.add(AiChatHistoryMessage.assistant(content: result.content));
+      _insertAssistantAfter(
+        userMessage,
+        AiChatHistoryMessage.assistant(content: result.content),
+      );
       return result;
     } catch (_) {
-      _removePending(userMessage);
+      _removeMessage(userMessage);
       rethrow;
     }
   }
@@ -267,9 +273,39 @@ class AiAgentSession {
     }
   }
 
-  void _removePending(AiChatHistoryMessage message) {
-    if (_history.isNotEmpty && identical(_history.last, message)) {
-      _history.removeLast();
+  void _insertTurn(
+    int preferredIndex,
+    AiChatHistoryMessage userMessage,
+    AiChatHistoryMessage assistantMessage,
+  ) {
+    final int insertIndex = preferredIndex <= _history.length
+        ? preferredIndex
+        : _history.length;
+    _history.insertAll(insertIndex, <AiChatHistoryMessage>[
+      userMessage,
+      assistantMessage,
+    ]);
+  }
+
+  void _insertAssistantAfter(
+    AiChatHistoryMessage userMessage,
+    AiChatHistoryMessage assistantMessage,
+  ) {
+    final int userIndex = _history.indexWhere(
+      (AiChatHistoryMessage message) => identical(message, userMessage),
+    );
+    if (userIndex < 0) {
+      return;
+    }
+    _history.insert(userIndex + 1, assistantMessage);
+  }
+
+  void _removeMessage(AiChatHistoryMessage message) {
+    final int index = _history.indexWhere(
+      (AiChatHistoryMessage item) => identical(item, message),
+    );
+    if (index >= 0) {
+      _history.removeAt(index);
     }
   }
 }
