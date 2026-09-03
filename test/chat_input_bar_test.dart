@@ -29,4 +29,40 @@ void main() {
     );
     expect(textField.textAlignVertical, TextAlignVertical.top);
   });
+
+  testWidgets('流式输出时发送按钮切换为停止并保持可点击', (
+    WidgetTester tester,
+  ) async {
+    final TextEditingController controller = TextEditingController();
+    final FocusNode focusNode = FocusNode();
+    int stopCount = 0;
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInputBar(
+            controller: controller,
+            focusNode: focusNode,
+            isLoading: true,
+            onSend: (_) async {},
+            onStop: () {
+              stopCount++;
+            },
+            onNewSession: () {},
+            onSettingsTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('停止生成'), findsOneWidget);
+    expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pump();
+
+    expect(stopCount, 1);
+  });
 }
