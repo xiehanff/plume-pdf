@@ -91,6 +91,33 @@ extension HomeControllerAiSession on HomeController {
     );
   }
 
+  /// 停止当前 AI 生成。
+  ///
+  /// 已进入 SSE 流式阶段时直接取消底层 subscription，并保留已经收到的
+  /// 正文/推理；如果还停留在文档上下文准备阶段，则递增 actionId 让这轮
+  /// 异步任务立即失效，后续不会再真正发起模型请求。UI 的 loading 状态
+  /// 在点击当下同步结束，因此发送按钮会立即恢复。
+  void stopAiResponse() {
+    if (!state.aiPanelState.loading) {
+      return;
+    }
+
+    final bool stoppedActiveStream = _aiAgentSession.stopActiveStream();
+    if (!stoppedActiveStream) {
+      _aiActionId++;
+    }
+
+    _applyState(
+      state.copyWith(
+        aiPanelState: state.aiPanelState.copyWith(
+          loading: false,
+          followUpSuggestions: const <String>[],
+          errorMessage: null,
+        ),
+      ),
+    );
+  }
+
   Future<void> runAiAction(AiToolAction action) async {
     final PdfAiSelection? selection = state.aiSelection;
     if (selection == null) {
