@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.1.3 - 2026-09-03
+
+> `v0.1.3` 是一个针对 Linux 的键盘焦点修复版本。Linux 桌面用户在 Reader 中按 Escape 无法退出 AI 框选/回到正常阅读，本次发布修复了该平台快捷键被 pdfrx 子焦点拦截的问题；其他平台行为不变。
+
+### Linux 修复
+
+- 修复 Linux 上 Reader 获得焦点后按 Escape 无响应的问题。根因：pdfrx 在 viewer 周围挂了自己的 Focus 节点，Linux 平台上该子节点会在键盘事件冒泡到 Reader 的 Focus 节点之前把 Escape 消费掉，原有 `Focus.onKeyEvent` 监听永远收不到事件。
+- `ReaderShortcuts` 从 `StatelessWidget` 改为 `StatefulWidget`：持有一个独立的 `ReaderFocusNode`，并在 `initState` 注册 `FocusManager.addEarlyKeyEventHandler`，在焦点分发最早期处理 Escape，绕过 pdfrx 子焦点拦截。
+- 早期处理器只在 Reader 自身拥有焦点时生效（`_readerFocusNode.hasFocus`）；Reader 失去焦点时不处理，避免抢占外部弹窗（对话框、菜单等）的 Escape。
+- Escape 仍在 key down 触发，key repeat 与 key up 不响应；翻页、缩放、打开文件、切换侧栏等其余快捷键行为不变。
+- `dispose` 时同步移除早期处理器并释放 FocusNode，不遗留全局键盘钩子。
+
+### 测试与验证
+
+- 新增回归测试：焦点位于 Reader 后代节点且该节点自身消费 Escape 时，Reader 的早期键盘处理器仍先于子节点收到事件并触发 `onEscape`。
+- 保留既有测试：Reader 失焦状态下 Escape 不触发 `onEscape`（不抢外部弹窗的 Esc）。
+
+### 发布
+
+本版本发布元数据：
+
+```text
+version:      0.1.3+27
+msix_version: 0.1.3.0
+commit:       release: v0.1.3
+tag:          v0.1.3
+```
+
+GitHub Release 预期包含：
+
+- Linux `.deb`
+- Linux `.rpm`
+- Windows `.exe`
+- macOS `.dmg`
+- Android `plume-pdf-android-arm64-v8a-v0.1.3.apk`
+
+当前仍不生成 iOS 二进制发布资产。
+
 ## 0.1.2 - 2026-09-03
 
 ### AI 流式停止
