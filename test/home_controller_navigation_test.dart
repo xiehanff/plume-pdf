@@ -53,4 +53,33 @@ void main() {
       controller.onClose();
     },
   );
+
+  testWidgets('missing PDF does not advance document or AI session lifecycle', (
+    WidgetTester tester,
+  ) async {
+    final HomeController controller = HomeController();
+    controller.state = const PdfReaderState(
+      filePath: '/tmp/current-reader-document.pdf',
+      currentPage: 4,
+      pageCount: 12,
+    );
+
+    const String missingPath =
+        '/tmp/plume_pdf_round5_missing_94f13f6238d84eb9a8d13d7cc31d7f8f.pdf';
+    await controller.openFilePath(missingPath);
+
+    // 打开失败只是当前操作失败，不应切走正在阅读的文档。
+    expect(controller.state.filePath, '/tmp/current-reader-document.pdf');
+    expect(controller.state.currentPage, 4);
+    expect(controller.state.unavailableRecentFilePaths, contains(missingPath));
+    expect(controller.state.errorMessage, '文件不存在，可能已经被移动或删除。');
+
+    // 如果失败路径错误地推进了 _aiSessionId，这里会得到 sessionId == 2。
+    // 正确语义是失败尝试不算一次文档/AI 生命周期切换，因此下一次真实
+    // “新会话”仍然从 0 递增到 1。
+    controller.startNewAiSession();
+    expect(controller.state.aiPanelState.sessionId, 1);
+
+    controller.onClose();
+  });
 }
