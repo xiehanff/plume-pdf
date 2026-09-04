@@ -40,8 +40,9 @@ class AiSelectablePdfViewer extends StatefulWidget {
   final bool aiSelectionEnabled;
   final void Function(String filePath, PdfDocument? document) onDocumentChanged;
   final void Function(String filePath, int? pageNumber) onPageChanged;
-  final void Function(PdfDocument, PdfViewerController) onViewerReady;
-  final void Function(Object, StackTrace?) onLoadError;
+  final ValueChanged<String> onViewerReady;
+  final void Function(String filePath, Object error, StackTrace? stackTrace)
+  onLoadError;
   final ValueChanged<PdfAiSelection?> onSelectionChanged;
   final ValueChanged<AiToolAction> onActionSelected;
 
@@ -112,7 +113,9 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
         onPageChanged: (int? pageNumber) {
           widget.onPageChanged(widget.filePath, pageNumber);
         },
-        onViewerReady: widget.onViewerReady,
+        onViewerReady: (_, __) {
+          widget.onViewerReady(widget.filePath);
+        },
         viewerOverlayBuilder: (context, size, handleLinkTap) => <Widget>[
           if (widget.showScrollThumb)
             PdfViewerScrollThumb(
@@ -161,8 +164,9 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
           StackTrace? stackTrace,
           PdfDocumentRef documentRef,
         ) {
+          final String sourceFilePath = widget.filePath;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onLoadError(error, stackTrace);
+            widget.onLoadError(sourceFilePath, error, stackTrace);
           });
           return const SizedBox.shrink();
         },
