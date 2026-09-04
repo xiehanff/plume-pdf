@@ -9,19 +9,19 @@ extension PdfBackgroundThemeX on PdfBackgroundTheme {
         return null;
       case PdfBackgroundTheme.night:
         return const ColorFilter.matrix(<double>[
-          0.7,
+          0.55,
           0,
           0,
           0,
           0,
           0,
-          0.7,
+          0.55,
           0,
           0,
           0,
           0,
           0,
-          0.7,
+          0.55,
           0,
           0,
           0,
@@ -132,7 +132,6 @@ class AppColors {
   static const loadingOverlay = Color(0x6632343E); // scaffoldBg @40%
   static const tooltipBg = Color(0xB2000000); // black @70%
   static const toolbarOverlayBg = Color(0xD9000000); // black @85%
-  static const pageShadow = Color(0x42000000); // black @26%
   static const cardShadow = Color(0x66000000); // black @40%
 
   // ── Functional ──

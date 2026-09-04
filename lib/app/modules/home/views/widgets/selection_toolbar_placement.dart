@@ -13,24 +13,24 @@ class SelectionToolbarPlacement {
   final bool placeBelow;
 
   /// 当选区上下两侧都小于屏幕高度的最小阈值时，不再把工具条硬塞到
-  /// 选区外侧，而是放到选区垂直中心。此模式下 X 永远以屏幕中心为准。
+  /// 选区外侧，而是放到选区中心。
   final bool centeredInSelection;
 }
 
 /// 根据选区在屏幕中的真实位置决定悬浮工具条位置。
 ///
 /// 这里只使用 viewport / selection 的 global rect，不参考 PDF 页号、
-/// 页面高度或选区位于页面的哪一半。工具条的 X 永远以屏幕可视区域
-/// 水平中心对齐，只有 Y 根据选区上下空间变化。
+/// 页面高度或选区位于页面的哪一半。普通上下定位时工具条的 X 以屏幕
+/// 可视区域水平中心对齐；中心兜底时则以选区中心对齐。
 ///
 /// 当选区上下剩余空间都不足屏幕高度的 [minimumSideSpaceFraction] 时，
-/// 视为“选区几乎占满屏幕”。此时工具条直接放在选区垂直中心，避免
+/// 视为“选区几乎占满屏幕”。此时工具条直接放在选区中心，避免
 /// 继续 clamp 到屏幕顶/底边造成不可点击或与其他浮层重叠。
 SelectionToolbarPlacement resolveSelectionToolbarPlacement({
   required Rect selectionGlobalRect,
   required Rect viewportGlobalRect,
   Rect? avoidGlobalRect,
-  Size toolbarSize = const Size(256, 40),
+  Size toolbarSize = const Size(256, 38),
   double gap = 10,
   double minimumSideSpaceFraction = 0.20,
   double? screenHeight,
@@ -42,6 +42,11 @@ SelectionToolbarPlacement resolveSelectionToolbarPlacement({
     viewportGlobalRect.left,
     maxLeft < viewportGlobalRect.left ? viewportGlobalRect.left : maxLeft,
   );
+  final double centeredLeft =
+      (selectionGlobalRect.center.dx - toolbarSize.width / 2).clamp(
+        viewportGlobalRect.left,
+        maxLeft < viewportGlobalRect.left ? viewportGlobalRect.left : maxLeft,
+      );
 
   final double aboveSpace =
       selectionGlobalRect.top - viewportGlobalRect.top;
@@ -51,8 +56,8 @@ SelectionToolbarPlacement resolveSelectionToolbarPlacement({
       (screenHeight ?? viewportGlobalRect.height) * minimumSideSpaceFraction;
 
   // 选区几乎覆盖整个可视区域时，上下两边都不再具备稳定的浮层空间。
-  // 这时不做 above/below clamp，直接把工具条放到选区中心；X 仍固定
-  // 在屏幕中心，只让 Y 与选区中心发生关系。
+  // 这时不做 above/below clamp，直接把工具条放到选区中心；如果选区
+  // 靠近横向边缘，则只为保证工具条仍完整处于可点击区域而做 clamp。
   if (aboveSpace < minimumSideSpace && belowSpace < minimumSideSpace) {
     final double maxTop = viewportGlobalRect.bottom - toolbarSize.height;
     final double preferredTop =
@@ -63,7 +68,7 @@ SelectionToolbarPlacement resolveSelectionToolbarPlacement({
     );
     return SelectionToolbarPlacement(
       globalRect: Rect.fromLTWH(
-        left,
+        centeredLeft,
         top,
         toolbarSize.width,
         toolbarSize.height,

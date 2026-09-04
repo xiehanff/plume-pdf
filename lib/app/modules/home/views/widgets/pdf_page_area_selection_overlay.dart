@@ -424,7 +424,7 @@ class _SelectionActionToolbar extends StatelessWidget {
 
   Offset _fallbackViewerPosition() {
     const double toolbarWidth = 256;
-    const double toolbarHeight = 40;
+    const double toolbarHeight = 38;
     const double gap = 10;
     final double left = ((viewportSize.width - toolbarWidth) / 2).clamp(
       0,

@@ -99,36 +99,34 @@ class HomeView extends GetView<HomeController> {
                                   Expanded(
                                     child: ColoredBox(
                                       color: AppColors.surfaceBg,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(12),
-                                        child: LayoutBuilder(
-                                          builder: (_,
-                                              BoxConstraints constraints) {
-                                            controller.updateRenderAreaWidth(
-                                                constraints.maxWidth);
-                                            return Stack(
-                                              children: <Widget>[
-                                                Positioned.fill(
-                                                    child:
-                                                        _buildBody(state)),
-                                                if (state.loading)
-                                                  const Positioned.fill(
-                                                    child: ColoredBox(
-                                                      color: AppColors
-                                                          .loadingOverlay,
-                                                      child: Center(
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                          color: AppColors
-                                                              .textSecondary,
-                                                        ),
-                                                      ),
+                                      child: LayoutBuilder(
+                                        builder: (_, BoxConstraints constraints) {
+                                          controller.updateRenderAreaWidth(
+                                            constraints.maxWidth,
+                                            reserveScrollbarInset: false,
+                                          );
+                                          return Stack(
+                                            children: <Widget>[
+                                              Positioned.fill(
+                                                child: _buildBody(state),
+                                              ),
+                                              if (state.loading)
+                                                const Positioned.fill(
+                                                  child: ColoredBox(
+                                                    color: AppColors
+                                                        .loadingOverlay,
+                                                    child: Center(
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            color: AppColors
+                                                                .textSecondary,
+                                                          ),
                                                     ),
                                                   ),
-                                              ],
-                                            );
-                                          },
-                                        ),
+                                                ),
+                                            ],
+                                          );
+                                        },
                                       ),
                                     ),
                                   ),
@@ -215,6 +213,7 @@ class HomeView extends GetView<HomeController> {
       lockHorizontalPan: controller.shouldLockHorizontalPan,
       backgroundTheme: state.backgroundTheme,
       aiSelectionEnabled: state.aiSelectionMode,
+      pageMargin: 0,
       onDocumentChanged: controller.onDocumentChanged,
       onPageChanged: controller.onPageChanged,
       onViewerReady: controller.onViewerReady,

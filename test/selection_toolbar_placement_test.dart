@@ -58,15 +58,15 @@ void main() {
   });
 
   test('上下空间都低于屏幕高度 20% 时改为选区中心定位', () {
+    const Rect selection = Rect.fromLTRB(170, 35, 290, 760);
     final SelectionToolbarPlacement placement =
         resolveSelectionToolbarPlacement(
-          selectionGlobalRect: const Rect.fromLTRB(40, 35, 360, 760),
+          selectionGlobalRect: selection,
           viewportGlobalRect: viewport,
         );
 
     expect(placement.centeredInSelection, isTrue);
-    expect(placement.globalRect.center.dx, viewport.center.dx);
-    expect(placement.globalRect.center.dy, 397.5);
+    expect(placement.globalRect.center, selection.center);
     expect(placement.globalRect.left, greaterThanOrEqualTo(viewport.left));
     expect(placement.globalRect.right, lessThanOrEqualTo(viewport.right));
     expect(placement.globalRect.top, greaterThanOrEqualTo(viewport.top));

@@ -101,11 +101,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
         panAxis: widget.lockHorizontalPan ? PanAxis.vertical : PanAxis.free,
         boundaryMargin: EdgeInsets.zero,
         scrollByMouseWheel: 0.9,
-        pageDropShadow: const BoxShadow(
-          color: AppColors.pageShadow,
-          blurRadius: 18,
-          offset: Offset(0, 8),
-        ),
+        pageDropShadow: null,
         onDocumentChanged: (PdfDocument? document) {
           widget.onDocumentChanged(widget.filePath, document);
         },
