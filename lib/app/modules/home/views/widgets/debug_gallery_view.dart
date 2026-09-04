@@ -34,6 +34,7 @@ class _DebugGalleryViewState extends State<DebugGalleryView> {
         onApiKeyChanged: (_) {},
         onSaveApiKey: () async {},
         onSendChat: (_) async {},
+        onStopChat: () {},
         onNewSession: () {},
         documentPath: '/path/to/sample.pdf',
       ),

@@ -24,7 +24,10 @@ class ReaderShortcuts extends StatefulWidget {
   final VoidCallback onZoomOut;
   final VoidCallback onActualSize;
   final VoidCallback onToggleSidebar;
-  final VoidCallback onEscape;
+
+  /// 返回 true 表示 Reader 确实消费了本次 Escape。
+  /// 普通阅读状态返回 false，让事件继续交给输入框、弹窗等后续控件。
+  final bool Function() onEscape;
   final Widget child;
 
   @override
@@ -37,10 +40,9 @@ class _ReaderShortcutsState extends State<ReaderShortcuts> {
   @override
   void initState() {
     super.initState();
-    // pdfrx puts its own Focus node around the viewer. On Linux that node can
-    // consume the event before it bubbles to the Reader Focus node, so handle
-    // Escape at the beginning of the focus dispatch while the Reader owns the
-    // focus path.
+    // pdfrx 自己持有 Viewer Focus。Linux 已验证 descendant Focus 可能在
+    // 事件冒泡前消费 Escape，因此 Reader 只在 focus dispatch 的 early
+    // 阶段处理 Escape；普通快捷键仍由 CallbackShortcuts 负责。
     FocusManager.instance.addEarlyKeyEventHandler(_handleEarlyKeyEvent);
   }
 
@@ -52,27 +54,14 @@ class _ReaderShortcutsState extends State<ReaderShortcuts> {
   }
 
   KeyEventResult _handleEarlyKeyEvent(KeyEvent event) {
-    if (!_readerFocusNode.hasFocus) {
+    if (!_readerFocusNode.hasFocus ||
+        event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.escape) {
       return KeyEventResult.ignored;
     }
-    return _handleEscape(event)
+    return widget.onEscape()
         ? KeyEventResult.handled
         : KeyEventResult.ignored;
-  }
-
-  KeyEventResult _handleFocusKeyEvent(FocusNode _, KeyEvent event) {
-    return _handleEscape(event)
-        ? KeyEventResult.handled
-        : KeyEventResult.ignored;
-  }
-
-  bool _handleEscape(KeyEvent event) {
-    if (event is! KeyDownEvent ||
-        event.logicalKey != LogicalKeyboardKey.escape) {
-      return false;
-    }
-    widget.onEscape();
-    return true;
   }
 
   @override
@@ -128,7 +117,6 @@ class _ReaderShortcutsState extends State<ReaderShortcuts> {
       child: Focus(
         focusNode: _readerFocusNode,
         autofocus: true,
-        onKeyEvent: _handleFocusKeyEvent,
         child: widget.child,
       ),
     );

@@ -17,6 +17,7 @@ void main() {
         saved = true;
       },
       onSendChat: (_) async {},
+      onStopChat: () {},
       onNewSession: () {},
     );
     Get.put<AiSidebarController>(controller, tag: AiSidebarController.tag);

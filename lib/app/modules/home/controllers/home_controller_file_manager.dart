@@ -86,18 +86,23 @@ extension HomeControllerFileManager on HomeController {
     if (filePath.isEmpty) {
       return;
     }
-    _outlineLoadId++;
-    _aiSessionId++;
-    _aiAgentSession.clear();
-    _pinnedOutlineId = null;
-    _pinnedOutlinePage = null;
-    _pendingOutlineTargetPage = null;
+
+    // 只有确认新文档真实存在以后才切换 Reader / AI 生命周期。
+    // stale recent file、被移动的文件等失败尝试不应该取消当前 AI 会话，
+    // 也不应该推进 outline/session generation。
     final File file = File(filePath);
     if (!await file.exists()) {
       await _markRecentFileUnavailable(filePath);
       _showError('文件不存在，可能已经被移动或删除。');
       return;
     }
+
+    _outlineLoadId++;
+    _aiSessionId++;
+    _invalidateAiWork();
+    _pinnedOutlineId = null;
+    _pinnedOutlinePage = null;
+    _pendingOutlineTargetPage = null;
 
     final PdfRecentFile? previousRecord = _store.findByPath(
       state.recentFiles,
@@ -113,6 +118,7 @@ extension HomeControllerFileManager on HomeController {
 
   void showRecentFiles() {
     _outlineLoadId++;
+    _invalidateAiWork();
     final PdfAiPanelState aiPanelState = state.aiPanelState;
     _applyState(
       state.copyWith(
@@ -137,7 +143,6 @@ extension HomeControllerFileManager on HomeController {
         ),
       ),
     );
-    _aiAgentSession.clear();
     unawaited(_refreshRecentFileAvailability(state.recentFiles));
   }
 

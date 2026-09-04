@@ -12,11 +12,7 @@ import '../views/widgets/chat_message.dart';
 
 typedef SendChatCallback = Future<void> Function(AiChatInput input);
 
-void _noop() {}
-
 enum AiSidebarMode { conversation, settings }
-
-enum AiSidebarFollowUpState { hidden, visible }
 
 enum _ScrollFollowState { followingTail, userControlled }
 
@@ -98,8 +94,8 @@ class AiSidebarController extends GetxController {
     required ValueChanged<String> onApiKeyChanged,
     required Future<void> Function() onSaveApiKey,
     required SendChatCallback onSendChat,
+    required VoidCallback onStopChat,
     required VoidCallback onNewSession,
-    VoidCallback? onStopChat,
     String? documentPath,
     double leftSidebarWidth = 0,
   }) : _panelState = state,
@@ -108,8 +104,8 @@ class AiSidebarController extends GetxController {
        _onApiKeyChanged = onApiKeyChanged,
        _onSaveApiKey = onSaveApiKey,
        _onSendChat = onSendChat,
-       _onNewSession = onNewSession,
-       _onStopChat = onStopChat ?? _noop {
+       _onStopChat = onStopChat,
+       _onNewSession = onNewSession {
     _deepSeekController = TextEditingController(text: state.apiKey);
     _inputController = TextEditingController();
     _scrollController = FollowTailScrollController(
@@ -128,11 +124,11 @@ class AiSidebarController extends GetxController {
   PdfAiPanelState _panelState;
   String? _documentPath;
   double _leftSidebarWidth;
-  ValueChanged<String> _onApiKeyChanged;
-  Future<void> Function() _onSaveApiKey;
-  SendChatCallback _onSendChat;
-  VoidCallback _onNewSession;
-  VoidCallback _onStopChat;
+  final ValueChanged<String> _onApiKeyChanged;
+  final Future<void> Function() _onSaveApiKey;
+  final SendChatCallback _onSendChat;
+  final VoidCallback _onStopChat;
+  final VoidCallback _onNewSession;
 
   AiSidebarMode _mode = AiSidebarMode.conversation;
   double _sidebarWidth = 320;
@@ -147,21 +143,18 @@ class AiSidebarController extends GetxController {
 
   AiSidebarMode get mode => _mode;
 
-  AiSidebarFollowUpState get followUpState {
+  bool get showFollowUpSuggestions {
     if (_panelState.loading ||
         _panelState.errorMessage != null ||
         _panelState.followUpSuggestions.isEmpty ||
         _conversation.messages.isEmpty) {
-      return AiSidebarFollowUpState.hidden;
+      return false;
     }
     final ChatMessage last = _conversation.messages.last;
-    if (last.author != MessageAuthor.ai ||
-        last.isLoading ||
-        last.text.trim().isEmpty ||
-        last.text.startsWith('❌')) {
-      return AiSidebarFollowUpState.hidden;
-    }
-    return AiSidebarFollowUpState.visible;
+    return last.author == MessageAuthor.ai &&
+        !last.isLoading &&
+        last.text.trim().isNotEmpty &&
+        !last.text.startsWith('❌');
   }
 
   List<ChatMessage> get messages => _conversation.messages;
@@ -186,17 +179,12 @@ class AiSidebarController extends GetxController {
 
   VoidCallback get onStopChat => _onStopChat;
 
-  /// 同步外部面板状态。用户滚离底部阅读历史且模型仍在流式输出时，
-  /// 数据继续同步，但暂缓 GetBuilder rebuild；回到底部或流结束后一次刷新。
+  /// 只同步真正会变化的外部数据。Controller 的行为回调在构造时固定，
+  /// 不再随每个流式 preview 重复赋值。
   void updateExternalState({
     required PdfAiPanelState state,
     required String? documentPath,
     required double leftSidebarWidth,
-    required ValueChanged<String> onApiKeyChanged,
-    required Future<void> Function() onSaveApiKey,
-    required SendChatCallback onSendChat,
-    required VoidCallback onNewSession,
-    VoidCallback? onStopChat,
   }) {
     final bool sessionChanged =
         _panelState.sessionId != state.sessionId ||
@@ -209,13 +197,6 @@ class AiSidebarController extends GetxController {
     _panelState = state;
     _documentPath = documentPath;
     _leftSidebarWidth = leftSidebarWidth;
-    _onApiKeyChanged = onApiKeyChanged;
-    _onSaveApiKey = onSaveApiKey;
-    _onSendChat = onSendChat;
-    _onNewSession = onNewSession;
-    if (onStopChat != null) {
-      _onStopChat = onStopChat;
-    }
 
     if (sessionChanged) {
       _resetConversation(notify: false);
