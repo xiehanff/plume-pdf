@@ -114,14 +114,23 @@ class HomeController extends GetxController {
     );
   }
 
-  void onViewerReady(PdfDocument document, PdfViewerController controller) {
+  void onViewerReady(String filePath) {
+    if (state.filePath != filePath) {
+      return;
+    }
     _applyState(state.copyWith(loading: false, errorMessage: null));
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isClosed || state.filePath != filePath) {
+        return;
+      }
       fitWidth();
     });
   }
 
-  void onLoadError(Object error, StackTrace? stackTrace) {
+  void onLoadError(String filePath, Object error, StackTrace? stackTrace) {
+    if (state.filePath != filePath) {
+      return;
+    }
     debugPrint('[plume_pdf] onLoadError: $error');
     _showError('打开失败：$error');
   }
@@ -187,6 +196,7 @@ class HomeController extends GetxController {
         actionSelectionText: null,
         actionSelectionImage: null,
         result: null,
+        reasoning: null,
         followUpSuggestions: const <String>[],
         errorMessage: null,
       ),
