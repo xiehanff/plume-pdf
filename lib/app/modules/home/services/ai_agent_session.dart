@@ -31,39 +31,80 @@ class _ActiveAiStream {
   bool stopped = false;
 }
 
+class _AiTurnGate {
+  final Completer<void> completion = Completer<void>();
+  bool started = false;
+  bool stoppedBeforeStart = false;
+}
+
 /// AI 会话层：持有对话历史，负责流式累积、响应解析与历史写入。
 ///
 /// 流式期间通过 onPreview 回调累积中的正文与推理过程，供 UI 做预览
 /// 渲染；动作类请求成功后才把本轮 user/assistant 消息写入历史，
 /// 对话类请求失败时回滚已入列的 user 消息。
 ///
-/// [clear] 会递增会话代数并取消当前流：清空后旧流不会继续消耗网络
-/// 增量，也不会把结果写进新会话的历史。
+/// 每一轮 Turn 在真正发起模型请求前会等待上一轮完成 history commit / 
+/// rollback。这样 Stop 后 UI 可以立即恢复，但下一轮不会拿到尚未收尾的
+/// history，也不需要依赖事后插入下标来修正顺序。
+///
+/// [clear] 会递增会话代数并取消当前流；旧队列会因 generation 失效，
+/// 新会话不必等待旧 transport 的异步取消收尾。
 class AiAgentSession {
   AiAgentSession({DeepSeekService? deepSeekService})
     : _deepSeekService = deepSeekService ?? DeepSeekService();
+
+  static const AiStreamResult _stoppedBeforeStartResult = AiStreamResult(
+    content: '',
+    reasoning: '',
+    followUpSuggestions: <String>[],
+    stopped: true,
+  );
 
   final DeepSeekService _deepSeekService;
   final List<AiChatHistoryMessage> _history = <AiChatHistoryMessage>[];
   int _generation = 0;
   _ActiveAiStream? _activeStream;
+  Future<void> _turnTail = Future<void>.value();
+  _AiTurnGate? _latestTurn;
 
   List<AiChatHistoryMessage> get history => _history;
 
   void clear() {
     _history.clear();
     _generation++;
-    stopActiveStream();
+
+    // 已排队但尚未开始的旧 Turn 直接失效；generation 也会拦住其他旧队列。
+    final _AiTurnGate? latestTurn = _latestTurn;
+    if (latestTurn != null && !latestTurn.started) {
+      latestTurn.stoppedBeforeStart = true;
+    }
+    _latestTurn = null;
+
+    final _ActiveAiStream? active = _activeStream;
+    if (active != null && !active.stopped) {
+      unawaited(_stopStream(active));
+    }
+
+    // 新会话拥有独立的 Turn 链，不等待旧会话 transport cancel 收尾。
+    _turnTail = Future<void>.value();
   }
 
-  /// 立即停止当前流式请求。
+  /// 立即停止当前生成。
   ///
-  /// 返回 true 表示已经存在活跃的底层 stream，并已发起 subscription cancel；
-  /// 返回 false 表示请求还未进入流式阶段或已经结束。取消动作本身异步收尾，
-  /// 但 subscription 会立即进入取消流程，之后不会再向 UI 追加增量。
+  /// 已进入 SSE 时取消底层 subscription；如果下一轮正在等待上一轮完成
+  /// history 收尾，则直接标记该等待中的 Turn 为停止，保证它不会再发起
+  /// 网络请求。返回 true 表示本次停止命中了一个 active/pending Turn。
   bool stopActiveStream() {
+    final _AiTurnGate? latestTurn = _latestTurn;
+    if (latestTurn != null &&
+        !latestTurn.started &&
+        !latestTurn.stoppedBeforeStart) {
+      latestTurn.stoppedBeforeStart = true;
+      return true;
+    }
+
     final _ActiveAiStream? active = _activeStream;
-    if (active == null) {
+    if (active == null || active.stopped) {
       return false;
     }
     unawaited(_stopStream(active));
@@ -82,89 +123,114 @@ class AiAgentSession {
     String? pageContext,
     Uint8List? imageBytes,
     required void Function(String text, String reasoning) onPreview,
-  }) async {
+  }) {
     final int requestGeneration = _generation;
-    final int historyInsertIndex = _history.length;
-    final AiStreamResult result = await _runStream(
-      () => _deepSeekService.performStream(
-        action: action,
-        apiKey: apiKey,
-        selectionText: selectionText,
-        pageContext: pageContext,
-        history: _history,
-        imageBytes: imageBytes,
-      ),
-      onPreview: onPreview,
-      isStale: () => _generation != requestGeneration,
-    );
+    return _runTurn(requestGeneration, () async {
+      final AiStreamResult result = await _runStream(
+        () => _deepSeekService.performStream(
+          action: action,
+          apiKey: apiKey,
+          selectionText: selectionText,
+          pageContext: pageContext,
+          history: _history,
+          imageBytes: imageBytes,
+        ),
+        onPreview: onPreview,
+        isStale: () => _generation != requestGeneration,
+      );
 
-    if (_generation != requestGeneration ||
-        (result.stopped && result.content.trim().isEmpty)) {
+      if (_generation != requestGeneration ||
+          (result.stopped && result.content.trim().isEmpty)) {
+        return result;
+      }
+
+      final bool isVisionMode = imageBytes != null && imageBytes.isNotEmpty;
+      final AiChatHistoryMessage userMessage = isVisionMode
+          ? AiChatHistoryMessage.user(
+              content: AiPrompts.visionUserPrompt(action),
+              image: AiImageAttachment(bytes: imageBytes, mimeType: 'image/png'),
+            )
+          : AiChatHistoryMessage.user(
+              content: AiPrompts.userPrompt(
+                action,
+                selectionText,
+                pageContext: pageContext,
+              ),
+            );
+      _history
+        ..add(userMessage)
+        ..add(AiChatHistoryMessage.assistant(content: result.content));
       return result;
-    }
-
-    final bool isVisionMode = imageBytes != null && imageBytes.isNotEmpty;
-    final AiChatHistoryMessage userMessage = isVisionMode
-        ? AiChatHistoryMessage.user(
-            content: AiPrompts.visionUserPrompt(action),
-            image: AiImageAttachment(bytes: imageBytes, mimeType: 'image/png'),
-          )
-        : AiChatHistoryMessage.user(
-            content: AiPrompts.userPrompt(
-              action,
-              selectionText,
-              pageContext: pageContext,
-            ),
-          );
-    _insertTurn(
-      historyInsertIndex,
-      userMessage,
-      AiChatHistoryMessage.assistant(content: result.content),
-    );
-    return result;
+    });
   }
 
-  /// 流式发送一轮多轮对话。user 消息先入历史再请求，失败时回滚。
-  /// 用户主动停止且已有部分正文时，保留 user 与部分 assistant；如果
-  /// 尚未返回正文，则回滚本轮 user，避免历史里留下悬空请求。
-  ///
-  /// assistant 始终插回本轮 user 后面，而不是无条件 append 到历史末尾。
-  /// 因此 Stop 后 UI 立即允许下一次发送时，即使旧请求的 cancel 稍后才
-  /// 完成，也不会形成 user1 → user2 → assistant1 的乱序历史。
+  /// 流式发送一轮多轮对话。上一轮 history 收尾完成后，本轮 user 才入列
+  /// 并 snapshot 给 transport。失败或首 token 前停止时按 identity 回滚。
   Future<AiStreamResult> sendChat({
     required String apiKey,
     required AiChatHistoryMessage userMessage,
     PdfAiContext? documentContext,
     required void Function(String text, String reasoning) onPreview,
-  }) async {
+  }) {
     final int requestGeneration = _generation;
-    _history.add(userMessage);
-    try {
-      final AiStreamResult result = await _runStream(
-        () => _deepSeekService.chatStream(
-          apiKey: apiKey,
-          history: _history,
-          documentContext: documentContext,
-        ),
-        onPreview: onPreview,
-        isStale: () => _generation != requestGeneration,
-      );
-      if (_generation != requestGeneration) {
+    return _runTurn(requestGeneration, () async {
+      _history.add(userMessage);
+      try {
+        final AiStreamResult result = await _runStream(
+          () => _deepSeekService.chatStream(
+            apiKey: apiKey,
+            history: _history,
+            documentContext: documentContext,
+          ),
+          onPreview: onPreview,
+          isStale: () => _generation != requestGeneration,
+        );
+        if (_generation != requestGeneration) {
+          return result;
+        }
+        if (result.stopped && result.content.trim().isEmpty) {
+          _removeMessage(userMessage);
+          return result;
+        }
+        _history.add(AiChatHistoryMessage.assistant(content: result.content));
         return result;
-      }
-      if (result.stopped && result.content.trim().isEmpty) {
+      } catch (_) {
         _removeMessage(userMessage);
-        return result;
+        rethrow;
       }
-      _insertAssistantAfter(
-        userMessage,
-        AiChatHistoryMessage.assistant(content: result.content),
-      );
-      return result;
-    } catch (_) {
-      _removeMessage(userMessage);
-      rethrow;
-    }
+    });
+  }
+
+  /// 串行化 Turn 的 history 边界，而不是串行 UI。
+  ///
+  /// 调用方可以在 Stop 后立刻恢复按钮并创建下一轮 Future，但下一轮的
+  /// [operation] 只有在上一轮完成 partial commit / rollback 后才运行。
+  Future<AiStreamResult> _runTurn(
+    int requestGeneration,
+    Future<AiStreamResult> Function() operation,
+  ) {
+    final Future<void> previousTurn = _turnTail;
+    final _AiTurnGate turn = _AiTurnGate();
+    _turnTail = turn.completion.future;
+    _latestTurn = turn;
+
+    return () async {
+      await previousTurn;
+      try {
+        if (turn.stoppedBeforeStart || _generation != requestGeneration) {
+          return _stoppedBeforeStartResult;
+        }
+        turn.started = true;
+        return await operation();
+      } finally {
+        if (identical(_latestTurn, turn)) {
+          _latestTurn = null;
+        }
+        if (!turn.completion.isCompleted) {
+          turn.completion.complete();
+        }
+      }
+    }();
   }
 
   /// 累积一段流式响应：逐块回调预览，结束后解析正文与追问建议。
@@ -271,33 +337,6 @@ class AiAgentSession {
         active.completion.complete();
       }
     }
-  }
-
-  void _insertTurn(
-    int preferredIndex,
-    AiChatHistoryMessage userMessage,
-    AiChatHistoryMessage assistantMessage,
-  ) {
-    final int insertIndex = preferredIndex <= _history.length
-        ? preferredIndex
-        : _history.length;
-    _history.insertAll(insertIndex, <AiChatHistoryMessage>[
-      userMessage,
-      assistantMessage,
-    ]);
-  }
-
-  void _insertAssistantAfter(
-    AiChatHistoryMessage userMessage,
-    AiChatHistoryMessage assistantMessage,
-  ) {
-    final int userIndex = _history.indexWhere(
-      (AiChatHistoryMessage message) => identical(message, userMessage),
-    );
-    if (userIndex < 0) {
-      return;
-    }
-    _history.insert(userIndex + 1, assistantMessage);
   }
 
   void _removeMessage(AiChatHistoryMessage message) {
