@@ -30,32 +30,14 @@ extension HomeControllerAiSession on HomeController {
     return true;
   }
 
+  /// Selection lifecycle 只描述“当前框选是什么”。
+  ///
+  /// 框选开始、变化、取消以及 Overlay 因 viewport/focus 重置 selection，
+  /// 都不能结束正在运行的 AI Turn，也不能清理模型输出。只有明确的 AI
+  /// 动作、停止、新会话、切文档等入口才有资格改变 AI request/session
+  /// 生命周期。
   void onAiSelectionChanged(PdfAiSelection? selection) {
-    _applyState(
-      state.copyWith(
-        aiSelection: selection,
-        aiPanelState: selection == null
-            ? state.aiPanelState.copyWith(
-                actionId: null,
-                actionLabel: null,
-                actionSelectionText: null,
-                actionSelectionImage: null,
-                result: null,
-                reasoning: null,
-                followUpSuggestions: const <String>[],
-                errorMessage: null,
-                loading: false,
-              )
-            : state.aiPanelState.copyWith(
-                actionId: null,
-                actionLabel: null,
-                actionSelectionText: null,
-                actionSelectionImage: null,
-                followUpSuggestions: const <String>[],
-                errorMessage: null,
-              ),
-      ),
-    );
+    _applyState(state.copyWith(aiSelection: selection));
   }
 
   void updateAiApiKey(String apiKey) {
