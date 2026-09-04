@@ -1,135 +1,237 @@
 # Linux Debian Package Distribution
 
-> 文档基线：Plume PDF `v0.1.2`，更新于 2026-09-03。
+> 文档基线：`main @ c19c2f82eec37940635168ab42cc731ab4f61ef6`，更新于 2026-09-04。
+>
+> 当前 `pubspec.yaml`：`0.1.3+27`；最新 GitHub Release：`v0.1.3`。
 
-本文记录 Linux Release Bundle、Debian `.deb` 打包方式，以及当前 GitHub Release 自动化行为。
+本文记录当前 Linux Release Bundle、Debian `.deb` 打包脚本与 GitHub Actions 行为。
 
 ## 1. 前置条件
 
-- 使用项目固定 Flutter 版本：`fvm`
-- 本机安装 `dpkg-deb`
+本地脚本默认使用项目 FVM Flutter：
 
-## 2. 自动生成 DEB
+```text
+fvm flutter
+```
+
+并要求系统存在：
+
+```bash
+dpkg-deb
+```
+
+Ubuntu/Debian 可通过系统包管理器安装相关工具。
+
+## 2. 生成 DEB
+
+推荐：
 
 ```bash
 make package-deb
 ```
 
-脚本读取 `pubspec.yaml` 的版本号，必要时构建 Linux Release Bundle，并组装 Debian 元数据、desktop entry 与图标。
+等价于：
 
-当前 v0.1.2 应用版本：
-
-```text
-0.1.2+26
+```bash
+bash scripts/build_linux_deb.sh
 ```
 
-输出格式：
+脚本会：
 
 ```text
-build/linux/x64/release/plume-pdf_<version+build>_amd64.deb
+读取 pubspec.yaml version
+↓
+必要时 fvm flutter build linux --release --verbose
+↓
+读取 build/linux/x64/release/bundle
+↓
+组装 DEBIAN/control + desktop entry + hicolor icons
+↓
+dpkg-deb --build --root-owner-group
 ```
 
-若已有最新 Release Bundle：
+当前版本输出示例：
+
+```text
+build/linux/x64/release/plume-pdf_0.1.3+27_amd64.deb
+```
+
+通用格式：
+
+```text
+build/linux/x64/release/plume-pdf_<pubspec-version>_amd64.deb
+```
+
+若已经有最新 Linux Release Bundle：
 
 ```bash
 ./scripts/build_linux_deb.sh --skip-build
 ```
 
-## 3. 单独构建 Linux Release
+## 3. Linux Release Bundle
+
+单独构建：
 
 ```bash
 fvm flutter build linux --release --verbose
 ```
 
-Bundle 位于：
+Bundle：
 
 ```text
 build/linux/x64/release/bundle/
 ```
 
-## 4. 安装测试
+脚本会验证：
+
+```text
+build/linux/x64/release/bundle/plume_pdf
+```
+
+必须存在且可执行。
+
+## 4. DEB 安装布局
+
+当前 DEB 安装主目录是：
+
+```text
+/opt/plume_pdf
+```
+
+主程序：
+
+```text
+/opt/plume_pdf/plume_pdf
+```
+
+desktop entry：
+
+```text
+/usr/share/applications/com.example.plume_pdf.desktop
+```
+
+图标安装到：
+
+```text
+/usr/share/icons/hicolor/
+```
+
+`postinst` 会尽力刷新：
+
+```text
+gtk-update-icon-cache
+update-desktop-database
+```
+
+注意：当前 RPM 使用 `/opt/plume-pdf`，与 DEB 的 `/opt/plume_pdf` 仍不一致。这是当前代码的真实安装布局；切换 DEB/RPM 包格式测试时应注意旧目录残留。
+
+## 5. 安装 / 重装 / 卸载测试
+
+安装：
 
 ```bash
 sudo apt install ./build/linux/x64/release/*.deb
 ```
 
-必要时：
+依赖需要补齐时：
 
 ```bash
 sudo apt install -f
 ```
 
-安装后检查：
+覆盖安装后若怀疑仍启动旧二进制，优先确认：
 
-- 应用菜单能找到 `Plume PDF`
+```bash
+which plume_pdf
+ls -l /opt/plume_pdf/plume_pdf
+```
+
+以及桌面入口中的 `Exec=` 是否指向：
+
+```text
+/opt/plume_pdf/plume_pdf
+```
+
+验收至少包含：
+
+- 应用菜单可以找到 `Plume PDF`
 - 图标正确
-- 应用可启动并打开 PDF
+- 应用能启动并打开 PDF
 - `.pdf` desktop integration 正常
-- 应用内版本号与 `pubspec.yaml` 一致
-- AI 流式生成时发送按钮可切换为停止，并能立即终止当前输出
-
-## 5. 图标 / 桌面入口
-
-当前 desktop entry 与图标使用 `com.example.plume_pdf` 名称，二者必须保持一致。安装脚本会刷新图标缓存和 desktop database。
-
-常见排查：
-
-| 问题 | 处理 |
-|---|---|
-| 菜单无图标 | 检查 `Icon=` 与 hicolor 文件名是否一致 |
-| 图标缓存未刷新 | `sudo gtk-update-icon-cache -f /usr/share/icons/hicolor/` |
-| 菜单入口未刷新 | `sudo update-desktop-database /usr/share/applications/` |
+- 版本与 `pubspec.yaml` 对应
+- Reader Escape / AI 框选行为正常
+- AI streaming Stop 可终止当前输出
+- 连续触发翻译/解释/深度理解不会长期堆积后台请求
 
 ## 6. GitHub Actions
 
-`.github/workflows/build-desktop-packages.yml` 在普通 `main` push 时自动：
+`.github/workflows/build-desktop-packages.yml` 在普通 `main` push 时执行 Linux job：
 
 ```text
+flutter pub get
+↓
 flutter build linux --release
-→ build_linux_deb.sh --skip-build
-→ build_linux_rpm.sh --skip-build
-→ upload DEB + RPM Actions Artifact
+↓
+build_linux_deb.sh --skip-build
+↓
+build_linux_rpm.sh --skip-build
+↓
+upload DEB + RPM artifact
 ```
 
-RPM 在 Ubuntu runner 上使用已验证的 `rpmbuild --nodeps` 路径，只绕过 RPM 数据库无法识别 apt 安装依赖的问题；实际 `rpmbuild` / `patchelf` 命令仍会先检查存在。
+CI 使用 workflow 固定的 Flutter `3.41.9`，不会通过 FVM 调用。
 
-## 7. v0.1.2 自动发布流程
+## 7. Release 约定
 
-正式版本不需要手工上传 DEB。
-
-当 `main` 的发布提交满足：
+当前版本元数据：
 
 ```text
-pubspec.yaml: version: 0.1.2+26
-commit message: release: v0.1.2
+version: 0.1.3+27
 ```
 
-`Build Packages` 会：
+正式发布通用约定：
 
 ```text
-解析 0.1.2
-→ 创建/校验 v0.1.2 tag
-→ 构建 Linux DEB + RPM
-→ 构建 Windows EXE
-→ 构建 macOS DMG
-→ 构建 Android arm64 APK
-→ 等待所有 release jobs 成功
-→ 从 CHANGELOG.md 提取 0.1.2 Release Notes
-→ 创建 GitHub Release
-→ 上传全部安装包
+pubspec.yaml: version: X.Y.Z+N
+head commit:  release: vX.Y.Z
 ```
 
-因此正式 Release 页面中的 DEB 与其他平台包来自同一个发布提交和同一个 tag。
+`release_meta` 会：
+
+```text
+解析 X.Y.Z
+↓
+创建/校验 vX.Y.Z tag
+↓
+Linux DEB + RPM
+Windows EXE
+macOS DMG
+Android arm64 APK
+↓
+从 CHANGELOG.md 提取对应版本说明
+↓
+创建/更新 GitHub Release
+```
+
+当前 workflow 同时监听 `main` 和 `v*` tag。release commit 在 main run 中创建 tag 后，tag push 会再触发一次 Build Packages run；查看 Actions 时这是当前预期代码路径，不代表 DEB 被人工重复构建。
 
 ## 8. 发布验收
 
-v0.1.2 发布后至少确认：
+以当前 `v0.1.3` / `0.1.3+27` 为例，至少检查：
 
-- Linux job 成功
-- DEB Artifact 存在
-- RPM Artifact 存在
-- GitHub Release 中 DEB/RPM 均已上传
-- DEB 文件中的版本与 `0.1.2+26` 对应
-- 安装后应用可启动并打开 PDF
+- Linux release bundle 成功
+- DEB 成功生成
+- RPM 成功生成
+- Actions Artifact 中同时存在 DEB/RPM
+- GitHub Release 中 Linux 包存在
+- DEB 文件版本与 `pubspec.yaml` 对应
+- 安装后实际执行的是 `/opt/plume_pdf/plume_pdf`
+- 卸载/重装后桌面入口和图标缓存正常
 
-如果 Release job 未执行，优先检查发布提交消息是否严格为 `release: v0.1.2`，以及 `pubspec.yaml` 版本是否为 `0.1.2+26`。
+如果 Release job 未执行，先检查：
+
+```text
+commit message 是否严格为 release: vX.Y.Z
+pubspec.yaml 是否为 X.Y.Z+N
+CHANGELOG.md 是否有 ## X.Y.Z 章节
+```

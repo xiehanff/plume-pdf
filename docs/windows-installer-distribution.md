@@ -1,13 +1,16 @@
 # Windows 安装包生成与分发
 
-> 文档基线：Plume PDF `v0.1.2`，更新于 2026-09-03。
+> 文档基线：`main @ c19c2f82eec37940635168ab42cc731ab4f61ef6`，更新于 2026-09-04。
+>
+> 当前 `pubspec.yaml`：`0.1.3+27`，`msix_version: 0.1.3.0`；最新 GitHub Release：`v0.1.3`。
 
-本文记录 Windows Release / Inno Setup 安装包生成方式，以及当前 GitHub Actions 自动发布行为。
+本文记录当前 Windows Release / Inno Setup EXE 安装包生成方式，以及 GitHub Actions 自动发布行为。
 
 ## 1. 前置条件
 
-- 使用项目固定 Flutter 版本：`fvm`
-- 本机安装 Inno Setup 6
+- 项目本地命令使用 FVM Flutter
+- 安装 Inno Setup 6
+- Windows x64
 
 ## 2. 本地生成安装包
 
@@ -17,110 +20,213 @@
 .\make.cmd package-windows
 ```
 
-这条命令会构建最新 Windows Release，并调用 `windows/installer/build_installer.ps1` 生成 setup。
-
-手动执行：
+或直接：
 
 ```powershell
-fvm flutter build windows --release
+powershell -ExecutionPolicy Bypass -File .\windows\installer\build_installer.ps1
+```
+
+脚本默认会执行：
+
+```text
+fvm flutter build windows --release --verbose
+↓
+寻找 ISCC.exe
+↓
+读取 pubspec.yaml 的 version name
+↓
+编译 windows/installer/plume_pdf.iss
+```
+
+如果已经有最新 Windows Release Bundle：
+
+```powershell
 & .\windows\installer\build_installer.ps1 -SkipBuild
 ```
 
-如果希望脚本自己构建：
+## 3. 版本来源
 
-```powershell
-& .\windows\installer\build_installer.ps1
-```
-
-## 3. 版本与输出位置
-
-v0.1.2 对应：
+当前：
 
 ```text
-pubspec version: 0.1.2+26
-msix_version:     0.1.2.0
+pubspec version: 0.1.3+27
+msix_version:     0.1.3.0
 ```
 
-Inno Setup 输出格式：
+Inno Setup 脚本实际使用 `pubspec.yaml` 中 `+` 前面的版本：
 
 ```text
-windows/installer/dist/PlumePDF_Setup_<version>.exe
+0.1.3+27
+↓
+MyAppVersion = 0.1.3
 ```
 
-版本来自 `pubspec.yaml`，不要在脚本或文档里额外维护第二份业务版本号。
+输出：
+
+```text
+windows/installer/dist/PlumePDF_Setup_0.1.3.exe
+```
+
+通用格式：
+
+```text
+windows/installer/dist/PlumePDF_Setup_<version-name>.exe
+```
+
+不要在文档或 PowerShell 中再维护第二份 Inno Setup 业务版本号。
+
+`msix_config` 仍保留在 `pubspec.yaml`，仓库也保留独立 MSIX 构建入口；但当前 GitHub Release 的 Windows 正式产物是 **Inno Setup EXE**，不是 MSIX。
 
 ## 4. 安装器行为
 
-安装器会：
+`windows/installer/plume_pdf.iss` 当前会：
 
-- 安装到 `C:\Program Files\Plume PDF`
-- 创建桌面快捷方式
+- 安装到 `{autopf}\Plume PDF`，通常是 `C:\Program Files\Plume PDF`
 - 创建开始菜单入口
-- 注册 `.pdf` 文件关联
+- 默认提供桌面快捷方式任务
+- 注册 `.pdf` Open With / ProgID
+- 把 `%1` 文件路径传给 `plume_pdf.exe`
+- 卸载时清理安装器创建的关联键
 
-## 5. GitHub Actions
+主程序：
 
-`.github/workflows/build-desktop-packages.yml` 的 Windows job 使用 `windows-2022`：
+```text
+plume_pdf.exe
+```
+
+安装器 `AppId` 固定，因此升级安装会识别为同一产品。
+
+## 5. PDF 文件打开链路
+
+Inno Setup 注册的 open command：
+
+```text
+"<install-dir>\plume_pdf.exe" "%1"
+```
+
+应用侧会从启动参数读取 PDF 路径；Windows Reader 的启动文件链路由 `AppLaunchArgs` 与 `Platform.executableArguments` 处理。
+
+验收应包含：
+
+```text
+资源管理器右键“打开方式”
+↓
+Plume PDF
+↓
+启动应用
+↓
+打开对应 PDF
+```
+
+以及双击已经关联的 PDF。
+
+## 6. GitHub Actions
+
+`.github/workflows/build-desktop-packages.yml` 的 Windows job 当前固定：
+
+```text
+runs-on: windows-2022
+Flutter: 3.41.9
+```
+
+流程：
 
 ```text
 Checkout
-→ Setup Flutter
-→ Install Inno Setup
-→ flutter pub get
-→ flutter build windows --release
-→ build_installer.ps1 -SkipBuild
-→ upload-artifact *.exe
+↓
+Setup Flutter
+↓
+choco install innosetup
+↓
+flutter pub get
+↓
+flutter build windows --release
+↓
+build_installer.ps1 -SkipBuild
+↓
+upload windows/installer/dist/*.exe
 ```
 
-普通 `main` push 会生成 Windows Actions Artifact。
+普通 `main` push 只生成 Windows Actions Artifact，不自动创建 GitHub Release。
 
-## 6. v0.1.2 正式发布
+## 7. 正式 Release
 
-发布不需要手工打包或上传 EXE。
-
-当 `main` 出现：
+通用约定：
 
 ```text
-version: 0.1.2+26
-commit message: release: v0.1.2
+pubspec.yaml: version: X.Y.Z+N
+head commit:  release: vX.Y.Z
 ```
 
-工作流会自动创建/校验 `v0.1.2` tag。Windows EXE 会与：
+当前 `v0.1.3` 对应：
+
+```text
+version:      0.1.3+27
+msix_version: 0.1.3.0
+release tag:  v0.1.3
+```
+
+发布模式会把 Windows EXE 与：
 
 - Linux DEB
 - Linux RPM
 - macOS DMG
 - Android arm64 APK
 
-一起进入同一个 GitHub Release。
+聚合到同一个 GitHub Release。
 
-Release 文案自动从 `CHANGELOG.md` 的 `0.1.2` 章节提取，因此版本文案、tag 和安装包都绑定同一 release commit。
-
-## 7. 发布前 / 发布后自查
-
-- Windows Release 构建通过
-- Inno Setup 成功输出 EXE
-- EXE 已进入 Actions Artifact
-- GitHub Release 页面已上传 EXE
-- 安装后主程序存在
-- 桌面 / 开始菜单快捷方式存在
-- PDF “打开方式”中可以选择 Plume PDF
-- 双击 PDF 可以把文件路径传给应用并打开
-- 应用版本为 `0.1.2`
-- AI 流式生成期间发送按钮切换为停止；点击后立即停止继续输出并保留已生成内容
-- 卸载行为正常
-
-## 8. 常见发布问题
-
-### Release 没有创建
-
-确认：
+Release Notes 从 `CHANGELOG.md` 对应的：
 
 ```text
-pubspec.yaml == 0.1.2+26
-head commit message == release: v0.1.2
+## X.Y.Z
 ```
 
-### 普通 main push 只有 Artifact，没有 Release
+章节提取。
 
-这是预期行为。普通开发提交只验证桌面打包；只有 release commit / release tag 才进入 GitHub Release 聚合流程。
+当前 Build Packages workflow 同时监听：
+
+```text
+main push
+v* tag push
+```
+
+release commit 的 main run 会创建/校验 tag；tag push 随后还会再触发一轮 Build Packages。这是当前 workflow 的实际行为。
+
+## 8. 当前 Windows 发布验收
+
+至少检查：
+
+- Windows Release 构建成功
+- `PlumePDF_Setup_<version>.exe` 生成
+- Actions Artifact 包含 EXE
+- GitHub Release 包含 EXE
+- 安装目录正确
+- 桌面 / 开始菜单入口正确
+- PDF “打开方式”可见 Plume PDF
+- 双击 PDF 能把文件路径传给应用
+- 应用版本与 `pubspec.yaml` 对应
+- Reader Escape 可退出 AI 框选
+- AI streaming Stop 正常
+- 连续翻译/解释/深度理解不会长期排队等待旧请求
+- 卸载后安装目录与安装器注册项清理正常
+
+## 9. 常见问题
+
+### 找不到 `ISCC.exe`
+
+`build_installer.ps1` 会依次尝试：
+
+- PATH 中的 `iscc.exe`
+- Program Files (x86) / Inno Setup 6
+- `%LOCALAPPDATA%\Programs\Inno Setup 6`
+- Start Menu 中 Inno Setup Compiler 快捷方式目标目录
+
+仍找不到时会直接失败，不会静默跳过安装器生成。
+
+### 普通 main push 没有 GitHub Release
+
+这是当前设计：普通提交只做 package verification / Artifact；只有 release commit 或 release tag 才进入 Release 聚合路径。
+
+### EXE 版本和 `+build` 不一致
+
+这是预期行为。Inno Setup `AppVersion` 使用 `0.1.3` 这样的 version name；Flutter build number `+27` 不写入安装器文件名。完整版本/build number仍由 Flutter 工程元数据维护。
