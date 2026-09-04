@@ -66,7 +66,9 @@ void main() {
 
     const String missingPath =
         '/tmp/plume_pdf_round5_missing_94f13f6238d84eb9a8d13d7cc31d7f8f.pdf';
-    await controller.openFilePath(missingPath);
+    // openFilePath 会执行真实 dart:io File.exists；widget test 的 FakeAsync
+    // 不推进真实文件 I/O，因此必须在 runAsync 区域执行。
+    await tester.runAsync(() => controller.openFilePath(missingPath));
 
     // 打开失败只是当前操作失败，不应切走正在阅读的文档。
     expect(controller.state.filePath, '/tmp/current-reader-document.pdf');
