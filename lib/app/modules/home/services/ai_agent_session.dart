@@ -43,7 +43,7 @@ class _AiTurnGate {
 /// 渲染；动作类请求成功后才把本轮 user/assistant 消息写入历史，
 /// 对话类请求失败时回滚已入列的 user 消息。
 ///
-/// 每一轮 Turn 在真正发起模型请求前会等待上一轮完成 history commit / 
+/// 每一轮 Turn 在真正发起模型请求前会等待上一轮完成 history commit /
 /// rollback。这样 Stop 后 UI 可以立即恢复，但下一轮不会拿到尚未收尾的
 /// history，也不需要依赖事后插入下标来修正顺序。
 ///
@@ -126,13 +126,15 @@ class AiAgentSession {
   }) {
     final int requestGeneration = _generation;
     return _runTurn(requestGeneration, () async {
+      final List<AiChatHistoryMessage> requestHistory =
+          List<AiChatHistoryMessage>.unmodifiable(_history);
       final AiStreamResult result = await _runStream(
         () => _deepSeekService.performStream(
           action: action,
           apiKey: apiKey,
           selectionText: selectionText,
           pageContext: pageContext,
-          history: _history,
+          history: requestHistory,
           imageBytes: imageBytes,
         ),
         onPreview: onPreview,
@@ -175,11 +177,13 @@ class AiAgentSession {
     final int requestGeneration = _generation;
     return _runTurn(requestGeneration, () async {
       _history.add(userMessage);
+      final List<AiChatHistoryMessage> requestHistory =
+          List<AiChatHistoryMessage>.unmodifiable(_history);
       try {
         final AiStreamResult result = await _runStream(
           () => _deepSeekService.chatStream(
             apiKey: apiKey,
-            history: _history,
+            history: requestHistory,
             documentContext: documentContext,
           ),
           onPreview: onPreview,
