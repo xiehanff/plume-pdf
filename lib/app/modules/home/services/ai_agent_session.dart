@@ -113,6 +113,11 @@ class AiAgentSession {
 
   /// 流式执行翻译/解释/深度理解动作。
   ///
+  /// Tool Action 采用 latest-wins：新的动作到来时，先停止上一轮 active
+  /// stream 或尚未开始的 pending Turn。随后仍通过 Turn barrier 等上一轮
+  /// history 完成 partial commit / rollback，再启动最新动作。这样连续点击
+  /// 翻译/解释/深度理解不会在后台堆积多个已失效但仍真实发网的请求。
+  ///
   /// 本轮 user 消息只在成功后写入历史（含视觉模式的截图）。用户主动
   /// 停止时，若已经产生正文，则把当前部分正文作为本轮 assistant 历史；
   /// 尚未产生正文则不写入这一轮动作历史。
@@ -124,6 +129,7 @@ class AiAgentSession {
     Uint8List? imageBytes,
     required void Function(String text, String reasoning) onPreview,
   }) {
+    stopActiveStream();
     final int requestGeneration = _generation;
     return _runTurn(requestGeneration, () async {
       final List<AiChatHistoryMessage> requestHistory =
