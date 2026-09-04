@@ -87,12 +87,14 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
   }
 
   Widget _buildPdfViewer() {
+    final String sourceFilePath = widget.filePath;
+    final int sourceInitialPage = widget.initialPage;
     final ColorFilter? colorFilter = widget.backgroundTheme.colorFilter;
     return PdfViewer.file(
-      widget.filePath,
-      key: ValueKey<String>('${widget.filePath}:${widget.initialPage}'),
+      sourceFilePath,
+      key: ValueKey<String>('$sourceFilePath:$sourceInitialPage'),
       controller: widget.controller,
-      initialPageNumber: widget.initialPage,
+      initialPageNumber: sourceInitialPage,
       params: PdfViewerParams(
         margin: widget.pageMargin,
         backgroundColor: AppColors.transparent,
@@ -108,13 +110,13 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
           offset: Offset(0, 8),
         ),
         onDocumentChanged: (PdfDocument? document) {
-          widget.onDocumentChanged(widget.filePath, document);
+          widget.onDocumentChanged(sourceFilePath, document);
         },
         onPageChanged: (int? pageNumber) {
-          widget.onPageChanged(widget.filePath, pageNumber);
+          widget.onPageChanged(sourceFilePath, pageNumber);
         },
         onViewerReady: (_, __) {
-          widget.onViewerReady(widget.filePath);
+          widget.onViewerReady(sourceFilePath);
         },
         viewerOverlayBuilder: (context, size, handleLinkTap) => <Widget>[
           if (widget.showScrollThumb)
@@ -164,7 +166,6 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
           StackTrace? stackTrace,
           PdfDocumentRef documentRef,
         ) {
-          final String sourceFilePath = widget.filePath;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             widget.onLoadError(sourceFilePath, error, stackTrace);
           });
