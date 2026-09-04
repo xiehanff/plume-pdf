@@ -138,6 +138,7 @@ extension HomeControllerFileManager on HomeController {
           actionLabel: null,
           actionId: null,
           result: null,
+          reasoning: null,
           followUpSuggestions: const <String>[],
           errorMessage: null,
         ),
