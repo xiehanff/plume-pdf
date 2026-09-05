@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart';
 
 import '../../controllers/ai_sidebar_controller.dart';
 import '../../models/pdf_ai_panel_state.dart';
@@ -11,6 +14,17 @@ import 'error_reader_view.dart';
 import 'page_status_bar.dart';
 import 'reader_sidebar.dart';
 
+class _DebugGalleryAiBackend implements AiBackend {
+  const _DebugGalleryAiBackend();
+
+  @override
+  Stream<AiStreamEvent> chat(AiBackendRequest request) {
+    return Stream<AiStreamEvent>.value(
+      const AiStreamEvent(text: '这里会展示 DeepSeek 返回的结果。'),
+    );
+  }
+}
+
 class DebugGalleryView extends StatefulWidget {
   const DebugGalleryView({super.key});
 
@@ -21,24 +35,33 @@ class DebugGalleryView extends StatefulWidget {
 class _DebugGalleryViewState extends State<DebugGalleryView> {
   static const String _aiControllerTag = 'debug-gallery-ai-sidebar';
 
+  late final AiChatController _chatController = AiChatController(
+    session: AiChatSession(backend: const _DebugGalleryAiBackend()),
+  );
+
   @override
   void initState() {
     super.initState();
     Get.put(
       AiSidebarController(
-        state: const PdfAiPanelState(
-          sessionId: 1,
-          actionLabel: '翻译',
-          result: '这里会展示 DeepSeek 返回的结果。',
-        ),
+        state: const PdfAiPanelState(sessionId: 1),
+        chatController: _chatController,
         onApiKeyChanged: (_) {},
         onSaveApiKey: () async {},
         onSendChat: (_) async {},
-        onStopChat: () {},
-        onNewSession: () {},
+        onStopChat: _chatController.stop,
+        onNewSession: _chatController.newConversation,
         documentPath: '/path/to/sample.pdf',
       ),
       tag: _aiControllerTag,
+    );
+    unawaited(
+      _chatController.submit(
+        submission: const AiChatSubmission(
+          displayText: '翻译',
+          userMessage: AiChatHistoryMessage.user(content: '翻译示例'),
+        ),
+      ),
     );
   }
 
@@ -47,6 +70,7 @@ class _DebugGalleryViewState extends State<DebugGalleryView> {
     if (Get.isRegistered<AiSidebarController>(tag: _aiControllerTag)) {
       Get.delete<AiSidebarController>(tag: _aiControllerTag);
     }
+    _chatController.onClose();
     super.dispose();
   }
 
