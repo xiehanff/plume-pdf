@@ -13,11 +13,20 @@ import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
 
 class _ControlledBackend implements AiBackend {
-  final StreamController<AiStreamEvent> stream =
-      StreamController<AiStreamEvent>(sync: true);
+  MultiStreamController<AiStreamEvent>? _controller;
+
+  bool get hasListener => _controller != null;
 
   @override
-  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+  Stream<AiStreamEvent> chat(AiBackendRequest request) {
+    return Stream<AiStreamEvent>.multi((MultiStreamController<AiStreamEvent> controller) {
+      _controller = controller;
+    });
+  }
+
+  void add(AiStreamEvent event) => _controller!.addSync(event);
+
+  void close() => _controller?.closeSync();
 }
 
 class _Harness {
@@ -57,11 +66,11 @@ class _Harness {
   }
 
   Future<void> waitForTransport(WidgetTester tester) async {
-    for (int i = 0; i < 5 && !backend.stream.hasListener; i++) {
+    for (int i = 0; i < 5 && !backend.hasListener; i++) {
       await tester.pump();
     }
     expect(
-      backend.stream.hasListener,
+      backend.hasListener,
       isTrue,
       reason: 'AI transport subscription should be attached before test events',
     );
@@ -71,10 +80,9 @@ class _Harness {
     WidgetTester tester,
     Future<AiChatTurnResult> future,
   ) async {
-    final Future<void> closeFuture = backend.stream.close();
+    backend.close();
     await tester.pump();
     await future;
-    await closeFuture;
     await tester.pump();
   }
 
@@ -187,7 +195,7 @@ void main() {
 
     bool overflowed = false;
     for (int i = 0; i < pieces.length; i++) {
-      h.backend.stream.add(AiStreamEvent(text: pieces[i]));
+      h.backend.add(AiStreamEvent(text: pieces[i]));
       await tester.pump(const Duration(milliseconds: 55));
 
       expectPinnedToBottom(h, 'chunk $i');
@@ -204,7 +212,7 @@ void main() {
     }
     expect(overflowed, isTrue, reason: '内容应超出视口，否则贴底断言无意义');
 
-    h.backend.stream.add(
+    h.backend.add(
       const AiStreamEvent(
         text:
             '<plume_follow_up_suggestions>["什么是位置编码","对比 RNN 的差异"]</plume_follow_up_suggestions>',
@@ -220,7 +228,7 @@ void main() {
     final Future<AiChatTurnResult> future = h.startTurn();
     await h.waitForTransport(tester);
 
-    h.backend.stream.add(
+    h.backend.add(
       AiStreamEvent(text: List<String>.filled(8, longText).join()),
     );
     await tester.pump(const Duration(milliseconds: 55));
@@ -229,7 +237,7 @@ void main() {
     expect(position.maxScrollExtent, greaterThan(300));
     moveAwayFromBottom(h.sidebar);
 
-    h.backend.stream.add(const AiStreamEvent(text: '底部新增但暂不打扰历史阅读。'));
+    h.backend.add(const AiStreamEvent(text: '底部新增但暂不打扰历史阅读。'));
     await tester.pump(const Duration(milliseconds: 55));
 
     h.sidebar.handleScrollNotification(
@@ -263,7 +271,7 @@ void main() {
     final Future<AiChatTurnResult> future = h.startTurn();
     await h.waitForTransport(tester);
 
-    h.backend.stream.add(
+    h.backend.add(
       AiStreamEvent(text: List<String>.filled(6, longText).join()),
     );
     await tester.pump(const Duration(milliseconds: 55));
@@ -272,7 +280,7 @@ void main() {
     moveAwayFromBottom(h.sidebar);
     final double pixelsBefore = position.pixels;
 
-    h.backend.stream.add(
+    h.backend.add(
       AiStreamEvent(text: List<String>.filled(6, longText).join()),
     );
     await tester.pump(const Duration(milliseconds: 55));
