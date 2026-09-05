@@ -39,6 +39,21 @@ class _SingleStreamBackend implements AiBackend {
   }
 }
 
+class _CancelableBackend implements AiBackend {
+  final Completer<void> canceled = Completer<void>();
+  late final StreamController<AiStreamEvent> stream =
+      StreamController<AiStreamEvent>(
+        onCancel: () {
+          if (!canceled.isCompleted) {
+            canceled.complete();
+          }
+        },
+      );
+
+  @override
+  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+}
+
 void main() {
   test('old stopped Future cannot clear a newer send state', () async {
     final _QueuedBackend backend = _QueuedBackend();
@@ -47,7 +62,6 @@ void main() {
     );
 
     final Future<AiChatTurnResult> first = controller.send(
-      apiKey: 'key',
       input: const AiChatInput(text: 'first'),
     );
     await Future<void>.delayed(Duration.zero);
@@ -59,7 +73,6 @@ void main() {
     expect(controller.messages.single.text, 'first');
 
     final Future<AiChatTurnResult> second = controller.send(
-      apiKey: 'key',
       input: const AiChatInput(text: 'second'),
     );
     expect(controller.isGenerating, isTrue);
@@ -67,7 +80,6 @@ void main() {
     backend.firstCancelGate.complete();
     await first;
 
-    // The first Future finishes after the second send has taken ownership.
     expect(controller.isGenerating, isTrue);
 
     await backend.secondStarted.future;
@@ -84,6 +96,46 @@ void main() {
     );
   });
 
+  test('stopPrevious finalizes old placeholder before the new turn', () async {
+    final _QueuedBackend backend = _QueuedBackend();
+    final AiChatController controller = AiChatController(
+      session: AiChatSession(backend: backend),
+    );
+
+    final Future<AiChatTurnResult> first = controller.send(
+      input: const AiChatInput(text: 'first'),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final Future<AiChatTurnResult> second = controller.submit(
+      submission: const AiChatSubmission(
+        displayText: 'second',
+        userMessage: AiChatHistoryMessage.user(content: 'second prompt'),
+        stopPrevious: true,
+      ),
+    );
+
+    expect(
+      controller.messages.map((ChatMessage message) => message.text),
+      <String>['first', 'second', ''],
+    );
+    expect(controller.messages.last.isLoading, isTrue);
+
+    backend.firstCancelGate.complete();
+    await first;
+    await backend.secondStarted.future;
+    backend.secondStream
+      ..add(const AiStreamEvent(text: 'second answer'))
+      ..close();
+    await second;
+
+    expect(
+      controller.messages.map((ChatMessage message) => message.text),
+      <String>['first', 'second', 'second answer'],
+    );
+    expect(controller.messages.last.isLoading, isFalse);
+  });
+
   test('streaming controller hides follow-up protocol tags from UI state', () async {
     final _SingleStreamBackend backend = _SingleStreamBackend();
     final AiChatController controller = AiChatController(
@@ -91,7 +143,6 @@ void main() {
     );
 
     final Future<AiChatTurnResult> future = controller.send(
-      apiKey: 'key',
       input: const AiChatInput(text: 'hello'),
     );
     await Future<void>.delayed(Duration.zero);
@@ -123,7 +174,6 @@ void main() {
     );
 
     final Future<AiChatTurnResult> future = controller.submit(
-      apiKey: 'key',
       submission: const AiChatSubmission(
         displayText: '解释这段选区',
         userMessage: AiChatHistoryMessage.user(
@@ -142,7 +192,7 @@ void main() {
       '请解释以下内容，并结合页面全文上下文：rich prompt',
     );
     expect(backend.lastRequest!.systemPrompt, 'system');
-    expect(controller.history, isEmpty, reason: 'deferred tool turn is not committed early');
+    expect(controller.history, isEmpty);
 
     backend.stream
       ..add(const AiStreamEvent(text: '解释结果'))
@@ -163,7 +213,6 @@ void main() {
     );
 
     final Future<AiChatTurnResult> future = controller.send(
-      apiKey: 'key',
       input: const AiChatInput(text: 'hello'),
     );
     await Future<void>.delayed(Duration.zero);
@@ -178,5 +227,25 @@ void main() {
     await future;
     expect(controller.messages, isEmpty);
     expect(controller.history, isEmpty);
+  });
+
+  test('controller disposal cancels transport and invalidates UI state', () async {
+    final _CancelableBackend backend = _CancelableBackend();
+    final AiChatController controller = AiChatController(
+      session: AiChatSession(backend: backend),
+    );
+
+    final Future<AiChatTurnResult> future = controller.send(
+      input: const AiChatInput(text: 'hello'),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    controller.onClose();
+    await backend.canceled.future;
+    await future;
+
+    expect(controller.messages, isEmpty);
+    expect(controller.history, isEmpty);
+    expect(controller.isGenerating, isFalse);
   });
 }
