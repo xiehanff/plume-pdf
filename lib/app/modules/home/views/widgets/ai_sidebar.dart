@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart'
+    show AiChatMessageList, ChatMessage;
 
 import '../../../../theme/app_colors.dart';
 import '../../controllers/ai_sidebar_controller.dart';
@@ -8,7 +10,6 @@ import '../../models/ai_chat_input.dart';
 import 'ai_sidebar_settings.dart';
 import 'chat_bubble.dart';
 import 'chat_input_bar.dart';
-import 'chat_message.dart';
 
 class AiSidebar extends StatelessWidget {
   const AiSidebar({
@@ -211,28 +212,25 @@ class _AiSidebarView extends StatelessWidget {
 
     final bool showFollowUpSuggestions = controller.showFollowUpSuggestions;
     final List<String> followUpSuggestions = controller.followUpSuggestions;
-    return NotificationListener<ScrollNotification>(
-      onNotification: controller.handleScrollNotification,
-      child: Listener(
-        onPointerSignal: controller.handlePointerSignal,
-        child: ListView.builder(
-          controller: controller.scrollController,
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-          itemCount: messages.length + (showFollowUpSuggestions ? 1 : 0),
-          itemBuilder: (BuildContext context, int index) {
-            if (showFollowUpSuggestions && index == messages.length) {
-              return _FollowUpSuggestions(
+    return AiChatMessageList(
+      messages: messages,
+      controller: controller.scrollController,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      onScrollNotification: controller.handleScrollNotification,
+      onPointerSignal: controller.handlePointerSignal,
+      messageBuilder: (
+        BuildContext context,
+        ChatMessage message,
+        int index,
+      ) {
+        return ChatBubble(message: message);
+      },
+      trailingBuilder: showFollowUpSuggestions
+          ? (BuildContext context) => _FollowUpSuggestions(
                 suggestions: followUpSuggestions,
                 onTap: (String text) => controller.sendMessage(text),
-              );
-            }
-            return ChatBubble(
-              key: ValueKey<String>(messages[index].id),
-              message: messages[index],
-            );
-          },
-        ),
-      ),
+              )
+          : null,
     );
   }
 }
