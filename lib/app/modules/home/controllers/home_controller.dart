@@ -70,7 +70,6 @@ class HomeController extends GetxController {
     viewerController: pdfViewerController,
     ocrService: _macosOcrService,
   );
-  int _aiSessionId = 0;
   int _aiActionId = 0;
   int _outlineLoadId = 0;
   String? _pinnedOutlineId;
@@ -205,18 +204,7 @@ class HomeController extends GetxController {
       zoom: 1,
       fitWidthActive: false,
       aiSelection: null,
-      aiPanelState: state.aiPanelState.copyWith(
-        sessionId: _aiSessionId,
-        loading: false,
-        actionId: null,
-        actionLabel: null,
-        actionSelectionText: null,
-        actionSelectionImage: null,
-        result: null,
-        reasoning: null,
-        followUpSuggestions: const <String>[],
-        errorMessage: null,
-      ),
+      aiPanelState: state.aiPanelState.copyWith(loading: false),
     );
   }
 
