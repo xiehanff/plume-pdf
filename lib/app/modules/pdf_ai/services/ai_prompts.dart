@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:plume_ai_chat/plume_ai_chat.dart' show AiResponseParser;
 
-import '../../home/models/pdf_outline_entry.dart';
+import '../../reader/models/pdf_outline_entry.dart';
 import '../models/pdf_ai_context.dart';
 import '../models/pdf_ai_tool_action.dart';
 
