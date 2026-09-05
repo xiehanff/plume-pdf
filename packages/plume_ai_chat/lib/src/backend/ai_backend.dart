@@ -1,16 +1,33 @@
 import '../models/ai_chat_history_message.dart';
 
+/// Provider-neutral generation options.
+///
+/// [providerOptions] is intentionally opaque to the core runtime. Concrete
+/// backends may read provider-specific fields without leaking them into
+/// [AiChatSession].
+class AiRequestOptions {
+  const AiRequestOptions({
+    this.maxOutputTokens,
+    this.providerOptions = const <String, Object?>{},
+  });
+
+  final int? maxOutputTokens;
+  final Map<String, Object?> providerOptions;
+}
+
 /// Provider-neutral request passed from the chat runtime to a concrete backend.
 class AiBackendRequest {
   const AiBackendRequest({
     required this.apiKey,
     required this.history,
     this.systemPrompt,
+    this.options = const AiRequestOptions(),
   });
 
   final String apiKey;
   final List<AiChatHistoryMessage> history;
   final String? systemPrompt;
+  final AiRequestOptions options;
 }
 
 /// Provider-neutral streaming event.

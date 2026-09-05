@@ -14,27 +14,35 @@ import 'ai_backend.dart';
 class DeepSeekBackend implements AiBackend {
   DeepSeekBackend({
     http.Client? httpClient,
-    this.model = 'deepseek-v4-flash-vision-exp',
+    this.model = defaultModel,
     this.endpoint = 'https://api.deepseek.com/v1',
     this.reasoningEffort = 'low',
   }) : _httpClient = httpClient;
 
+  static const String defaultModel = 'deepseek-v4-flash-vision-exp';
+
   final http.Client? _httpClient;
   final String model;
   final String endpoint;
+
+  /// Default DeepSeek reasoning effort. A request can override this through
+  /// `providerOptions['reasoning_effort']`; an explicit null removes the field.
   final String? reasoningEffort;
 
   @override
   Stream<AiStreamEvent> chat(AiBackendRequest request) async* {
     final String apiKey = request.apiKey.trim();
     if (apiKey.isEmpty) {
-      throw const DeepSeekBackendException(
-        '请先填写 DeepSeek API Key。',
-      );
+      throw const DeepSeekBackendException('请先填写 DeepSeek API Key。');
     }
     if (request.history.isEmpty) {
       throw const DeepSeekBackendException('对话内容不能为空。');
     }
+
+    final Object? requestReasoningEffort =
+        request.options.providerOptions.containsKey('reasoning_effort')
+        ? request.options.providerOptions['reasoning_effort']
+        : reasoningEffort;
 
     final http.Client client = _httpClient ?? http.Client();
     final bool closeClient = _httpClient == null;
@@ -50,8 +58,11 @@ class DeepSeekBackend implements AiBackend {
               'model': model,
               'messages': _messages(request),
               'stream': true,
-              if (reasoningEffort != null)
-                'reasoning_effort': reasoningEffort,
+              if (request.options.maxOutputTokens != null)
+                'max_tokens': request.options.maxOutputTokens,
+              if (requestReasoningEffort is String &&
+                  requestReasoningEffort.trim().isNotEmpty)
+                'reasoning_effort': requestReasoningEffort,
             });
 
       final http.StreamedResponse response = await client.send(httpRequest);
@@ -190,6 +201,20 @@ class DeepSeekBackendException implements Exception {
 
   final String message;
   final int? statusCode;
+
+  /// Only explicit 400/422 multimodal rejections are safe to retry as text.
+  /// Authentication, rate-limit and network failures must not trigger a second
+  /// request for the same user action.
+  bool get canFallbackToText {
+    if (statusCode != 400 && statusCode != 422) {
+      return false;
+    }
+    final String lowercased = message.toLowerCase();
+    return lowercased.contains('image') ||
+        lowercased.contains('vision') ||
+        lowercased.contains('media') ||
+        lowercased.contains('multimodal');
+  }
 
   @override
   String toString() => message;

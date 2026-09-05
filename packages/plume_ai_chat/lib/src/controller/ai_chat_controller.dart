@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 
+import '../backend/ai_backend.dart';
 import '../core/ai_chat_session.dart';
 import '../models/ai_chat_history_message.dart';
 import '../models/ai_chat_input.dart';
@@ -35,8 +36,11 @@ class AiChatController extends GetxController {
     required String apiKey,
     required AiChatInput input,
     String? systemPrompt,
+    AiRequestOptions options = const AiRequestOptions(),
+    bool stopPrevious = false,
+    bool deferHistoryCommit = false,
   }) async {
-    if (input.isEmpty || _isGenerating) {
+    if (input.isEmpty || (_isGenerating && !stopPrevious)) {
       return const AiChatTurnResult(content: '', reasoning: '');
     }
 
@@ -54,6 +58,9 @@ class AiChatController extends GetxController {
           image: input.image,
         ),
         systemPrompt: systemPrompt,
+        options: options,
+        stopPrevious: stopPrevious,
+        deferHistoryCommit: deferHistoryCommit,
         onPreview: (String text, String reasoning) {
           if (sendId != _latestSendId) {
             return;
@@ -69,8 +76,8 @@ class AiChatController extends GetxController {
       }
       return result;
     } finally {
-      // Stop 后允许调用方立即发起下一轮。旧 Future 随后完成时不能把
-      // 新一轮的 generating 状态或 streaming preview 覆盖掉。
+      // Stop/latest-wins allows a new turn to take UI ownership immediately.
+      // An older Future finishing later must not overwrite the new turn.
       if (sendId == _latestSendId) {
         _isGenerating = false;
         update(<String>[
@@ -92,7 +99,7 @@ class AiChatController extends GetxController {
   }
 
   void newConversation() {
-    // 让仍在异步收尾的旧 send() 失去 UI state ownership。
+    // Let still-finishing old send() Futures lose UI state ownership.
     _latestSendId++;
     _session.clear();
     _isGenerating = false;

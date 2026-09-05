@@ -77,6 +77,8 @@ class AiChatSession {
       unawaited(_stopTurn(active));
     }
 
+    // A new conversation gets an independent Turn chain. It must not wait for
+    // transport cancellation from the previous generation.
     _turnTail = Future<void>.value();
   }
 
@@ -97,17 +99,41 @@ class AiChatSession {
     return true;
   }
 
+  /// Executes one conversation turn.
+  ///
+  /// [stopPrevious] gives callers such as context-menu/tool actions latest-wins
+  /// semantics while regular chat can keep its normal sequential flow.
+  ///
+  /// [deferHistoryCommit] keeps the backing history unchanged until the request
+  /// succeeds (or is stopped after partial output). The transport snapshot still
+  /// includes [userMessage], so model behavior is identical while host UI cannot
+  /// observe an uncommitted tool turn.
   Future<AiChatTurnResult> send({
     required String apiKey,
     required AiChatHistoryMessage userMessage,
     String? systemPrompt,
+    AiRequestOptions options = const AiRequestOptions(),
+    bool stopPrevious = false,
+    bool deferHistoryCommit = false,
     required void Function(String text, String reasoning) onPreview,
   }) {
+    if (stopPrevious) {
+      stopActiveTurn();
+    }
+
     final int requestGeneration = _generation;
     return _runTurn(requestGeneration, () async {
-      _history.add(userMessage);
+      bool userCommitted = false;
+      if (!deferHistoryCommit) {
+        _history.add(userMessage);
+        userCommitted = true;
+      }
+
       final List<AiChatHistoryMessage> snapshot =
-          List<AiChatHistoryMessage>.unmodifiable(_history);
+          List<AiChatHistoryMessage>.unmodifiable(<AiChatHistoryMessage>[
+            ..._history,
+            if (deferHistoryCommit) userMessage,
+          ]);
       try {
         final AiChatTurnResult result = await _runStream(
           _backend.chat(
@@ -115,6 +141,7 @@ class AiChatSession {
               apiKey: apiKey,
               history: snapshot,
               systemPrompt: systemPrompt,
+              options: options,
             ),
           ),
           onPreview: onPreview,
@@ -124,15 +151,23 @@ class AiChatSession {
           return result;
         }
         if (result.stopped && result.content.trim().isEmpty) {
-          _removeMessage(userMessage);
+          if (userCommitted) {
+            _removeMessage(userMessage);
+          }
           return result;
+        }
+        if (deferHistoryCommit) {
+          _history.add(userMessage);
+          userCommitted = true;
         }
         _history.add(
           AiChatHistoryMessage.assistant(content: result.content),
         );
         return result;
       } catch (_) {
-        _removeMessage(userMessage);
+        if (userCommitted) {
+          _removeMessage(userMessage);
+        }
         rethrow;
       }
     });
