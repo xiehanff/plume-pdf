@@ -1,37 +1,15 @@
 name: plume_pdf
 description: "Cross-platform Flutter PDF reader with DeepSeek-assisted reading."
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-
-# The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
-# Both the version and the builder number may be overridden in flutter
-# build by specifying --build-name and --build-number, respectively.
-# In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
-# Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-# In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
+publish_to: 'none'
 version: 0.1.3+27
 
 environment:
   sdk: ^3.8.0
 
-# Dependencies specify other packages that your package depends on.
-# To automatically upgrade your package dependencies to the latest versions
-# consider running `flutter pub upgrade --major-versions`. Alternatively,
-# dependencies can be manually updated by changing the version numbers below to the latest version available on pub.dev. To see which dependencies have newer
-# versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
     sdk: flutter
 
-
-  # The following adds the Cupertino Icons font to your application.
   cupertino_icons: ^1.0.8
   crypto: ^3.0.6
   desktop_drop: ^0.6.0
@@ -44,6 +22,8 @@ dependencies:
   path: ^1.9.0
   path_provider: ^2.1.5
   pdfrx: ^1.3.5
+  plume_ai_chat:
+    path: packages/plume_ai_chat
   shared_preferences: ^2.5.3
   window_manager: ^0.4.3
   highlight: ^0.7.0
@@ -54,11 +34,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of the
-  # package. See that file for information on activating or disabling lint rules.
   flutter_lints: ^4.0.0
   msix: ^3.16.13
 
@@ -71,10 +46,6 @@ msix_config:
   capabilities: internetClient
   file_extension: .pdf
 
-# For information on the generic Dart part of this file, see the following page:
-# https://dart.dev/tools/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
   uses-material-design: true
 
