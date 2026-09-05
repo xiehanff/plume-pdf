@@ -1,11 +1,9 @@
 import 'dart:math' as math;
 
-export 'deepseek_service.dart' show AiToolAction;
-
 import '../models/pdf_ai_context.dart';
+import '../models/pdf_ai_tool_action.dart';
 import '../models/pdf_outline_entry.dart';
 import 'ai_response_parser.dart';
-import 'deepseek_service.dart';
 
 class AiPrompts {
   const AiPrompts._();
