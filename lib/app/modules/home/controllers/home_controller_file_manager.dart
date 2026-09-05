@@ -95,7 +95,6 @@ extension HomeControllerFileManager on HomeController {
     }
 
     _outlineLoadId++;
-    _aiSessionId++;
     _invalidateAiWork();
     _pinnedOutlineId = null;
     _pinnedOutlinePage = null;
@@ -130,15 +129,7 @@ extension HomeControllerFileManager on HomeController {
         outline: const <PdfOutlineEntry>[],
         aiSelectionMode: false,
         aiSelection: null,
-        aiPanelState: aiPanelState.copyWith(
-          loading: false,
-          actionLabel: null,
-          actionId: null,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: aiPanelState.copyWith(loading: false),
       ),
     );
     unawaited(_refreshRecentFileAvailability(state.recentFiles));
