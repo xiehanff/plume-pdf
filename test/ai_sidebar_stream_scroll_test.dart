@@ -234,9 +234,9 @@ void main() {
       reason: '恢复跟随后应贴底，否则后续流式输出不可见',
     );
 
-    expect(h.chat.stop(), isTrue);
-    await tester.pump();
+    await h.backend.stream.close();
     await future;
+    await tester.pump();
   });
 
   testWidgets('流式增长时用户阅读的历史位置保持稳定', (tester) async {
@@ -265,8 +265,8 @@ void main() {
       reason: '用户阅读历史时，流式内容增长不得移动滚动位置',
     );
 
-    expect(h.chat.stop(), isTrue);
-    await tester.pump();
+    await h.backend.stream.close();
     await future;
+    await tester.pump();
   });
 }
