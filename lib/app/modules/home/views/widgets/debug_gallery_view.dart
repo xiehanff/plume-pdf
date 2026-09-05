@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:plume_ai_chat/plume_ai_chat.dart';
 
-import '../../controllers/ai_sidebar_controller.dart';
-import '../../models/pdf_ai_panel_state.dart';
+import '../../../pdf_ai/controllers/ai_sidebar_controller.dart';
+import '../../../pdf_ai/models/pdf_ai_panel_state.dart';
 import '../../models/pdf_outline_entry.dart';
 import '../../../../theme/app_colors.dart';
 import 'ai_sidebar.dart';
@@ -44,7 +44,7 @@ class _DebugGalleryViewState extends State<DebugGalleryView> {
     super.initState();
     Get.put(
       AiSidebarController(
-        state: const PdfAiPanelState(sessionId: 1),
+        state: const PdfAiPanelState(apiKey: 'debug-key'),
         chatController: _chatController,
         onApiKeyChanged: (_) {},
         onSaveApiKey: () async {},
