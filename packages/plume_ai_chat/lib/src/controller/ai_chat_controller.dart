@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:get/get.dart';
 
 import '../backend/ai_backend.dart';
@@ -8,6 +11,11 @@ import '../models/ai_chat_input.dart';
 import '../models/ai_chat_submission.dart';
 import '../models/chat_message.dart';
 import 'ai_conversation_presenter.dart';
+
+typedef AiChatSubmissionPreparer = FutureOr<AiChatSubmission> Function();
+typedef AiChatFallbackBuilder = FutureOr<AiChatSubmission?> Function(
+  Object error,
+);
 
 abstract final class AiChatUpdateId {
   static const String messages = 'messages';
@@ -27,6 +35,12 @@ class AiChatController extends GetxController {
     AiConversationPresenter? presenter,
   }) : _session = session,
        _presenter = presenter ?? AiConversationPresenter();
+
+  static const AiChatTurnResult _stoppedBeforeTransport = AiChatTurnResult(
+    content: '',
+    reasoning: '',
+    stopped: true,
+  );
 
   final AiChatSession _session;
   final AiConversationPresenter _presenter;
@@ -81,10 +95,20 @@ class AiChatController extends GetxController {
   /// Executes a generic chat turn whose transport prompt may differ from the
   /// text/image presented in the conversation UI.
   ///
-  /// This is the reusable integration point for domain actions such as PDF
-  /// translate/explain, code review, email summarization, and similar workflows.
+  /// [prepareSubmission] runs after the user bubble/loading placeholder are
+  /// already visible. Hosts can therefore asynchronously build document
+  /// context, read attachments or resolve account state without maintaining a
+  /// second "preparing" conversation model. Stop/new-conversation/dispose
+  /// invalidate that preparation before it can reach transport.
+  ///
+  /// [fallbackBuilder] can replace a failed transport submission while keeping
+  /// the same presentation turn. It is intentionally only consulted before any
+  /// streamed text/reasoning has been displayed, so a retry can never erase a
+  /// partial answer the user has already seen.
   Future<AiChatTurnResult> submit({
     required AiChatSubmission submission,
+    AiChatSubmissionPreparer? prepareSubmission,
+    AiChatFallbackBuilder? fallbackBuilder,
   }) async {
     if (_isGenerating && !submission.stopPrevious) {
       return const AiChatTurnResult(content: '', reasoning: '');
@@ -109,38 +133,20 @@ class AiChatController extends GetxController {
     _streamingText = '';
     _streamingReasoning = '';
     _followUpSuggestions = const <String>[];
-    update(<String>[
-      AiChatUpdateId.messages,
-      AiChatUpdateId.status,
-      AiChatUpdateId.input,
-      AiChatUpdateId.suggestions,
-    ]);
+    _notifyConversationChanged();
 
     try {
-      final AiChatTurnResult result = await _session.send(
-        userMessage: submission.userMessage,
-        systemPrompt: submission.systemPrompt,
-        options: submission.options,
-        stopPrevious: submission.stopPrevious,
-        deferHistoryCommit: submission.deferHistoryCommit,
-        onPreview: (String text, String reasoning) {
-          if (sendId != _latestSendId) {
-            return;
-          }
-          final AiResponse response = AiResponseParser.parse(text);
-          _streamingText = response.content;
-          _streamingReasoning = reasoning;
-          _followUpSuggestions = response.followUpSuggestions;
-          _presenter.syncResponse(
-            loading: true,
-            result: response.content,
-            reasoning: reasoning,
-          );
-          update(<String>[
-            AiChatUpdateId.messages,
-            AiChatUpdateId.suggestions,
-          ]);
-        },
+      final AiChatSubmission preparedSubmission = prepareSubmission == null
+          ? submission
+          : await prepareSubmission();
+      if (sendId != _latestSendId) {
+        return _stoppedBeforeTransport;
+      }
+
+      final AiChatTurnResult result = await _executeSubmission(
+        sendId: sendId,
+        submission: preparedSubmission,
+        fallbackBuilder: fallbackBuilder,
       );
       if (sendId == _latestSendId) {
         _streamingText = result.content;
@@ -164,34 +170,112 @@ class AiChatController extends GetxController {
     } finally {
       if (sendId == _latestSendId) {
         _isGenerating = false;
-        update(<String>[
-          AiChatUpdateId.messages,
-          AiChatUpdateId.status,
-          AiChatUpdateId.input,
-          AiChatUpdateId.suggestions,
-        ]);
+        _notifyConversationChanged();
       }
     }
   }
 
-  bool stop() {
-    final bool stopped = _session.stopActiveTurn();
-    if (stopped) {
-      _isGenerating = false;
-      _followUpSuggestions = const <String>[];
-      _presenter.syncResponse(
-        loading: false,
-        result: _streamingText,
-        reasoning: _streamingReasoning,
-      );
-      update(<String>[
-        AiChatUpdateId.messages,
-        AiChatUpdateId.status,
-        AiChatUpdateId.input,
-        AiChatUpdateId.suggestions,
-      ]);
+  Future<AiChatTurnResult> _executeSubmission({
+    required int sendId,
+    required AiChatSubmission submission,
+    AiChatFallbackBuilder? fallbackBuilder,
+  }) async {
+    try {
+      return await _sendSubmission(sendId: sendId, submission: submission);
+    } catch (error) {
+      if (sendId != _latestSendId ||
+          fallbackBuilder == null ||
+          _streamingText.trim().isNotEmpty ||
+          _streamingReasoning.trim().isNotEmpty) {
+        rethrow;
+      }
+
+      final AiChatSubmission? fallback = await fallbackBuilder(error);
+      if (sendId != _latestSendId) {
+        return _stoppedBeforeTransport;
+      }
+      if (fallback == null) {
+        rethrow;
+      }
+      return _sendSubmission(sendId: sendId, submission: fallback);
     }
-    return stopped;
+  }
+
+  Future<AiChatTurnResult> _sendSubmission({
+    required int sendId,
+    required AiChatSubmission submission,
+  }) {
+    return _session.send(
+      userMessage: submission.userMessage,
+      systemPrompt: submission.systemPrompt,
+      options: submission.options,
+      stopPrevious: submission.stopPrevious,
+      deferHistoryCommit: submission.deferHistoryCommit,
+      onPreview: (String text, String reasoning) {
+        if (sendId != _latestSendId) {
+          return;
+        }
+        final AiResponse response = AiResponseParser.parse(text);
+        _streamingText = response.content;
+        _streamingReasoning = reasoning;
+        _followUpSuggestions = response.followUpSuggestions;
+        _presenter.syncResponse(
+          loading: true,
+          result: response.content,
+          reasoning: reasoning,
+        );
+        update(<String>[
+          AiChatUpdateId.messages,
+          AiChatUpdateId.suggestions,
+        ]);
+      },
+    );
+  }
+
+  /// Adds a host-side failure (for example document/OCR preparation failure)
+  /// to the same generic conversation presentation without touching transport
+  /// history.
+  void presentLocalError({
+    required String message,
+    String? displayText,
+    Uint8List? displayImageBytes,
+    bool stopPrevious = false,
+  }) {
+    if (_isGenerating && stopPrevious) {
+      stop();
+    }
+    final String visibleText = displayText?.trim() ?? '';
+    if (visibleText.isNotEmpty || displayImageBytes != null) {
+      _presenter.addUserMessage(
+        text: visibleText,
+        imageBytes: displayImageBytes,
+      );
+    }
+    _presenter
+      ..ensureLoadingPlaceholder()
+      ..syncResponse(loading: false, errorMessage: message);
+    _followUpSuggestions = const <String>[];
+    _notifyConversationChanged();
+  }
+
+  /// Stops either active transport or an asynchronous pre-transport
+  /// preparation owned by this controller.
+  bool stop() {
+    if (!_isGenerating) {
+      return false;
+    }
+
+    _session.stopActiveTurn();
+    _latestSendId++;
+    _isGenerating = false;
+    _followUpSuggestions = const <String>[];
+    _presenter.syncResponse(
+      loading: false,
+      result: _streamingText,
+      reasoning: _streamingReasoning,
+    );
+    _notifyConversationChanged();
+    return true;
   }
 
   void newConversation() {
@@ -215,7 +299,16 @@ class AiChatController extends GetxController {
     _streamingReasoning = '';
     _followUpSuggestions = const <String>[];
     if (notify) {
-      update();
+      _notifyConversationChanged();
     }
+  }
+
+  void _notifyConversationChanged() {
+    update(<String>[
+      AiChatUpdateId.messages,
+      AiChatUpdateId.status,
+      AiChatUpdateId.input,
+      AiChatUpdateId.suggestions,
+    ]);
   }
 }
