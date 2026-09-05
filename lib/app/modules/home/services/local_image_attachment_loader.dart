@@ -1,8 +1,7 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
-
-import '../models/ai_chat_input.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart' show AiImageAttachment;
 
 class LocalImageAttachmentLoader {
   const LocalImageAttachmentLoader._();
