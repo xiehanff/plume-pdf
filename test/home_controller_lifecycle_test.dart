@@ -6,36 +6,28 @@ import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_selection.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_reader_state.dart';
 
 void main() {
-  test('selection changes never mutate AI turn state', () {
+  test('selection changes never mutate host AI preflight state', () {
     final HomeController controller = HomeController();
     final PdfAiSelection initialSelection = PdfAiSelection.area(
       pageNumber: 1,
       bounds: const PdfRect(10, 100, 120, 20),
     );
-    const PdfAiPanelState runningTurn = PdfAiPanelState(
+    const PdfAiPanelState runningPreflight = PdfAiPanelState(
       apiKey: 'cached-key',
       loading: true,
-      sessionId: 7,
-      actionLabel: '解释',
-      actionId: 42,
-      actionSelectionText: 'old selection',
-      result: 'partial answer',
-      reasoning: 'partial reasoning',
-      followUpSuggestions: <String>['follow up'],
     );
     controller.state = PdfReaderState(
       aiSelectionMode: true,
       aiSelection: initialSelection,
-      aiPanelState: runningTurn,
+      aiPanelState: runningPreflight,
     );
 
     controller.onAiSelectionChanged(null);
 
     expect(controller.state.aiSelection, isNull);
-    expect(controller.state.aiPanelState, same(runningTurn));
+    expect(controller.state.aiPanelState, same(runningPreflight));
     expect(controller.state.aiPanelState.loading, isTrue);
-    expect(controller.state.aiPanelState.result, 'partial answer');
-    expect(controller.state.aiPanelState.reasoning, 'partial reasoning');
+    expect(controller.state.aiPanelState.apiKey, 'cached-key');
 
     final PdfAiSelection nextSelection = PdfAiSelection.area(
       pageNumber: 2,
@@ -44,7 +36,7 @@ void main() {
     controller.onAiSelectionChanged(nextSelection);
 
     expect(controller.state.aiSelection, same(nextSelection));
-    expect(controller.state.aiPanelState, same(runningTurn));
+    expect(controller.state.aiPanelState, same(runningPreflight));
 
     controller.onClose();
   });
@@ -77,7 +69,7 @@ void main() {
     controller.onClose();
   });
 
-  test('leaving a document clears document-scoped AI presentation state', () {
+  test('leaving a document ends host AI preflight and keeps API key', () {
     final HomeController controller = HomeController();
     controller.state = const PdfReaderState(
       filePath: '/tmp/current.pdf',
@@ -85,12 +77,6 @@ void main() {
       aiPanelState: PdfAiPanelState(
         apiKey: 'cached-key',
         loading: true,
-        sessionId: 3,
-        actionLabel: '深度理解',
-        actionId: 9,
-        result: 'old result',
-        reasoning: 'old reasoning',
-        followUpSuggestions: <String>['old follow up'],
       ),
     );
 
@@ -100,10 +86,6 @@ void main() {
     expect(controller.state.aiSelectionMode, isFalse);
     expect(controller.state.aiPanelState.apiKey, 'cached-key');
     expect(controller.state.aiPanelState.loading, isFalse);
-    expect(controller.state.aiPanelState.actionId, isNull);
-    expect(controller.state.aiPanelState.result, isNull);
-    expect(controller.state.aiPanelState.reasoning, isNull);
-    expect(controller.state.aiPanelState.followUpSuggestions, isEmpty);
 
     controller.onClose();
   });
