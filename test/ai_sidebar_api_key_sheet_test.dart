@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart';
 import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
+
+class _IdleBackend implements AiBackend {
+  @override
+  Stream<AiStreamEvent> chat(AiBackendRequest request) =>
+      const Stream<AiStreamEvent>.empty();
+}
 
 void main() {
   testWidgets('移动端 API Key 为空不关闭，非空保存完成后关闭设置弹窗', (
     WidgetTester tester,
   ) async {
     bool saved = false;
+    final AiChatController chatController = AiChatController(
+      session: AiChatSession(backend: _IdleBackend()),
+    );
     final AiSidebarController controller = AiSidebarController(
       state: const PdfAiPanelState(),
+      chatController: chatController,
       onApiKeyChanged: (_) {},
       onSaveApiKey: () async {
         saved = true;
@@ -25,6 +36,7 @@ void main() {
       if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
         Get.delete<AiSidebarController>(tag: AiSidebarController.tag, force: true);
       }
+      chatController.onClose();
     });
 
     await tester.pumpWidget(
