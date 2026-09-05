@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plume_pdf/app/modules/home/models/pdf_ai_context.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_context.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_outline_entry.dart';
-import 'package:plume_pdf/app/modules/home/services/ai_prompts.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/services/ai_prompts.dart';
 
 void main() {
   test('从中文和英文消息中识别指定页码', () {
