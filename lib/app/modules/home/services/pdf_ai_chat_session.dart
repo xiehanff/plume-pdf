@@ -68,7 +68,7 @@ class PdfAiChatSession {
         userMessage: AiChatHistoryMessage.user(
           content: userPrompt,
           image: isVisionMode
-              ? AiImageAttachment(bytes: imageBytes!, mimeType: 'image/png')
+              ? AiImageAttachment(bytes: imageBytes, mimeType: 'image/png')
               : null,
         ),
         systemPrompt: AiPrompts.systemPrompt(action),
