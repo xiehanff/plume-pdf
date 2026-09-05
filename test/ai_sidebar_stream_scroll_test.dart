@@ -56,6 +56,28 @@ class _Harness {
     );
   }
 
+  Future<void> waitForTransport(WidgetTester tester) async {
+    for (int i = 0; i < 5 && !backend.stream.hasListener; i++) {
+      await tester.pump();
+    }
+    expect(
+      backend.stream.hasListener,
+      isTrue,
+      reason: 'AI transport subscription should be attached before test events',
+    );
+  }
+
+  Future<void> finishTurn(
+    WidgetTester tester,
+    Future<AiChatTurnResult> future,
+  ) async {
+    final Future<void> closeFuture = backend.stream.close();
+    await tester.pump();
+    await closeFuture;
+    await future;
+    await tester.pump();
+  }
+
   void dispose() {
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       Get.delete<AiSidebarController>(tag: AiSidebarController.tag, force: true);
@@ -145,7 +167,7 @@ void main() {
     final _Harness h = createHarness();
     await h.mount(tester);
     final Future<AiChatTurnResult> future = h.startTurn();
-    await tester.pump();
+    await h.waitForTransport(tester);
     expectPinnedToBottom(h, 'loading 占位');
 
     const String paragraph = longText;
@@ -188,9 +210,7 @@ void main() {
             '<plume_follow_up_suggestions>["什么是位置编码","对比 RNN 的差异"]</plume_follow_up_suggestions>',
       ),
     );
-    await h.backend.stream.close();
-    await future;
-    await tester.pump();
+    await h.finishTurn(tester, future);
     expectPinnedToBottom(h, '完成态');
   });
 
@@ -198,7 +218,7 @@ void main() {
     final _Harness h = createHarness();
     await h.mount(tester);
     final Future<AiChatTurnResult> future = h.startTurn();
-    await tester.pump();
+    await h.waitForTransport(tester);
 
     h.backend.stream.add(
       AiStreamEvent(text: List<String>.filled(8, longText).join()),
@@ -234,16 +254,14 @@ void main() {
       reason: '恢复跟随后应贴底，否则后续流式输出不可见',
     );
 
-    await h.backend.stream.close();
-    await future;
-    await tester.pump();
+    await h.finishTurn(tester, future);
   });
 
   testWidgets('流式增长时用户阅读的历史位置保持稳定', (tester) async {
     final _Harness h = createHarness();
     await h.mount(tester);
     final Future<AiChatTurnResult> future = h.startTurn();
-    await tester.pump();
+    await h.waitForTransport(tester);
 
     h.backend.stream.add(
       AiStreamEvent(text: List<String>.filled(6, longText).join()),
@@ -265,8 +283,6 @@ void main() {
       reason: '用户阅读历史时，流式内容增长不得移动滚动位置',
     );
 
-    await h.backend.stream.close();
-    await future;
-    await tester.pump();
+    await h.finishTurn(tester, future);
   });
 }
