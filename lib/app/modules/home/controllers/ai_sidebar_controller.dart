@@ -5,6 +5,8 @@ import 'package:flutter/gestures.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:get/get.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart'
+    show FollowTailScrollController;
 
 import '../models/ai_chat_input.dart';
 import '../models/pdf_ai_panel_state.dart';
@@ -17,53 +19,6 @@ enum AiSidebarMode { conversation, settings }
 enum _ScrollFollowState { followingTail, userControlled }
 
 enum _ResultUpdateMode { replace, incremental }
-
-/// 贴底跟随的滚动控制器：跟随态下内容尺寸变化时，在 layout 期间
-/// 同帧把 offset 修正到新的底部（correction pass），渲染前已经贴底，
-/// 消除 post-frame 补偿产生的一帧漂移（高频流式下表现为上下闪动）。
-class FollowTailScrollController extends ScrollController {
-  FollowTailScrollController({required this.isFollowingTail});
-
-  final ValueGetter<bool> isFollowingTail;
-
-  @override
-  ScrollPosition createScrollPosition(
-    ScrollPhysics? physics,
-    ScrollContext context,
-    ScrollPosition? oldPosition,
-  ) {
-    return _FollowTailScrollPosition(
-      physics: physics ?? const ClampingScrollPhysics(),
-      context: context,
-      oldPosition: oldPosition,
-      isFollowingTail: isFollowingTail,
-    );
-  }
-}
-
-class _FollowTailScrollPosition extends ScrollPositionWithSingleContext {
-  _FollowTailScrollPosition({
-    required super.physics,
-    required super.context,
-    super.oldPosition,
-    required this.isFollowingTail,
-  });
-
-  final ValueGetter<bool> isFollowingTail;
-
-  @override
-  bool correctForNewDimensions(
-    ScrollMetrics oldDimensions,
-    ScrollMetrics newDimensions,
-  ) {
-    if (isFollowingTail() &&
-        newDimensions.maxScrollExtent - pixels > 0.5) {
-      correctPixels(newDimensions.maxScrollExtent);
-      return false;
-    }
-    return super.correctForNewDimensions(oldDimensions, newDimensions);
-  }
-}
 
 class _ConversationState {
   final List<ChatMessage> messages = <ChatMessage>[];
