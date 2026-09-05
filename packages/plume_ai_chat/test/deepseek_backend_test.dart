@@ -18,12 +18,14 @@ void main() {
         headers: <String, String>{'content-type': 'text/event-stream'},
       );
     });
-    final DeepSeekBackend backend = DeepSeekBackend(httpClient: client);
+    final DeepSeekBackend backend = DeepSeekBackend(
+      apiKeyProvider: () => 'key',
+      httpClient: client,
+    );
 
     final List<AiStreamEvent> events = await backend
         .chat(
           const AiBackendRequest(
-            apiKey: 'key',
             systemPrompt: 'system',
             history: <AiChatHistoryMessage>[
               AiChatHistoryMessage.user(content: 'hello'),
@@ -44,12 +46,14 @@ void main() {
       requestBody = jsonDecode(request.body) as Map<String, dynamic>;
       return http.Response('data: [DONE]\n\n', 200);
     });
-    final DeepSeekBackend backend = DeepSeekBackend(httpClient: client);
+    final DeepSeekBackend backend = DeepSeekBackend(
+      apiKeyProvider: () => 'key',
+      httpClient: client,
+    );
 
     await backend
         .chat(
           AiBackendRequest(
-            apiKey: 'key',
             history: <AiChatHistoryMessage>[
               AiChatHistoryMessage.user(
                 content: 'image',
@@ -78,12 +82,14 @@ void main() {
       requestBody = jsonDecode(request.body) as Map<String, dynamic>;
       return http.Response('data: [DONE]\n\n', 200);
     });
-    final DeepSeekBackend backend = DeepSeekBackend(httpClient: client);
+    final DeepSeekBackend backend = DeepSeekBackend(
+      apiKeyProvider: () => 'key',
+      httpClient: client,
+    );
 
     await backend
         .chat(
           const AiBackendRequest(
-            apiKey: 'key',
             history: <AiChatHistoryMessage>[
               AiChatHistoryMessage.user(content: 'deep dive'),
             ],
@@ -107,12 +113,14 @@ void main() {
       requestBody = jsonDecode(request.body) as Map<String, dynamic>;
       return http.Response('data: [DONE]\n\n', 200);
     });
-    final DeepSeekBackend backend = DeepSeekBackend(httpClient: client);
+    final DeepSeekBackend backend = DeepSeekBackend(
+      apiKeyProvider: () => 'key',
+      httpClient: client,
+    );
 
     await backend
         .chat(
           const AiBackendRequest(
-            apiKey: 'key',
             history: <AiChatHistoryMessage>[
               AiChatHistoryMessage.user(content: 'hello'),
             ],
@@ -126,6 +134,7 @@ void main() {
   test('empty API key fails before transport', () async {
     int calls = 0;
     final DeepSeekBackend backend = DeepSeekBackend(
+      apiKeyProvider: () => '   ',
       httpClient: MockClient((http.Request request) async {
         calls++;
         return http.Response('data: [DONE]\n\n', 200);
@@ -136,7 +145,6 @@ void main() {
       backend
           .chat(
             const AiBackendRequest(
-              apiKey: '   ',
               history: <AiChatHistoryMessage>[
                 AiChatHistoryMessage.user(content: 'hello'),
               ],
@@ -156,6 +164,7 @@ void main() {
 
   test('401 authentication failure cannot fallback to text', () async {
     final DeepSeekBackend backend = DeepSeekBackend(
+      apiKeyProvider: () => 'bad-key',
       httpClient: MockClient((http.Request request) async {
         return http.Response(
           jsonEncode(<String, dynamic>{
@@ -172,7 +181,6 @@ void main() {
       await backend
           .chat(
             const AiBackendRequest(
-              apiKey: 'bad-key',
               history: <AiChatHistoryMessage>[
                 AiChatHistoryMessage.user(content: 'hello'),
               ],
@@ -189,6 +197,7 @@ void main() {
 
   test('400 image capability rejection can fallback to text', () async {
     final DeepSeekBackend backend = DeepSeekBackend(
+      apiKeyProvider: () => 'key',
       httpClient: MockClient((http.Request request) async {
         return http.Response(
           jsonEncode(<String, dynamic>{
@@ -205,7 +214,6 @@ void main() {
       await backend
           .chat(
             AiBackendRequest(
-              apiKey: 'key',
               history: <AiChatHistoryMessage>[
                 AiChatHistoryMessage.user(
                   content: 'analyze',
