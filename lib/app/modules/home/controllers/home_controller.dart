@@ -16,7 +16,7 @@ import 'ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
-import '../services/ai_agent_session.dart';
+import '../services/pdf_ai_chat_session.dart';
 import '../services/deepseek_service.dart';
 import '../services/deepseek_settings_store.dart';
 import '../services/macos_file_open_service.dart';
@@ -51,7 +51,7 @@ class HomeController extends GetxController {
   final DeepSeekSettingsStore _deepSeekSettingsStore = DeepSeekSettingsStore();
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
-  final AiAgentSession _aiAgentSession = AiAgentSession();
+  final PdfAiChatSession _aiAgentSession = PdfAiChatSession();
   late final PdfAiContextService _pdfAiContextService = PdfAiContextService(
     viewerController: pdfViewerController,
     ocrService: _macosOcrService,
