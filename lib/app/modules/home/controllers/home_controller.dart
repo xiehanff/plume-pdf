@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart'
+    show AiChatException, DeepSeekBackend, DeepSeekBackendException;
 
 import '../models/ai_chat_history_message.dart';
 import '../models/pdf_outline_entry.dart';
@@ -14,10 +16,10 @@ import '../models/pdf_ai_panel_state.dart';
 import '../models/pdf_ai_context.dart';
 import 'ai_sidebar_controller.dart';
 import '../models/pdf_ai_selection.dart';
+import '../models/pdf_ai_tool_action.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
 import '../services/pdf_ai_chat_session.dart';
-import '../services/deepseek_service.dart';
 import '../services/deepseek_settings_store.dart';
 import '../services/macos_file_open_service.dart';
 import '../services/macos_ocr_service.dart';
