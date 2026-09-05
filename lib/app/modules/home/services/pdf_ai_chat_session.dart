@@ -52,7 +52,7 @@ class PdfAiChatSession {
     String? pageContext,
     Uint8List? imageBytes,
     required void Function(String text, String reasoning) onPreview,
-  }) async {
+  }) {
     final bool isVisionMode = imageBytes != null && imageBytes.isNotEmpty;
     final String userPrompt = isVisionMode && selectionText.trim().isEmpty
         ? AiPrompts.visionUserPrompt(action)
@@ -68,7 +68,7 @@ class PdfAiChatSession {
         userMessage: AiChatHistoryMessage.user(
           content: userPrompt,
           image: isVisionMode
-              ? AiImageAttachment(bytes: imageBytes, mimeType: 'image/png')
+              ? AiImageAttachment(bytes: imageBytes!, mimeType: 'image/png')
               : null,
         ),
         systemPrompt: AiPrompts.systemPrompt(action),
