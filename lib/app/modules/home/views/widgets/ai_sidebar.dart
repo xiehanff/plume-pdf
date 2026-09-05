@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:plume_ai_chat/plume_ai_chat.dart'
-    show AiChatMessageList, ChatMessage;
+    show AiChatInput, AiChatMessageList, ChatMessage;
 
 import '../../../../theme/app_colors.dart';
-import '../../controllers/ai_sidebar_controller.dart';
-import '../../models/ai_chat_input.dart';
+import '../../../pdf_ai/controllers/ai_sidebar_controller.dart';
 import 'ai_sidebar_settings.dart';
 import 'chat_bubble.dart';
 import 'chat_input_bar.dart';
