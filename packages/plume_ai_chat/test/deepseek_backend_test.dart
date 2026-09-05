@@ -122,4 +122,106 @@ void main() {
 
     expect(requestBody['reasoning_effort'], 'low');
   });
+
+  test('empty API key fails before transport', () async {
+    int calls = 0;
+    final DeepSeekBackend backend = DeepSeekBackend(
+      httpClient: MockClient((http.Request request) async {
+        calls++;
+        return http.Response('data: [DONE]\n\n', 200);
+      }),
+    );
+
+    await expectLater(
+      backend
+          .chat(
+            const AiBackendRequest(
+              apiKey: '   ',
+              history: <AiChatHistoryMessage>[
+                AiChatHistoryMessage.user(content: 'hello'),
+              ],
+            ),
+          )
+          .toList(),
+      throwsA(
+        isA<DeepSeekBackendException>().having(
+          (DeepSeekBackendException error) => error.message,
+          'message',
+          contains('API Key'),
+        ),
+      ),
+    );
+    expect(calls, 0);
+  });
+
+  test('401 authentication failure cannot fallback to text', () async {
+    final DeepSeekBackend backend = DeepSeekBackend(
+      httpClient: MockClient((http.Request request) async {
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'error': <String, dynamic>{
+              'message': 'Invalid API key provided',
+            },
+          }),
+          401,
+        );
+      }),
+    );
+
+    try {
+      await backend
+          .chat(
+            const AiBackendRequest(
+              apiKey: 'bad-key',
+              history: <AiChatHistoryMessage>[
+                AiChatHistoryMessage.user(content: 'hello'),
+              ],
+            ),
+          )
+          .toList();
+      fail('expected DeepSeekBackendException');
+    } on DeepSeekBackendException catch (error) {
+      expect(error.statusCode, 401);
+      expect(error.message, contains('认证失败'));
+      expect(error.canFallbackToText, isFalse);
+    }
+  });
+
+  test('400 image capability rejection can fallback to text', () async {
+    final DeepSeekBackend backend = DeepSeekBackend(
+      httpClient: MockClient((http.Request request) async {
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'error': <String, dynamic>{
+              'message': 'This model does not support image input',
+            },
+          }),
+          400,
+        );
+      }),
+    );
+
+    try {
+      await backend
+          .chat(
+            AiBackendRequest(
+              apiKey: 'key',
+              history: <AiChatHistoryMessage>[
+                AiChatHistoryMessage.user(
+                  content: 'analyze',
+                  image: AiImageAttachment(
+                    bytes: Uint8List.fromList(<int>[1]),
+                    mimeType: 'image/png',
+                  ),
+                ),
+              ],
+            ),
+          )
+          .toList();
+      fail('expected DeepSeekBackendException');
+    } on DeepSeekBackendException catch (error) {
+      expect(error.statusCode, 400);
+      expect(error.canFallbackToText, isTrue);
+    }
+  });
 }
