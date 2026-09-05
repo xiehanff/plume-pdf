@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import '../models/chat_message.dart';
@@ -11,11 +12,13 @@ enum _ResultUpdateMode { replace, incremental }
 /// have presentation lifecycles that should not mutate model history.
 class AiConversationPresenter {
   final List<ChatMessage> _messages = <ChatMessage>[];
+  late final UnmodifiableListView<ChatMessage> _messageView =
+      UnmodifiableListView<ChatMessage>(_messages);
   String? _lastResult;
   String? _lastReasoning;
   int _nextMessageId = 0;
 
-  List<ChatMessage> get messages => List<ChatMessage>.unmodifiable(_messages);
+  List<ChatMessage> get messages => _messageView;
 
   bool get isEmpty => _messages.isEmpty;
 
@@ -23,7 +26,9 @@ class AiConversationPresenter {
     _messages.clear();
     _lastResult = null;
     _lastReasoning = null;
-    _nextMessageId = 0;
+    // Keep IDs monotonic across conversation resets. Flutter views commonly use
+    // them as ValueKeys, so a new conversation must not reuse a key that an old
+    // subtree may still be disposing in the same frame.
   }
 
   /// Adds a user-visible turn without making any assumption about the transport
