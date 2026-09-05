@@ -22,23 +22,26 @@ DeepSeekBackend / another provider
 
 `AiChatSession` and `AiBackend` are framework-independent. GetX is an intentional dependency of the controller/UI coordination layer, not of the transport/runtime layer.
 
-The package does **not** call `Get.put`, `Get.find`, define routes, or persist credentials. The host owns controller lifecycle and dependency registration.
+The package does **not** call `Get.put`, `Get.find`, define routes, or persist credentials. The host owns controller lifecycle and dependency registration. Provider credentials are configured on the concrete backend, so the provider-neutral controller/session/request types never need to know what an API key is.
 
 ## Basic usage
 
 ```dart
 final session = AiChatSession(
-  backend: DeepSeekBackend(),
+  backend: DeepSeekBackend(
+    apiKeyProvider: () async => apiKey,
+  ),
 );
 
 final controller = AiChatController(session: session);
 
 final result = await controller.send(
-  apiKey: apiKey,
   input: const AiChatInput(text: 'Hello'),
   systemPrompt: 'Answer concisely.',
 );
 ```
+
+The credential provider can read from any host-owned source: secure storage, account state, an in-memory token, or another credential service. Backends that require no authentication do not need to model an API key at all.
 
 `AiChatController` owns the reusable presentation lifecycle as well as GetX invalidation:
 
@@ -46,8 +49,10 @@ final result = await controller.send(
 - AI loading placeholder
 - streaming text/reasoning updates
 - Stop cleanup
+- latest-wins presentation ownership
 - follow-up suggestions
 - new-conversation reset
+- active-turn cancellation when the controller is disposed
 
 The rendered message list is available from `controller.messages`.
 
@@ -57,7 +62,7 @@ A host that already uses GetX may register the controller itself:
 Get.put<AiChatController>(controller, tag: 'my-chat');
 ```
 
-Registration is optional. A host may also keep the controller as a normal object and pass it to its own widgets.
+Registration is optional. A host may also keep the controller as a normal object and pass it to its own widgets. In either case, disposing the controller clears the session and cancels active/pending work.
 
 ## Reusable message-list structure
 
@@ -144,5 +149,6 @@ Belongs in the host application:
 - app navigation
 - sidebar/window layout
 - API key persistence / secure storage policy
+- backend credential provider/configuration
 - app-specific colors, fonts, Markdown rendering and attachment UX
 - provider/account selection policy specific to the product
