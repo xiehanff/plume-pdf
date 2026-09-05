@@ -3,8 +3,8 @@ import 'dart:typed_data';
 import 'package:plume_ai_chat/plume_ai_chat.dart';
 
 import '../models/pdf_ai_context.dart';
+import '../models/pdf_ai_tool_action.dart';
 import 'ai_prompts.dart';
-import 'deepseek_service.dart' show AiToolAction, DeepSeekException;
 
 /// Plume 侧暂时保留的结果形状。
 ///
@@ -63,7 +63,7 @@ class PdfAiChatSession {
           );
 
     return _run(
-      () => _session.send(
+      _session.send(
         apiKey: apiKey,
         userMessage: AiChatHistoryMessage.user(
           content: userPrompt,
@@ -94,7 +94,7 @@ class PdfAiChatSession {
     required void Function(String text, String reasoning) onPreview,
   }) {
     return _run(
-      () => _session.send(
+      _session.send(
         apiKey: apiKey,
         userMessage: userMessage,
         systemPrompt: AiPrompts.chatSystemPrompt(
@@ -105,23 +105,13 @@ class PdfAiChatSession {
     );
   }
 
-  Future<AiStreamResult> _run(
-    Future<AiChatTurnResult> Function() operation,
-  ) async {
-    try {
-      final AiChatTurnResult result = await operation();
-      return AiStreamResult(
-        content: result.content,
-        reasoning: result.reasoning,
-        followUpSuggestions: result.followUpSuggestions,
-        stopped: result.stopped,
-      );
-    } on DeepSeekBackendException catch (error) {
-      // HomeController 现阶段仍按旧异常类型处理视觉 fallback 和错误文案。
-      // 这层只做类型兼容，不重新发请求。
-      throw DeepSeekException(error.message, statusCode: error.statusCode);
-    } on AiChatException catch (error) {
-      throw DeepSeekException(error.message);
-    }
+  Future<AiStreamResult> _run(Future<AiChatTurnResult> operation) async {
+    final AiChatTurnResult result = await operation;
+    return AiStreamResult(
+      content: result.content,
+      reasoning: result.reasoning,
+      followUpSuggestions: result.followUpSuggestions,
+      stopped: result.stopped,
+    );
   }
 }
