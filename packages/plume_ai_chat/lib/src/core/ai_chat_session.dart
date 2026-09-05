@@ -2,17 +2,29 @@ import 'dart:async';
 
 import '../backend/ai_backend.dart';
 import '../models/ai_chat_history_message.dart';
+import 'ai_response_parser.dart';
 
 class AiChatTurnResult {
   const AiChatTurnResult({
     required this.content,
     required this.reasoning,
+    this.followUpSuggestions = const <String>[],
     this.stopped = false,
   });
 
   final String content;
   final String reasoning;
+  final List<String> followUpSuggestions;
   final bool stopped;
+}
+
+class AiChatException implements Exception {
+  const AiChatException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 class _ActiveTurn {
@@ -216,9 +228,17 @@ class AiChatSession {
       }
     }
 
+    final AiResponse response = AiResponseParser.parse(textBuffer.toString());
+    final String content = response.content.trim();
+    if (content.isEmpty && !active.stopped) {
+      throw const AiChatException('AI 没有返回可展示的内容。');
+    }
     return AiChatTurnResult(
-      content: textBuffer.toString().trim(),
+      content: content,
       reasoning: reasoningBuffer.toString(),
+      followUpSuggestions: active.stopped
+          ? const <String>[]
+          : response.followUpSuggestions,
       stopped: active.stopped,
     );
   }

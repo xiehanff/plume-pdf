@@ -1,6 +1,7 @@
 library plume_ai_chat;
 
 export 'src/backend/ai_backend.dart';
+export 'src/backend/deepseek_backend.dart';
 export 'src/controller/ai_chat_controller.dart';
 export 'src/core/ai_chat_session.dart';
 export 'src/core/ai_response_parser.dart';
