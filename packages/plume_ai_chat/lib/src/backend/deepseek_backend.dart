@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -10,17 +11,21 @@ import 'ai_backend.dart';
 ///
 /// Domain-specific prompt construction belongs to the host application. The
 /// backend only converts generic chat history and the optional system prompt to
-/// DeepSeek's HTTP/SSE protocol.
+/// DeepSeek's HTTP/SSE protocol. Authentication is resolved by the backend so
+/// the provider-neutral chat core never needs to know what an API key is.
 class DeepSeekBackend implements AiBackend {
   DeepSeekBackend({
+    required FutureOr<String> Function() apiKeyProvider,
     http.Client? httpClient,
     this.model = defaultModel,
     this.endpoint = 'https://api.deepseek.com/v1',
     this.reasoningEffort = 'low',
-  }) : _httpClient = httpClient;
+  }) : _apiKeyProvider = apiKeyProvider,
+       _httpClient = httpClient;
 
   static const String defaultModel = 'deepseek-v4-flash-vision-exp';
 
+  final FutureOr<String> Function() _apiKeyProvider;
   final http.Client? _httpClient;
   final String model;
   final String endpoint;
@@ -31,7 +36,7 @@ class DeepSeekBackend implements AiBackend {
 
   @override
   Stream<AiStreamEvent> chat(AiBackendRequest request) async* {
-    final String apiKey = request.apiKey.trim();
+    final String apiKey = (await _apiKeyProvider()).trim();
     if (apiKey.isEmpty) {
       throw const DeepSeekBackendException('请先填写 DeepSeek API Key。');
     }
