@@ -5,6 +5,7 @@ import '../core/ai_chat_session.dart';
 import '../core/ai_response_parser.dart';
 import '../models/ai_chat_history_message.dart';
 import '../models/ai_chat_input.dart';
+import '../models/ai_chat_submission.dart';
 import '../models/chat_message.dart';
 import 'ai_conversation_presenter.dart';
 
@@ -43,6 +44,8 @@ class AiChatController extends GetxController {
   List<AiChatHistoryMessage> get history => _session.history;
   List<ChatMessage> get messages => _presenter.messages;
 
+  /// Convenience API for a normal user chat message, where UI presentation and
+  /// transport history are the same message.
   Future<AiChatTurnResult> send({
     required String apiKey,
     required AiChatInput input,
@@ -50,17 +53,52 @@ class AiChatController extends GetxController {
     AiRequestOptions options = const AiRequestOptions(),
     bool stopPrevious = false,
     bool deferHistoryCommit = false,
+  }) {
+    if (input.isEmpty) {
+      return Future<AiChatTurnResult>.value(
+        const AiChatTurnResult(content: '', reasoning: ''),
+      );
+    }
+
+    final String displayText = input.text.trim().isEmpty && input.image != null
+        ? '请分析这张图片。'
+        : input.text.trim();
+    return submit(
+      apiKey: apiKey,
+      submission: AiChatSubmission(
+        userMessage: AiChatHistoryMessage.user(
+          content: displayText,
+          image: input.image,
+        ),
+        displayText: displayText,
+        displayImageBytes: input.image?.bytes,
+        systemPrompt: systemPrompt,
+        options: options,
+        stopPrevious: stopPrevious,
+        deferHistoryCommit: deferHistoryCommit,
+      ),
+    );
+  }
+
+  /// Executes a generic chat turn whose transport prompt may differ from the
+  /// text/image presented in the conversation UI.
+  ///
+  /// This is the reusable integration point for domain actions such as PDF
+  /// translate/explain, code review, email summarization, and similar workflows.
+  Future<AiChatTurnResult> submit({
+    required String apiKey,
+    required AiChatSubmission submission,
   }) async {
-    if (input.isEmpty || (_isGenerating && !stopPrevious)) {
+    if (_isGenerating && !submission.stopPrevious) {
       return const AiChatTurnResult(content: '', reasoning: '');
     }
 
     final int sendId = ++_latestSendId;
-    final String displayText = input.text.trim().isEmpty && input.image != null
-        ? '请分析这张图片。'
-        : input.text.trim();
     _presenter
-      ..addUserMessage(text: displayText, imageBytes: input.image?.bytes)
+      ..addUserMessage(
+        text: submission.displayText,
+        imageBytes: submission.displayImageBytes,
+      )
       ..ensureLoadingPlaceholder();
 
     _isGenerating = true;
@@ -77,14 +115,11 @@ class AiChatController extends GetxController {
     try {
       final AiChatTurnResult result = await _session.send(
         apiKey: apiKey,
-        userMessage: AiChatHistoryMessage.user(
-          content: displayText,
-          image: input.image,
-        ),
-        systemPrompt: systemPrompt,
-        options: options,
-        stopPrevious: stopPrevious,
-        deferHistoryCommit: deferHistoryCommit,
+        userMessage: submission.userMessage,
+        systemPrompt: submission.systemPrompt,
+        options: submission.options,
+        stopPrevious: submission.stopPrevious,
+        deferHistoryCommit: submission.deferHistoryCommit,
         onPreview: (String text, String reasoning) {
           if (sendId != _latestSendId) {
             return;
@@ -159,7 +194,7 @@ class AiChatController extends GetxController {
   }
 
   void newConversation() {
-    // Let still-finishing old send() Futures lose UI state ownership.
+    // Let still-finishing old submit() Futures lose UI state ownership.
     _latestSendId++;
     _session.clear();
     _presenter.reset();
