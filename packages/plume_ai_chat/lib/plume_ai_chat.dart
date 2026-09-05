@@ -8,3 +8,4 @@ export 'src/core/ai_response_parser.dart';
 export 'src/models/ai_chat_history_message.dart';
 export 'src/models/ai_chat_input.dart';
 export 'src/models/chat_message.dart';
+export 'src/ui/follow_tail_scroll_controller.dart';
