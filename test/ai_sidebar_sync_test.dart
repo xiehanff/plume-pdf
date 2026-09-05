@@ -21,13 +21,8 @@ class _ControlledBackend implements AiBackend {
 }
 
 class _Harness {
-  _Harness()
-    : backend = _ControlledBackend(),
-      chat = AiChatController(
-        session: AiChatSession(backend: _ControlledBackend()),
-      ) {
-    // Replace the temporary initializer with one shared backend/controller pair.
-    chat.onClose();
+  _Harness() {
+    backend = _ControlledBackend();
     chat = AiChatController(session: AiChatSession(backend: backend));
     sidebar = AiSidebarController(
       state: const PdfAiPanelState(apiKey: 'test-key'),
@@ -40,9 +35,9 @@ class _Harness {
     );
   }
 
-  final _ControlledBackend backend;
-  late AiChatController chat;
-  late AiSidebarController sidebar;
+  late final _ControlledBackend backend;
+  late final AiChatController chat;
+  late final AiSidebarController sidebar;
 
   Future<void> mount(WidgetTester tester) async {
     Get.put<AiSidebarController>(sidebar, tag: AiSidebarController.tag);
