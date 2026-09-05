@@ -13,11 +13,20 @@ import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
 
 class _ControlledBackend implements AiBackend {
-  final StreamController<AiStreamEvent> stream =
-      StreamController<AiStreamEvent>(sync: true);
+  MultiStreamController<AiStreamEvent>? _controller;
+
+  bool get hasListener => _controller != null;
 
   @override
-  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+  Stream<AiStreamEvent> chat(AiBackendRequest request) {
+    return Stream<AiStreamEvent>.multi((MultiStreamController<AiStreamEvent> controller) {
+      _controller = controller;
+    });
+  }
+
+  void add(AiStreamEvent event) => _controller!.addSync(event);
+
+  void close() => _controller?.closeSync();
 }
 
 class _Harness {
@@ -48,11 +57,11 @@ class _Harness {
   }
 
   Future<void> waitForTransport(WidgetTester tester) async {
-    for (int i = 0; i < 5 && !backend.stream.hasListener; i++) {
+    for (int i = 0; i < 5 && !backend.hasListener; i++) {
       await tester.pump();
     }
     expect(
-      backend.stream.hasListener,
+      backend.hasListener,
       isTrue,
       reason: 'AI transport subscription should be attached before test events',
     );
@@ -62,10 +71,9 @@ class _Harness {
     WidgetTester tester,
     Future<AiChatTurnResult> future,
   ) async {
-    final Future<void> closeFuture = backend.stream.close();
+    backend.close();
     await tester.pump();
     await future;
-    await closeFuture;
     await tester.pump();
   }
 
@@ -112,7 +120,7 @@ void main() {
     expect(second.author, MessageAuthor.ai);
     expect(second.isLoading, isTrue);
 
-    h.backend.stream.add(const AiStreamEvent(text: '完成'));
+    h.backend.add(const AiStreamEvent(text: '完成'));
     await tester.pump(const Duration(milliseconds: 55));
     await h.finishTurn(tester, future);
   });
@@ -129,16 +137,16 @@ void main() {
     );
     await h.waitForTransport(tester);
 
-    h.backend.stream.add(const AiStreamEvent(text: '这是一个'));
+    h.backend.add(const AiStreamEvent(text: '这是一个'));
     await tester.pump(const Duration(milliseconds: 55));
     expect(find.text('这是一个'), findsOneWidget);
 
-    h.backend.stream.add(const AiStreamEvent(text: '最基础的 C 语言示例'));
+    h.backend.add(const AiStreamEvent(text: '最基础的 C 语言示例'));
     await tester.pump(const Duration(milliseconds: 55));
     expect(find.text('这是一个最基础的 C 语言示例'), findsOneWidget);
     expect(find.byType(ChatBubble), findsNWidgets(2));
 
-    h.backend.stream.add(
+    h.backend.add(
       const AiStreamEvent(
         text:
             '<plume_follow_up_suggestions>["根据这段代码再举一个例子","解释它的运行过程"]</plume_follow_up_suggestions>',
@@ -164,7 +172,7 @@ void main() {
       ),
     );
     await h.waitForTransport(tester);
-    h.backend.stream.add(const AiStreamEvent(text: answer));
+    h.backend.add(const AiStreamEvent(text: answer));
     await h.finishTurn(tester, future);
 
     expect(find.byType(CustomDivider), findsNothing);
@@ -198,7 +206,7 @@ void main() {
       ),
     );
     await h.waitForTransport(tester);
-    h.backend.stream.add(AiStreamEvent(reasoning: reasoning));
+    h.backend.add(AiStreamEvent(reasoning: reasoning));
     await tester.pump(const Duration(milliseconds: 55));
 
     expect(find.byType(ReasoningPanel), findsOneWidget);
@@ -213,7 +221,7 @@ void main() {
     expect(find.byType(GptMarkdown), findsOneWidget);
     expect(find.byType(ShaderMask), findsNothing);
 
-    h.backend.stream.add(const AiStreamEvent(text: '完成'));
+    h.backend.add(const AiStreamEvent(text: '完成'));
     await tester.pump(const Duration(milliseconds: 55));
     await h.finishTurn(tester, future);
   });
