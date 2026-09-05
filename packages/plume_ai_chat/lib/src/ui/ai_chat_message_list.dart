@@ -10,6 +10,7 @@ typedef AiChatMessageBuilder = Widget Function(
 );
 typedef AiChatEmptyBuilder = Widget Function(BuildContext context);
 typedef AiChatTrailingBuilder = Widget Function(BuildContext context);
+typedef AiChatPointerSignalCallback = void Function(PointerSignalEvent event);
 
 /// Reusable structure for a streaming chat message list.
 ///
@@ -37,7 +38,7 @@ class AiChatMessageList extends StatelessWidget {
   final AiChatTrailingBuilder? trailingBuilder;
   final NotificationListenerCallback<ScrollNotification>?
       onScrollNotification;
-  final PointerSignalEventListener? onPointerSignal;
+  final AiChatPointerSignalCallback? onPointerSignal;
   final EdgeInsetsGeometry padding;
 
   @override
