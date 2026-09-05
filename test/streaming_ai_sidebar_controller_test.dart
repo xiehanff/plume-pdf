@@ -12,7 +12,7 @@ import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 
 class _ControlledBackend implements AiBackend {
   final StreamController<AiStreamEvent> stream =
-      StreamController<AiStreamEvent>();
+      StreamController<AiStreamEvent>(sync: true);
 
   @override
   Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
@@ -115,7 +115,8 @@ void main() {
       reason: '用户回到底部阈值后应一次性 flush 最新流式内容',
     );
 
-    chatController.stop();
+    expect(chatController.stop(), isTrue);
+    await tester.pump();
     await future;
   });
 }
