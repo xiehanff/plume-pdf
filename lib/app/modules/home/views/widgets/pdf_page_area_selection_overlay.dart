@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../../theme/app_colors.dart';
-import '../../models/pdf_ai_selection.dart';
-import '../../services/deepseek_service.dart';
+import '../../../pdf_ai/models/pdf_ai_selection.dart';
+import '../../../pdf_ai/models/pdf_ai_tool_action.dart';
 import 'selection_toolbar_placement.dart';
 
 enum DragMode { none, create, move }
