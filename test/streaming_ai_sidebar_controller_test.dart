@@ -115,8 +115,8 @@ void main() {
       reason: '用户回到底部阈值后应一次性 flush 最新流式内容',
     );
 
-    expect(chatController.stop(), isTrue);
-    await tester.pump();
+    await backend.stream.close();
     await future;
+    await tester.pump();
   });
 }
