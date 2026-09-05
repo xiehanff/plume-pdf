@@ -61,7 +61,15 @@ void main() {
         userMessage: AiChatHistoryMessage.user(content: 'prompt'),
       ),
     );
-    await tester.pump();
+    for (int i = 0; i < 5 && !backend.stream.hasListener; i++) {
+      await tester.pump();
+    }
+    expect(
+      backend.stream.hasListener,
+      isTrue,
+      reason: 'AI transport subscription should be attached before test events',
+    );
+
     backend.stream.add(AiStreamEvent(text: initialResult));
     await tester.pump(const Duration(milliseconds: 55));
 
@@ -115,7 +123,9 @@ void main() {
       reason: '用户回到底部阈值后应一次性 flush 最新流式内容',
     );
 
-    await backend.stream.close();
+    final Future<void> closeFuture = backend.stream.close();
+    await tester.pump();
+    await closeFuture;
     await future;
     await tester.pump();
   });
