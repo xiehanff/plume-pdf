@@ -2,7 +2,7 @@
 
 Reusable Flutter AI chat foundation used by Plume applications.
 
-The package owns generic conversation state, streaming lifecycle, provider transport boundaries and GetX-based UI coordination. Host applications remain responsible for domain context such as PDF extraction/OCR, app routing and credential persistence.
+The package owns generic conversation state, streaming lifecycle, provider transport boundaries and GetX-based UI coordination. Host applications remain responsible for domain context such as PDF extraction/OCR, app routing, visual design and credential persistence.
 
 ## Architecture
 
@@ -11,6 +11,8 @@ Host domain adapter
         ↓
 AiChatController (GetX)
         ↓
+AiConversationPresenter
+        ↓
 AiChatSession
         ↓
 AiBackend
@@ -18,7 +20,7 @@ AiBackend
 DeepSeekBackend / another provider
 ```
 
-`AiChatSession` and `AiBackend` are framework-independent. GetX is an intentional dependency of the controller/UI layer, not of the transport/runtime layer.
+`AiChatSession` and `AiBackend` are framework-independent. GetX is an intentional dependency of the controller/UI coordination layer, not of the transport/runtime layer.
 
 The package does **not** call `Get.put`, `Get.find`, define routes, or persist credentials. The host owns controller lifecycle and dependency registration.
 
@@ -38,13 +40,45 @@ final result = await controller.send(
 );
 ```
 
+`AiChatController` owns the reusable presentation lifecycle as well as GetX invalidation:
+
+- optimistic user message
+- AI loading placeholder
+- streaming text/reasoning updates
+- Stop cleanup
+- follow-up suggestions
+- new-conversation reset
+
+The rendered message list is available from `controller.messages`.
+
 A host that already uses GetX may register the controller itself:
 
 ```dart
 Get.put<AiChatController>(controller, tag: 'my-chat');
 ```
 
-Registration is optional; the same controller can also be passed directly to widgets.
+Registration is optional. A host may also keep the controller as a normal object and pass it to its own widgets.
+
+## Reusable message-list structure
+
+The package deliberately does not impose Plume's colors, Markdown renderer or icons. `AiChatMessageList` owns only list structure, stable message keys and scroll-event plumbing; the host supplies visual builders.
+
+```dart
+AiChatMessageList(
+  messages: controller.messages,
+  controller: scrollController,
+  messageBuilder: (context, message, index) {
+    return MyChatBubble(message: message);
+  },
+  trailingBuilder: controller.followUpSuggestions.isEmpty
+      ? null
+      : (context) => MySuggestions(
+            suggestions: controller.followUpSuggestions,
+          ),
+)
+```
+
+This lets another Flutter application reuse the chat lifecycle without taking a dependency on Plume-specific presentation code.
 
 ## Streaming and cancellation
 
@@ -59,7 +93,7 @@ Registration is optional; the same controller can also be passed directly to wid
 - ~40 ms preview batching for high-frequency SSE streams
 - latest-wins turns for tool/action workflows
 
-The public history view is immutable.
+The public history view is immutable. Each transport request still receives an independent immutable history snapshot at the Turn boundary.
 
 ## Domain adapters
 
@@ -100,7 +134,9 @@ Belongs in `plume_ai_chat`:
 - provider-neutral backend contract
 - DeepSeek HTTP/SSE backend
 - GetX chat controller
-- generic chat UI behavior such as follow-tail scrolling
+- generic chat presentation state
+- generic message-list structure
+- generic follow-tail scrolling behavior
 
 Belongs in the host application:
 
@@ -108,5 +144,5 @@ Belongs in the host application:
 - app navigation
 - sidebar/window layout
 - API key persistence / secure storage policy
-- app-specific colors, fonts and Markdown presentation
+- app-specific colors, fonts, Markdown rendering and attachment UX
 - provider/account selection policy specific to the product
