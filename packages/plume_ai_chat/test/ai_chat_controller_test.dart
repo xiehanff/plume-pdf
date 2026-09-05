@@ -30,9 +30,13 @@ class _QueuedBackend implements AiBackend {
 class _SingleStreamBackend implements AiBackend {
   final StreamController<AiStreamEvent> stream =
       StreamController<AiStreamEvent>();
+  AiBackendRequest? lastRequest;
 
   @override
-  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+  Stream<AiStreamEvent> chat(AiBackendRequest request) {
+    lastRequest = request;
+    return stream.stream;
+  }
 }
 
 void main() {
@@ -110,6 +114,46 @@ void main() {
     expect(controller.followUpSuggestions, <String>['继续解释']);
     expect(controller.messages.last.text, '正文');
     expect(controller.messages.last.isLoading, isFalse);
+  });
+
+  test('submission separates display content from transport prompt', () async {
+    final _SingleStreamBackend backend = _SingleStreamBackend();
+    final AiChatController controller = AiChatController(
+      session: AiChatSession(backend: backend),
+    );
+
+    final Future<AiChatTurnResult> future = controller.submit(
+      apiKey: 'key',
+      submission: const AiChatSubmission(
+        displayText: '解释这段选区',
+        userMessage: AiChatHistoryMessage.user(
+          content: '请解释以下内容，并结合页面全文上下文：rich prompt',
+        ),
+        systemPrompt: 'system',
+        stopPrevious: true,
+        deferHistoryCommit: true,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.messages.first.text, '解释这段选区');
+    expect(
+      backend.lastRequest!.history.last.content,
+      '请解释以下内容，并结合页面全文上下文：rich prompt',
+    );
+    expect(backend.lastRequest!.systemPrompt, 'system');
+    expect(controller.history, isEmpty, reason: 'deferred tool turn is not committed early');
+
+    backend.stream
+      ..add(const AiStreamEvent(text: '解释结果'))
+      ..close();
+    await future;
+
+    expect(controller.messages.last.text, '解释结果');
+    expect(
+      controller.history.map((AiChatHistoryMessage message) => message.content),
+      <String>['请解释以下内容，并结合页面全文上下文：rich prompt', '解释结果'],
+    );
   });
 
   test('new conversation clears transport and presentation state', () async {
