@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart' show DeepSeekBackend;
 
 import '../../../../theme/app_colors.dart';
-import '../../services/ai_model_config.dart';
-import '../../services/deepseek_service.dart';
+import '../../../pdf_ai/services/ai_model_config.dart';
 
 class AiSidebarSettingsHeader extends StatelessWidget {
   const AiSidebarSettingsHeader({super.key, required this.onBack});
@@ -87,10 +87,11 @@ class _ModelInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AiModelConfig? config =
-        AiModelRegistry.instance.configFor(DeepSeekService.model);
-    final String modelId = config?.modelId ?? DeepSeekService.model;
-    final String label = config?.label ?? DeepSeekService.model;
+    final AiModelConfig? config = AiModelRegistry.instance.configFor(
+      DeepSeekBackend.defaultModel,
+    );
+    final String modelId = config?.modelId ?? DeepSeekBackend.defaultModel;
+    final String label = config?.label ?? DeepSeekBackend.defaultModel;
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
       padding: const EdgeInsets.all(14),

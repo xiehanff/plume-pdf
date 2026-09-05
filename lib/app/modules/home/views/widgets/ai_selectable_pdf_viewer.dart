@@ -6,7 +6,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../../../../theme/app_colors.dart';
 import '../../models/pdf_ai_selection.dart';
-import '../../services/deepseek_service.dart';
+import '../../models/pdf_ai_tool_action.dart';
 import 'ai_selection_mode_badge.dart';
 import 'pdf_page_area_selection_overlay.dart';
 
@@ -40,8 +40,9 @@ class AiSelectablePdfViewer extends StatefulWidget {
   final bool aiSelectionEnabled;
   final void Function(String filePath, PdfDocument? document) onDocumentChanged;
   final void Function(String filePath, int? pageNumber) onPageChanged;
-  final void Function(PdfDocument, PdfViewerController) onViewerReady;
-  final void Function(Object, StackTrace?) onLoadError;
+  final ValueChanged<String> onViewerReady;
+  final void Function(String filePath, Object error, StackTrace? stackTrace)
+  onLoadError;
   final ValueChanged<PdfAiSelection?> onSelectionChanged;
   final ValueChanged<AiToolAction> onActionSelected;
 
@@ -86,12 +87,14 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
   }
 
   Widget _buildPdfViewer() {
+    final String sourceFilePath = widget.filePath;
+    final int sourceInitialPage = widget.initialPage;
     final ColorFilter? colorFilter = widget.backgroundTheme.colorFilter;
     return PdfViewer.file(
-      widget.filePath,
-      key: ValueKey<String>('${widget.filePath}:${widget.initialPage}'),
+      sourceFilePath,
+      key: ValueKey<String>('$sourceFilePath:$sourceInitialPage'),
       controller: widget.controller,
-      initialPageNumber: widget.initialPage,
+      initialPageNumber: sourceInitialPage,
       params: PdfViewerParams(
         margin: widget.pageMargin,
         backgroundColor: AppColors.transparent,
@@ -103,12 +106,14 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
         scrollByMouseWheel: 0.9,
         pageDropShadow: null,
         onDocumentChanged: (PdfDocument? document) {
-          widget.onDocumentChanged(widget.filePath, document);
+          widget.onDocumentChanged(sourceFilePath, document);
         },
         onPageChanged: (int? pageNumber) {
-          widget.onPageChanged(widget.filePath, pageNumber);
+          widget.onPageChanged(sourceFilePath, pageNumber);
         },
-        onViewerReady: widget.onViewerReady,
+        onViewerReady: (_, __) {
+          widget.onViewerReady(sourceFilePath);
+        },
         viewerOverlayBuilder: (context, size, handleLinkTap) => <Widget>[
           if (widget.showScrollThumb)
             PdfViewerScrollThumb(
@@ -158,7 +163,7 @@ class _AiSelectablePdfViewerState extends State<AiSelectablePdfViewer> {
           PdfDocumentRef documentRef,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onLoadError(error, stackTrace);
+            widget.onLoadError(sourceFilePath, error, stackTrace);
           });
           return const SizedBox.shrink();
         },

@@ -6,28 +6,35 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart'
+    show
+        AiChatException,
+        AiChatHistoryMessage,
+        AiChatInput,
+        AiImageAttachment,
+        AiResponse,
+        AiResponseParser,
+        DeepSeekBackend,
+        DeepSeekBackendException;
 
-import '../models/ai_chat_history_message.dart';
-import '../models/pdf_outline_entry.dart';
-import '../models/ai_chat_input.dart';
-import '../models/pdf_ai_panel_state.dart';
-import '../models/pdf_ai_context.dart';
-import 'ai_sidebar_controller.dart';
-import '../models/pdf_ai_selection.dart';
+import '../../pdf_ai/controllers/ai_sidebar_controller.dart';
+import '../../pdf_ai/models/pdf_ai_context.dart';
+import '../../pdf_ai/models/pdf_ai_panel_state.dart';
+import '../../pdf_ai/models/pdf_ai_selection.dart';
+import '../../pdf_ai/models/pdf_ai_tool_action.dart';
+import '../../pdf_ai/services/ai_model_config.dart';
+import '../../pdf_ai/services/deepseek_settings_store.dart';
+import '../../pdf_ai/services/macos_ocr_service.dart';
+import '../../pdf_ai/services/pdf_ai_chat_session.dart';
+import '../../pdf_ai/services/pdf_ai_context_service.dart';
+import '../../reader/models/pdf_outline_entry.dart';
 import '../models/pdf_reader_state.dart';
 import '../models/pdf_recent_file.dart';
-import '../services/ai_agent_session.dart';
-import '../services/deepseek_service.dart';
-import '../services/deepseek_settings_store.dart';
 import '../services/macos_file_open_service.dart';
-import '../services/macos_ocr_service.dart';
-import '../services/pdf_ai_context_service.dart';
 import '../services/pdf_file_picker.dart';
 import '../services/pdf_outline_mapper.dart';
 import '../services/pdf_cover_cache.dart';
 import '../services/pdf_reader_store.dart';
-import '../services/ai_model_config.dart';
-import '../services/ai_response_parser.dart';
 import '../../../services/app_launch_args.dart';
 import '../../../theme/app_colors.dart';
 
@@ -36,6 +43,12 @@ part 'home_controller_ai_session.dart';
 part 'home_controller_file_manager.dart';
 
 class HomeController extends GetxController {
+  HomeController() {
+    _aiAgentSession = PdfAiChatSession(
+      apiKeyProvider: () => state.aiPanelState.apiKey,
+    );
+  }
+
   static const String viewId = 'reader_view';
   static const double _zoomStepFactor = 1.08;
   static const double _kScrollbarWidth = 12; // 8px thumb + 4px margin
@@ -51,7 +64,7 @@ class HomeController extends GetxController {
   final DeepSeekSettingsStore _deepSeekSettingsStore = DeepSeekSettingsStore();
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
-  final AiAgentSession _aiAgentSession = AiAgentSession();
+  late final PdfAiChatSession _aiAgentSession;
   late final PdfAiContextService _pdfAiContextService = PdfAiContextService(
     viewerController: pdfViewerController,
     ocrService: _macosOcrService,
@@ -114,14 +127,23 @@ class HomeController extends GetxController {
     );
   }
 
-  void onViewerReady(PdfDocument document, PdfViewerController controller) {
+  void onViewerReady(String filePath) {
+    if (state.filePath != filePath) {
+      return;
+    }
     _applyState(state.copyWith(loading: false, errorMessage: null));
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isClosed || state.filePath != filePath) {
+        return;
+      }
       fitWidth();
     });
   }
 
-  void onLoadError(Object error, StackTrace? stackTrace) {
+  void onLoadError(String filePath, Object error, StackTrace? stackTrace) {
+    if (state.filePath != filePath) {
+      return;
+    }
     debugPrint('[plume_pdf] onLoadError: $error');
     _showError('打开失败：$error');
   }
@@ -187,6 +209,7 @@ class HomeController extends GetxController {
         actionSelectionText: null,
         actionSelectionImage: null,
         result: null,
+        reasoning: null,
         followUpSuggestions: const <String>[],
         errorMessage: null,
       ),

@@ -2,7 +2,7 @@ part of 'home_controller.dart';
 
 /// AI 动作与会话编排：负责状态流转与层间协调。
 ///
-/// 流式累积/历史写入在 [AiAgentSession]（会话层），
+/// 流式累积/历史写入在 [PdfAiChatSession]（会话适配层），
 /// PDF 选区与文档上下文提取在 [PdfAiContextService]（提取层）。
 extension HomeControllerAiSession on HomeController {
   /// 请求发起时捕获的 actionId 是否仍是最新一次：失效的旧请求
@@ -30,32 +30,14 @@ extension HomeControllerAiSession on HomeController {
     return true;
   }
 
+  /// Selection lifecycle 只描述“当前框选是什么”。
+  ///
+  /// 框选开始、变化、取消以及 Overlay 因 viewport/focus 重置 selection，
+  /// 都不能结束正在运行的 AI Turn，也不能清理模型输出。只有明确的 AI
+  /// 动作、停止、新会话、切文档等入口才有资格改变 AI request/session
+  /// 生命周期。
   void onAiSelectionChanged(PdfAiSelection? selection) {
-    _applyState(
-      state.copyWith(
-        aiSelection: selection,
-        aiPanelState: selection == null
-            ? state.aiPanelState.copyWith(
-                actionId: null,
-                actionLabel: null,
-                actionSelectionText: null,
-                actionSelectionImage: null,
-                result: null,
-                reasoning: null,
-                followUpSuggestions: const <String>[],
-                errorMessage: null,
-                loading: false,
-              )
-            : state.aiPanelState.copyWith(
-                actionId: null,
-                actionLabel: null,
-                actionSelectionText: null,
-                actionSelectionImage: null,
-                followUpSuggestions: const <String>[],
-                errorMessage: null,
-              ),
-      ),
-    );
+    _applyState(state.copyWith(aiSelection: selection));
   }
 
   void updateAiApiKey(String apiKey) {
@@ -142,8 +124,7 @@ extension HomeControllerAiSession on HomeController {
       ),
     );
 
-    final String apiKey = state.aiPanelState.apiKey;
-    if (apiKey.trim().isEmpty) {
+    if (state.aiPanelState.apiKey.trim().isEmpty) {
       _applyState(
         state.copyWith(
           aiSidebarVisible: true,
@@ -185,7 +166,7 @@ extension HomeControllerAiSession on HomeController {
     );
 
     final AiModelConfig? config = AiModelRegistry.instance.configFor(
-      DeepSeekService.model,
+      DeepSeekBackend.defaultModel,
     );
     if (config != null &&
         config.supportsVision &&
@@ -194,7 +175,6 @@ extension HomeControllerAiSession on HomeController {
       return _runVisionAction(
         action: action,
         selection: selection,
-        apiKey: apiKey,
         currentActionId: currentActionId,
         imageBytes: imageBytes,
         selectionText: selectionText,
@@ -203,7 +183,6 @@ extension HomeControllerAiSession on HomeController {
     return _runTextAction(
       action: action,
       selection: selection,
-      apiKey: apiKey,
       currentActionId: currentActionId,
       extractedText: selectionText,
     );
@@ -214,7 +193,6 @@ extension HomeControllerAiSession on HomeController {
   Future<void> _runVisionAction({
     required AiToolAction action,
     required PdfAiSelection selection,
-    required String apiKey,
     required int currentActionId,
     required Uint8List imageBytes,
     required String selectionText,
@@ -222,7 +200,6 @@ extension HomeControllerAiSession on HomeController {
     try {
       final AiStreamResult result = await _aiAgentSession.runToolAction(
         action: action,
-        apiKey: apiKey,
         selectionText: '',
         imageBytes: imageBytes,
         onPreview: (String text, String reasoning) {
@@ -232,17 +209,19 @@ extension HomeControllerAiSession on HomeController {
       );
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
+    } on DeepSeekBackendException catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
       if (error.canFallbackToText && selectionText.trim().isNotEmpty) {
         return _runTextAction(
           action: action,
           selection: selection,
-          apiKey: apiKey,
           currentActionId: currentActionId,
           extractedText: selectionText,
         );
       }
+      _applyAiErrorState(error.message);
+    } on AiChatException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
@@ -253,7 +232,6 @@ extension HomeControllerAiSession on HomeController {
   Future<void> _runTextAction({
     required AiToolAction action,
     required PdfAiSelection selection,
-    required String apiKey,
     required int currentActionId,
     required String extractedText,
   }) async {
@@ -301,7 +279,6 @@ extension HomeControllerAiSession on HomeController {
     try {
       final AiStreamResult result = await _aiAgentSession.runToolAction(
         action: action,
-        apiKey: apiKey,
         selectionText: extractedText,
         pageContext: pageContext,
         onPreview: (String text, String reasoning) {
@@ -311,7 +288,10 @@ extension HomeControllerAiSession on HomeController {
       );
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
+    } on DeepSeekBackendException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
+      _applyAiErrorState(error.message);
+    } on AiChatException catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {
@@ -324,8 +304,7 @@ extension HomeControllerAiSession on HomeController {
     if (input.isEmpty) {
       return;
     }
-    final String apiKey = state.aiPanelState.apiKey;
-    if (apiKey.trim().isEmpty) {
+    if (state.aiPanelState.apiKey.trim().isEmpty) {
       _applyState(
         state.copyWith(
           aiSidebarVisible: true,
@@ -374,7 +353,6 @@ extension HomeControllerAiSession on HomeController {
         return;
       }
       final AiStreamResult result = await _aiAgentSession.sendChat(
-        apiKey: apiKey,
         userMessage: userHistoryMessage,
         documentContext: documentContext,
         onPreview: (String text, String reasoning) {
@@ -384,7 +362,10 @@ extension HomeControllerAiSession on HomeController {
       );
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
+    } on DeepSeekBackendException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
+      _applyAiErrorState(error.message);
+    } on AiChatException catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {

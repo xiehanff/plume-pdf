@@ -45,6 +45,16 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Test AI chat package
+        working-directory: packages/plume_ai_chat
+        run: |
+          flutter pub get
+          flutter test
+
+      - name: Analyze AI chat package
+        working-directory: packages/plume_ai_chat
+        run: flutter analyze --no-fatal-infos
+
       - name: Test
         run: flutter test
 
