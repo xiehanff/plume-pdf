@@ -47,7 +47,6 @@ class AiChatController extends GetxController {
   /// Convenience API for a normal user chat message, where UI presentation and
   /// transport history are the same message.
   Future<AiChatTurnResult> send({
-    required String apiKey,
     required AiChatInput input,
     String? systemPrompt,
     AiRequestOptions options = const AiRequestOptions(),
@@ -64,7 +63,6 @@ class AiChatController extends GetxController {
         ? '请分析这张图片。'
         : input.text.trim();
     return submit(
-      apiKey: apiKey,
       submission: AiChatSubmission(
         userMessage: AiChatHistoryMessage.user(
           content: displayText,
@@ -86,11 +84,17 @@ class AiChatController extends GetxController {
   /// This is the reusable integration point for domain actions such as PDF
   /// translate/explain, code review, email summarization, and similar workflows.
   Future<AiChatTurnResult> submit({
-    required String apiKey,
     required AiChatSubmission submission,
   }) async {
     if (_isGenerating && !submission.stopPrevious) {
       return const AiChatTurnResult(content: '', reasoning: '');
+    }
+
+    // Latest-wins must finalize/remove the previous presentation placeholder
+    // before appending the new user turn. Otherwise the new response can reuse
+    // the old loading bubble and appear above the new user message.
+    if (_isGenerating && submission.stopPrevious) {
+      stop();
     }
 
     final int sendId = ++_latestSendId;
@@ -114,7 +118,6 @@ class AiChatController extends GetxController {
 
     try {
       final AiChatTurnResult result = await _session.send(
-        apiKey: apiKey,
         userMessage: submission.userMessage,
         systemPrompt: submission.systemPrompt,
         options: submission.options,
@@ -159,8 +162,6 @@ class AiChatController extends GetxController {
       }
       rethrow;
     } finally {
-      // Stop/latest-wins allows a new turn to take UI ownership immediately.
-      // An older Future finishing later must not overwrite the new turn.
       if (sendId == _latestSendId) {
         _isGenerating = false;
         update(<String>[
@@ -194,7 +195,18 @@ class AiChatController extends GetxController {
   }
 
   void newConversation() {
-    // Let still-finishing old submit() Futures lose UI state ownership.
+    _resetConversation(notify: true);
+  }
+
+  @override
+  void onClose() {
+    // Controller disposal owns the runtime lifecycle too: no network stream or
+    // pending turn may outlive a host-owned GetX controller.
+    _resetConversation(notify: false);
+    super.onClose();
+  }
+
+  void _resetConversation({required bool notify}) {
     _latestSendId++;
     _session.clear();
     _presenter.reset();
@@ -202,6 +214,8 @@ class AiChatController extends GetxController {
     _streamingText = '';
     _streamingReasoning = '';
     _followUpSuggestions = const <String>[];
-    update();
+    if (notify) {
+      update();
+    }
   }
 }
