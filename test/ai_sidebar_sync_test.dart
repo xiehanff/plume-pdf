@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,150 +6,170 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:gpt_markdown/custom_widgets/custom_divider.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart';
 import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/chat_message.dart';
 
-void main() {
-  Future<void> pumpSidebar(WidgetTester tester, PdfAiPanelState state) async {
-    // 模拟 HomeController：首次注册时固定行为回调，之后只同步可变数据。
-    if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
-      Get.put(
-        AiSidebarController(
-          state: state,
-          onApiKeyChanged: (_) {},
-          onSaveApiKey: () async {},
-          onSendChat: (_) async {},
-          onStopChat: () {},
-          onNewSession: () {},
-        ),
-        tag: AiSidebarController.tag,
-      );
-      addTearDown(() {
-        if (Get.isRegistered<AiSidebarController>(
-          tag: AiSidebarController.tag,
-        )) {
-          Get.delete<AiSidebarController>(
-            tag: AiSidebarController.tag,
-            force: true,
-          );
-        }
-      });
-    }
-    Get.find<AiSidebarController>(
-      tag: AiSidebarController.tag,
-    ).updateExternalState(
-      state: state,
-      documentPath: null,
-      leftSidebarWidth: 0,
-    );
-    await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: AiSidebar())),
+class _ControlledBackend implements AiBackend {
+  final StreamController<AiStreamEvent> stream =
+      StreamController<AiStreamEvent>(sync: true);
+
+  @override
+  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+}
+
+class _Harness {
+  _Harness() {
+    backend = _ControlledBackend();
+    chat = AiChatController(session: AiChatSession(backend: backend));
+    sidebar = AiSidebarController(
+      state: const PdfAiPanelState(apiKey: 'test-key'),
+      chatController: chat,
+      onApiKeyChanged: (_) {},
+      onSaveApiKey: () async {},
+      onSendChat: (_) async {},
+      onStopChat: chat.stop,
+      onNewSession: chat.newConversation,
     );
   }
 
-  testWidgets('runAiAction 时序：用户气泡先出现，loading 在其后', (tester) async {
-    // 阶段1：提取中（loading=false，actionId 还未设置）→ 无用户气泡/loading
-    await pumpSidebar(
-      tester,
-      const PdfAiPanelState(sessionId: 1, loading: false),
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byType(ChatBubble), findsNothing);
+  late final _ControlledBackend backend;
+  late final AiChatController chat;
+  late final AiSidebarController sidebar;
 
-    // 阶段2：提取完成，一次性写入 loading+actionId+截图
-    final PdfAiPanelState ready = PdfAiPanelState(
-      sessionId: 1,
-      loading: true,
-      actionLabel: '解释',
-      actionId: 1,
-      actionSelectionImage: base64Decode(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
-        'AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  Future<void> mount(WidgetTester tester) async {
+    Get.put<AiSidebarController>(sidebar, tag: AiSidebarController.tag);
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: AiSidebar())),
+    );
+    await tester.pump();
+  }
+
+  Future<void> waitForTransport(WidgetTester tester) async {
+    for (int i = 0; i < 5 && !backend.stream.hasListener; i++) {
+      await tester.pump();
+    }
+    expect(
+      backend.stream.hasListener,
+      isTrue,
+      reason: 'AI transport subscription should be attached before test events',
+    );
+  }
+
+  Future<void> finishTurn(
+    WidgetTester tester,
+    Future<AiChatTurnResult> future,
+  ) async {
+    final Future<void> closeFuture = backend.stream.close();
+    await tester.pump();
+    await closeFuture;
+    await future;
+    await tester.pump();
+  }
+
+  void dispose() {
+    if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
+      Get.delete<AiSidebarController>(tag: AiSidebarController.tag, force: true);
+    }
+    chat.onClose();
+  }
+}
+
+void main() {
+  _Harness harness(WidgetTester tester) {
+    final _Harness value = _Harness();
+    addTearDown(value.dispose);
+    return value;
+  }
+
+  testWidgets('Package turn 时序：用户气泡先出现，loading 在其后', (tester) async {
+    final _Harness h = harness(tester);
+    await h.mount(tester);
+
+    final Future<AiChatTurnResult> future = h.chat.submit(
+      submission: AiChatSubmission(
+        displayText: '',
+        displayImageBytes: base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
+          'AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        ),
+        userMessage: const AiChatHistoryMessage.user(content: '解释图片'),
       ),
     );
-    await pumpSidebar(tester, ready);
-    await tester.pump(const Duration(milliseconds: 100));
+    await h.waitForTransport(tester);
 
     final List<ChatBubble> bubbles = tester
         .widgetList<ChatBubble>(find.byType(ChatBubble))
         .toList();
     expect(bubbles, hasLength(2));
-    // reverse 布局只影响视觉顺序（index 0 在最底部）；数据层仍是
-    // 用户消息在前、loading 占位在后，据此断言时序。
-    final AiSidebarController controller = Get.find<AiSidebarController>(
-      tag: AiSidebarController.tag,
-    );
-    expect(controller.messages, hasLength(2));
-    final ChatMessage first = controller.messages[0];
+    expect(h.sidebar.messages, hasLength(2));
+    final ChatMessage first = h.sidebar.messages[0];
     expect(first.author, MessageAuthor.human);
     expect(first.imageBytes, isNotNull);
-    // 第二条：模型侧 loading
-    final ChatMessage second = controller.messages[1];
+    final ChatMessage second = h.sidebar.messages[1];
     expect(second.author, MessageAuthor.ai);
     expect(second.isLoading, isTrue);
+
+    h.backend.stream.add(const AiStreamEvent(text: '完成'));
+    await tester.pump(const Duration(milliseconds: 55));
+    await h.finishTurn(tester, future);
   });
 
   testWidgets('流式：loading 被替换为增量内容，完成后显示追问建议', (tester) async {
-    PdfAiPanelState state = const PdfAiPanelState(
-      sessionId: 1,
-      loading: true,
-      actionLabel: '解释',
-      actionId: 1,
-    );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    final _Harness h = harness(tester);
+    await h.mount(tester);
 
-    // 首 chunk
-    state = state.copyWith(result: '这是一个', loading: true);
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    final Future<AiChatTurnResult> future = h.chat.submit(
+      submission: const AiChatSubmission(
+        displayText: '解释',
+        userMessage: AiChatHistoryMessage.user(content: '解释 prompt'),
+      ),
+    );
+    await h.waitForTransport(tester);
+
+    h.backend.stream.add(const AiStreamEvent(text: '这是一个'));
+    await tester.pump(const Duration(milliseconds: 55));
     expect(find.text('这是一个'), findsOneWidget);
 
-    // 增量 chunk
-    state = state.copyWith(result: '这是一个最基础的 C 语言示例', loading: true);
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    h.backend.stream.add(const AiStreamEvent(text: '最基础的 C 语言示例'));
+    await tester.pump(const Duration(milliseconds: 55));
     expect(find.text('这是一个最基础的 C 语言示例'), findsOneWidget);
-    // 增量不新增消息
-    final List<ChatBubble> bubbles = tester
-        .widgetList<ChatBubble>(find.byType(ChatBubble))
-        .toList();
-    expect(bubbles, hasLength(2));
+    expect(find.byType(ChatBubble), findsNWidgets(2));
 
-    // 完成
-    state = state.copyWith(
-      loading: false,
-      followUpSuggestions: const <String>['根据这段代码再举一个例子', '解释它的运行过程'],
+    h.backend.stream.add(
+      const AiStreamEvent(
+        text:
+            '<plume_follow_up_suggestions>["根据这段代码再举一个例子","解释它的运行过程"]</plume_follow_up_suggestions>',
+      ),
     );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    await h.finishTurn(tester, future);
+
     expect(find.text('根据这段代码再举一个例子'), findsOneWidget);
     expect(find.text('解释它的运行过程'), findsOneWidget);
   });
 
   testWidgets('正文渲染不产生分割线（--- 水平线与 h1 自动线）', (tester) async {
-    const PdfAiPanelState state = PdfAiPanelState(
-      sessionId: 3,
-      loading: false,
-      actionLabel: '解释',
-      actionId: 1,
-      result:
-          '# 概念\n\n第一段内容。\n\n---\n\n第二段内容。\n\n'
-          '```yaml\n---\nname: config\n```',
-    );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    final _Harness h = harness(tester);
+    await h.mount(tester);
+    const String answer =
+        '# 概念\n\n第一段内容。\n\n---\n\n第二段内容。\n\n'
+        '```yaml\n---\nname: config\n```';
 
-    // HrLine（---）与 h1 后自动分割线都渲染为 CustomDivider。
+    final Future<AiChatTurnResult> future = h.chat.submit(
+      submission: const AiChatSubmission(
+        displayText: '解释',
+        userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+      ),
+    );
+    await h.waitForTransport(tester);
+    h.backend.stream.add(const AiStreamEvent(text: answer));
+    await h.finishTurn(tester, future);
+
     expect(find.byType(CustomDivider), findsNothing);
-    // 分割线被隐藏，正文内容保留。
     expect(find.textContaining('第一段内容'), findsOneWidget);
     expect(find.textContaining('第二段内容'), findsOneWidget);
-    // 代码块内的 `---`（YAML 分隔符）不属于分割线，必须原样保留。
-    // HighlightView 将代码渲染为 RichText，需要 findRichText 匹配。
     expect(
       find.textContaining('name: config', findRichText: true),
       findsOneWidget,
@@ -163,23 +184,24 @@ void main() {
   });
 
   testWidgets('推理过程折叠态纯文本轻量渲染，展开后完整 markdown 渲染', (tester) async {
+    final _Harness h = harness(tester);
+    await h.mount(tester);
     final String reasoning = List<String>.generate(
       9,
       (int index) => '推理第 ${index + 1} 行',
     ).join('\n');
-    final PdfAiPanelState state = PdfAiPanelState(
-      sessionId: 2,
-      loading: true,
-      actionLabel: '解释',
-      actionId: 1,
-      reasoning: reasoning,
-    );
 
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    final Future<AiChatTurnResult> future = h.chat.submit(
+      submission: const AiChatSubmission(
+        displayText: '解释',
+        userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+      ),
+    );
+    await h.waitForTransport(tester);
+    h.backend.stream.add(AiStreamEvent(reasoning: reasoning));
+    await tester.pump(const Duration(milliseconds: 55));
 
     expect(find.byType(ReasoningPanel), findsOneWidget);
-    // 折叠态：轻量纯文本渲染（不构建完整 Markdown），八行截断 + 渐隐遮罩。
     expect(find.byType(GptMarkdown), findsNothing);
     expect(find.textContaining('推理第 1 行'), findsOneWidget);
     expect(find.text('展开全部'), findsOneWidget);
@@ -188,8 +210,11 @@ void main() {
     await tester.tap(find.text('展开全部'));
     await tester.pump();
     expect(find.text('收起'), findsOneWidget);
-    // 展开态：完整 Markdown 渲染，解除截断与遮罩。
     expect(find.byType(GptMarkdown), findsOneWidget);
     expect(find.byType(ShaderMask), findsNothing);
+
+    h.backend.stream.add(const AiStreamEvent(text: '完成'));
+    await tester.pump(const Duration(milliseconds: 55));
+    await h.finishTurn(tester, future);
   });
 }

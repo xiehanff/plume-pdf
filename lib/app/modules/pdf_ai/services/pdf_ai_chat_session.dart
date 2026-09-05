@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:plume_ai_chat/plume_ai_chat.dart';
@@ -7,112 +6,181 @@ import '../models/pdf_ai_context.dart';
 import '../models/pdf_ai_tool_action.dart';
 import 'ai_prompts.dart';
 
-/// Plume 侧暂时保留的结果形状。
-///
-/// Reader 编排层仍使用这个类型，内部已经由 `plume_ai_chat` 的
-/// [AiChatTurnResult] 提供真实会话结果。等 App 侧状态进一步收敛后再删除
-/// 这层兼容映射。
-class AiStreamResult {
-  const AiStreamResult({
-    required this.content,
-    required this.reasoning,
-    required this.followUpSuggestions,
-    this.stopped = false,
-  });
-
-  final String content;
-  final String reasoning;
-  final List<String> followUpSuggestions;
-  final bool stopped;
-}
+typedef PdfAiPageContextProvider = Future<String?> Function();
+typedef PdfAiDocumentContextProvider = Future<PdfAiContext?> Function();
 
 /// Plume-specific adapter between PDF reading semantics and the reusable
-/// `plume_ai_chat` runtime.
+/// `plume_ai_chat` controller/runtime.
+///
+/// This adapter owns prompt/domain translation only. Conversation presentation,
+/// loading/Stop state, history and streaming updates are all owned by the shared
+/// [AiChatController].
 class PdfAiChatSession {
-  PdfAiChatSession({
-    AiChatSession? session,
-    FutureOr<String> Function()? apiKeyProvider,
-  }) : _session =
-           session ??
-           AiChatSession(
-             backend: DeepSeekBackend(
-               apiKeyProvider: apiKeyProvider ?? () => '',
-             ),
-           );
+  PdfAiChatSession({required AiChatController controller})
+    : _controller = controller;
 
   static const int _deepDiveMaxTokens = 32768;
 
-  final AiChatSession _session;
+  final AiChatController _controller;
 
-  List<AiChatHistoryMessage> get history => _session.history;
+  bool get isGenerating => _controller.isGenerating;
+  List<AiChatHistoryMessage> get history => _controller.history;
 
-  void clear() => _session.clear();
+  void clear() => _controller.newConversation();
 
-  bool stopActiveStream() => _session.stopActiveTurn();
+  bool stopActiveStream() => _controller.stop();
 
-  Future<AiStreamResult> runToolAction({
+  Future<AiChatTurnResult> runToolAction({
     required AiToolAction action,
     required String selectionText,
-    String? pageContext,
     Uint8List? imageBytes,
-    required void Function(String text, String reasoning) onPreview,
+    PdfAiPageContextProvider? pageContextProvider,
   }) {
     final bool isVisionMode = imageBytes != null && imageBytes.isNotEmpty;
-    final String userPrompt = isVisionMode && selectionText.trim().isEmpty
-        ? AiPrompts.visionUserPrompt(action)
-        : AiPrompts.userPrompt(
-            action,
-            selectionText,
-            pageContext: pageContext,
+    final String displayText = isVisionMode
+        ? ''
+        : _actionDisplayText(action, selectionText);
+    final AiChatSubmission initialSubmission = isVisionMode
+        ? _visionSubmission(
+            action: action,
+            imageBytes: imageBytes,
+            displayText: displayText,
+          )
+        : _textSubmission(
+            action: action,
+            selectionText: selectionText,
+            displayText: displayText,
           );
 
-    return _run(
-      _session.send(
-        userMessage: AiChatHistoryMessage.user(
-          content: userPrompt,
-          image: isVisionMode
-              ? AiImageAttachment(bytes: imageBytes, mimeType: 'image/png')
-              : null,
-        ),
-        systemPrompt: AiPrompts.systemPrompt(action),
-        options: action == AiToolAction.deepDive
-            ? const AiRequestOptions(
-                maxOutputTokens: _deepDiveMaxTokens,
-                providerOptions: <String, Object?>{
-                  'reasoning_effort': null,
-                },
-              )
-            : const AiRequestOptions(),
-        stopPrevious: true,
-        deferHistoryCommit: true,
-        onPreview: onPreview,
-      ),
+    return _controller.submit(
+      submission: initialSubmission,
+      prepareSubmission: isVisionMode
+          ? null
+          : () async {
+              if (selectionText.trim().isEmpty) {
+                throw const AiChatException('当前框选区域没有识别到可用文本。');
+              }
+              final String? pageContext = await pageContextProvider?.call();
+              return _textSubmission(
+                action: action,
+                selectionText: selectionText,
+                pageContext: pageContext,
+                displayText: displayText,
+              );
+            },
+      fallbackBuilder: isVisionMode && selectionText.trim().isNotEmpty
+          ? (Object error) async {
+              if (error is! DeepSeekBackendException ||
+                  !error.canFallbackToText) {
+                return null;
+              }
+              final String? pageContext = await pageContextProvider?.call();
+              return _textSubmission(
+                action: action,
+                selectionText: selectionText,
+                pageContext: pageContext,
+                displayText: displayText,
+              );
+            }
+          : null,
     );
   }
 
-  Future<AiStreamResult> sendChat({
-    required AiChatHistoryMessage userMessage,
-    PdfAiContext? documentContext,
-    required void Function(String text, String reasoning) onPreview,
+  Future<AiChatTurnResult> sendChat({
+    required AiChatInput input,
+    required PdfAiDocumentContextProvider documentContextProvider,
   }) {
-    return _run(
-      _session.send(
-        userMessage: userMessage,
-        systemPrompt: AiPrompts.chatSystemPrompt(
-          documentContext: documentContext,
-        ),
-        onPreview: onPreview,
-      ),
+    final String trimmedMessage = input.text.trim();
+    final String historyMessage = trimmedMessage.isEmpty && input.image != null
+        ? '请分析这张图片。'
+        : trimmedMessage;
+    final AiChatHistoryMessage userMessage = AiChatHistoryMessage.user(
+      content: historyMessage,
+      image: input.image,
+    );
+    final AiChatSubmission initialSubmission = AiChatSubmission(
+      userMessage: userMessage,
+      displayText: historyMessage,
+      displayImageBytes: input.image?.bytes,
+      systemPrompt: AiPrompts.chatSystemPrompt(),
+    );
+
+    return _controller.submit(
+      submission: initialSubmission,
+      prepareSubmission: () async {
+        final PdfAiContext? documentContext = await documentContextProvider();
+        return AiChatSubmission(
+          userMessage: userMessage,
+          displayText: historyMessage,
+          displayImageBytes: input.image?.bytes,
+          systemPrompt: AiPrompts.chatSystemPrompt(
+            documentContext: documentContext,
+          ),
+        );
+      },
     );
   }
 
-  Future<AiStreamResult> _run(Future<AiChatTurnResult> operation) async {
-    final AiChatTurnResult result = await operation;
-    return AiStreamResult(
-      content: result.content,
-      reasoning: result.reasoning,
-      followUpSuggestions: result.followUpSuggestions,
-      stopped: result.stopped,
+  AiChatSubmission _visionSubmission({
+    required AiToolAction action,
+    required Uint8List imageBytes,
+    required String displayText,
+  }) {
+    return AiChatSubmission(
+      userMessage: AiChatHistoryMessage.user(
+        content: AiPrompts.visionUserPrompt(action),
+        image: AiImageAttachment(bytes: imageBytes, mimeType: 'image/png'),
+      ),
+      displayText: displayText,
+      displayImageBytes: imageBytes,
+      systemPrompt: AiPrompts.systemPrompt(action),
+      options: _optionsFor(action),
+      stopPrevious: true,
+      deferHistoryCommit: true,
     );
+  }
+
+  AiChatSubmission _textSubmission({
+    required AiToolAction action,
+    required String selectionText,
+    required String displayText,
+    String? pageContext,
+  }) {
+    return AiChatSubmission(
+      userMessage: AiChatHistoryMessage.user(
+        content: AiPrompts.userPrompt(
+          action,
+          selectionText,
+          pageContext: pageContext,
+        ),
+      ),
+      displayText: displayText,
+      systemPrompt: AiPrompts.systemPrompt(action),
+      options: _optionsFor(action),
+      stopPrevious: true,
+      deferHistoryCommit: true,
+    );
+  }
+
+  AiRequestOptions _optionsFor(AiToolAction action) {
+    return action == AiToolAction.deepDive
+        ? const AiRequestOptions(
+            maxOutputTokens: _deepDiveMaxTokens,
+            providerOptions: <String, Object?>{'reasoning_effort': null},
+          )
+        : const AiRequestOptions();
+  }
+
+  String _actionDisplayText(AiToolAction action, String selectionText) {
+    final String singleLine = selectionText
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (singleLine.isEmpty) {
+      return action.label;
+    }
+    final String shortened = singleLine.length <= 80
+        ? singleLine
+        : '${singleLine.substring(0, 80)}…';
+    return '${action.label} $shortened';
   }
 }

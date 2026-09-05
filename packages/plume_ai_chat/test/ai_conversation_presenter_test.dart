@@ -21,6 +21,24 @@ void main() {
     expect(presenter.messages.last.isLoading, isFalse);
   });
 
+  test('non-prefix replacement keeps the same AI bubble', () {
+    final AiConversationPresenter presenter = AiConversationPresenter();
+    presenter.addUserMessage(text: 'hello');
+    presenter.ensureLoadingPlaceholder();
+
+    final String loadingId = presenter.messages.last.id;
+    presenter.syncResponse(
+      loading: true,
+      result: '一段较长的初始回答，用来验证替换模式。',
+    );
+    presenter.syncResponse(loading: true, result: '替换后的短回答。');
+
+    expect(presenter.messages, hasLength(2));
+    expect(presenter.messages.last.id, loadingId);
+    expect(presenter.messages.last.text, '替换后的短回答。');
+    expect(presenter.messages.last.isLoading, isTrue);
+  });
+
   test('Stop before first visible token removes empty loading placeholder', () {
     final AiConversationPresenter presenter = AiConversationPresenter();
     presenter.addUserMessage(text: 'hello');

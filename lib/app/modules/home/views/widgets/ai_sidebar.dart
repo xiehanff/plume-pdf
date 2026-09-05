@@ -69,7 +69,7 @@ class _AiSidebarView extends StatelessWidget {
             ChatInputBar(
               controller: controller.inputController,
               focusNode: controller.inputFocusNode,
-              isLoading: controller.state.loading,
+              isLoading: controller.isLoading,
               onSend: (AiChatInput input) async {
                 // 移动端全屏模式：未配置 API Key 时发送直接打开配置弹窗，
                 // 避免首次使用者面对无引导的错误提示。

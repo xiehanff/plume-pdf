@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/gestures.dart'
     show PointerScrollEvent, PointerSignalEvent;
 import 'package:flutter/material.dart';
@@ -17,9 +15,9 @@ enum _ScrollFollowState { followingTail, userControlled }
 
 /// Plume's PDF-AI panel controller.
 ///
-/// Generic conversation presentation and follow-tail primitives live in
-/// `plume_ai_chat`; this controller keeps only host concerns such as sidebar
-/// width, API-key editing and synchronization with [PdfAiPanelState].
+/// Generic conversation state/presentation is owned by [AiChatController]. This
+/// controller keeps only host concerns: sidebar geometry, API-key settings,
+/// input/focus objects and the user's scroll-follow preference.
 class AiSidebarController extends GetxController {
   static const String tag = 'ai-sidebar';
 
@@ -29,6 +27,7 @@ class AiSidebarController extends GetxController {
 
   AiSidebarController({
     required PdfAiPanelState state,
+    required AiChatController chatController,
     required ValueChanged<String> onApiKeyChanged,
     required Future<void> Function() onSaveApiKey,
     required SendChatCallback onSendChat,
@@ -37,6 +36,7 @@ class AiSidebarController extends GetxController {
     String? documentPath,
     double leftSidebarWidth = 0,
   }) : _panelState = state,
+       _chatController = chatController,
        _documentPath = documentPath,
        _leftSidebarWidth = leftSidebarWidth,
        _onApiKeyChanged = onApiKeyChanged,
@@ -51,7 +51,11 @@ class AiSidebarController extends GetxController {
           _scrollFollowState == _ScrollFollowState.followingTail,
     );
     _inputFocusNode = FocusNode();
-    _syncConversationWithPanelState();
+    _lastMessageCount = chatController.messages.length;
+    _removeChatListener = chatController.addListenerId(
+      AiChatUpdateId.messages,
+      _handleChatControllerChanged,
+    );
   }
 
   late final TextEditingController _deepSeekController;
@@ -60,6 +64,7 @@ class AiSidebarController extends GetxController {
   late final FocusNode _inputFocusNode;
 
   PdfAiPanelState _panelState;
+  final AiChatController _chatController;
   String? _documentPath;
   double _leftSidebarWidth;
   final ValueChanged<String> _onApiKeyChanged;
@@ -67,36 +72,35 @@ class AiSidebarController extends GetxController {
   final SendChatCallback _onSendChat;
   final VoidCallback _onStopChat;
   final VoidCallback _onNewSession;
+  VoidCallback? _removeChatListener;
 
   AiSidebarMode _mode = AiSidebarMode.conversation;
   double _sidebarWidth = 320;
-  final AiConversationPresenter _conversation = AiConversationPresenter();
-  int? _lastActionId;
 
   _ScrollFollowState _scrollFollowState = _ScrollFollowState.followingTail;
   ScrollDirection _userScrollDirection = ScrollDirection.idle;
   int _scrollRequestId = 0;
   bool _hasDeferredStreamingUpdate = false;
+  int _lastMessageCount = 0;
 
   PdfAiPanelState get state => _panelState;
   AiSidebarMode get mode => _mode;
+  bool get isLoading => _panelState.loading || _chatController.isGenerating;
 
   bool get showFollowUpSuggestions {
-    if (_panelState.loading ||
-        _panelState.errorMessage != null ||
-        _panelState.followUpSuggestions.isEmpty ||
-        _conversation.isEmpty) {
+    if (isLoading || followUpSuggestions.isEmpty || messages.isEmpty) {
       return false;
     }
-    final ChatMessage last = _conversation.messages.last;
+    final ChatMessage last = messages.last;
     return last.author == MessageAuthor.ai &&
         !last.isLoading &&
         last.text.trim().isNotEmpty &&
         !last.text.startsWith('❌');
   }
 
-  List<ChatMessage> get messages => _conversation.messages;
-  List<String> get followUpSuggestions => _panelState.followUpSuggestions;
+  List<ChatMessage> get messages => _chatController.messages;
+  List<String> get followUpSuggestions =>
+      _chatController.followUpSuggestions;
   TextEditingController get deepSeekController => _deepSeekController;
   TextEditingController get inputController => _inputController;
   ScrollController get scrollController => _scrollController;
@@ -104,7 +108,7 @@ class AiSidebarController extends GetxController {
   double get sidebarWidth => _sidebarWidth;
   ValueChanged<String> get onApiKeyChanged => _onApiKeyChanged;
   Future<void> Function() get onSaveApiKey => _onSaveApiKey;
-  VoidCallback get onNewSession => _onNewSession;
+  VoidCallback get onNewSession => _handleNewSession;
   VoidCallback get onStopChat => _onStopChat;
 
   void updateExternalState({
@@ -112,36 +116,28 @@ class AiSidebarController extends GetxController {
     required String? documentPath,
     required double leftSidebarWidth,
   }) {
-    final bool sessionChanged =
-        _panelState.sessionId != state.sessionId ||
-        _documentPath != documentPath;
-    final bool startsNewRound =
-        sessionChanged ||
-        (state.actionId != null && state.actionId != _panelState.actionId);
+    final bool documentChanged = _documentPath != documentPath;
     final bool apiKeyChanged = _panelState.apiKey != state.apiKey;
+    final bool preflightLoadingChanged = _panelState.loading != state.loading;
+    final bool geometryChanged = _leftSidebarWidth != leftSidebarWidth;
 
     _panelState = state;
     _documentPath = documentPath;
     _leftSidebarWidth = leftSidebarWidth;
 
-    if (sessionChanged) {
-      _resetConversation(notify: false);
-    } else if (startsNewRound) {
-      _resumeScrollFollowing();
-      _hasDeferredStreamingUpdate = false;
+    if (documentChanged) {
+      _resetHostConversationUi();
     }
     if (apiKeyChanged && _deepSeekController.text != state.apiKey) {
       _deepSeekController.text = state.apiKey;
     }
 
-    _syncConversationWithPanelState();
-    if (_scrollFollowState == _ScrollFollowState.userControlled &&
-        state.loading) {
-      _hasDeferredStreamingUpdate = true;
-      return;
+    if (documentChanged ||
+        apiKeyChanged ||
+        preflightLoadingChanged ||
+        geometryChanged) {
+      update();
     }
-    _hasDeferredStreamingUpdate = false;
-    update();
   }
 
   void showSettings() {
@@ -225,6 +221,39 @@ class AiSidebarController extends GetxController {
     update();
   }
 
+  void _handleChatControllerChanged() {
+    if (isClosed) return;
+
+    final int messageCount = messages.length;
+    final bool messageCountChanged = messageCount != _lastMessageCount;
+    final bool addedMessage = messageCount > _lastMessageCount;
+    final bool resetConversation = messageCount == 0 && _lastMessageCount > 0;
+    _lastMessageCount = messageCount;
+
+    if (addedMessage) {
+      _resumeScrollFollowing();
+      _hasDeferredStreamingUpdate = false;
+    } else if (resetConversation) {
+      _resetHostConversationUi();
+    }
+
+    // Streaming markdown can be expensive. While the user is reading history,
+    // keep the newest package state but defer rebuilding this sidebar until the
+    // user returns to the bottom or the turn finishes/stops.
+    if (_scrollFollowState == _ScrollFollowState.userControlled &&
+        _chatController.isGenerating &&
+        !messageCountChanged) {
+      _hasDeferredStreamingUpdate = true;
+      return;
+    }
+
+    _hasDeferredStreamingUpdate = false;
+    update();
+    if (addedMessage) {
+      _scheduleScrollToBottom();
+    }
+  }
+
   Future<void> handleSend(AiChatInput input) async {
     if (input.isEmpty) return;
     await sendMessage(input.text, image: input.image);
@@ -233,16 +262,14 @@ class AiSidebarController extends GetxController {
   Future<void> sendMessage(String text, {AiImageAttachment? image}) async {
     final String trimmedText = text.trim();
     if (trimmedText.isEmpty && (image?.bytes.isEmpty ?? true)) return;
-    _conversation.addUserMessage(
-      text: trimmedText,
-      imageBytes: image?.bytes,
-    );
-    _conversation.ensureLoadingPlaceholder();
     _resumeScrollFollowing();
     _hasDeferredStreamingUpdate = false;
-    update();
-    _scheduleScrollToBottom();
     await _onSendChat(AiChatInput(text: trimmedText, image: image));
+  }
+
+  void _handleNewSession() {
+    _resetHostConversationUi();
+    _onNewSession();
   }
 
   void handleResize(DragUpdateDetails details, double screenWidth) {
@@ -254,56 +281,18 @@ class AiSidebarController extends GetxController {
     update();
   }
 
-  void _syncConversationWithPanelState() {
-    _syncAction(_panelState);
-    _conversation.syncResponse(
-      loading: _panelState.loading,
-      result: _panelState.result,
-      reasoning: _panelState.reasoning,
-      errorMessage: _panelState.errorMessage,
-    );
-  }
-
-  void _syncAction(PdfAiPanelState state) {
-    if (state.actionLabel == null || state.actionId == _lastActionId) return;
-
-    _lastActionId = state.actionId;
-    _conversation.addUserMessage(
-      text: _buildActionUserText(state),
-      imageBytes: state.actionSelectionImage,
-    );
-    _resumeScrollFollowing();
-    _scheduleScrollToBottom();
-  }
-
-  String _buildActionUserText(PdfAiPanelState state) {
-    final Uint8List? image = state.actionSelectionImage;
-    if (image != null && image.isNotEmpty) return '';
-    final String label = state.actionLabel ?? '';
-    final String selectionText = state.actionSelectionText ?? '';
-    if (selectionText.trim().isEmpty) return label;
-    final String singleLine = selectionText
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    final String shortened = singleLine.length <= 80
-        ? singleLine
-        : '${singleLine.substring(0, 80)}…';
-    return '$label $shortened';
-  }
-
-  void _resetConversation({required bool notify}) {
-    _conversation.reset();
-    _lastActionId = null;
+  void _resetHostConversationUi() {
     _inputController.clear();
     _resumeScrollFollowing();
     _userScrollDirection = ScrollDirection.idle;
     _scrollRequestId++;
     _hasDeferredStreamingUpdate = false;
-    if (notify) update();
   }
 
   @override
   void onClose() {
+    _removeChatListener?.call();
+    _removeChatListener = null;
     _deepSeekController.dispose();
     _inputController.dispose();
     _scrollController.dispose();

@@ -8,14 +8,10 @@ import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:plume_ai_chat/plume_ai_chat.dart'
     show
-        AiChatException,
-        AiChatHistoryMessage,
+        AiChatController,
         AiChatInput,
-        AiImageAttachment,
-        AiResponse,
-        AiResponseParser,
-        DeepSeekBackend,
-        DeepSeekBackendException;
+        AiChatSession,
+        DeepSeekBackend;
 
 import '../../pdf_ai/controllers/ai_sidebar_controller.dart';
 import '../../pdf_ai/models/pdf_ai_context.dart';
@@ -44,9 +40,14 @@ part 'home_controller_file_manager.dart';
 
 class HomeController extends GetxController {
   HomeController() {
-    _aiAgentSession = PdfAiChatSession(
-      apiKeyProvider: () => state.aiPanelState.apiKey,
+    _aiChatController = AiChatController(
+      session: AiChatSession(
+        backend: DeepSeekBackend(
+          apiKeyProvider: () => state.aiPanelState.apiKey,
+        ),
+      ),
     );
+    _aiAgentSession = PdfAiChatSession(controller: _aiChatController);
   }
 
   static const String viewId = 'reader_view';
@@ -64,6 +65,7 @@ class HomeController extends GetxController {
   final DeepSeekSettingsStore _deepSeekSettingsStore = DeepSeekSettingsStore();
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
+  late final AiChatController _aiChatController;
   late final PdfAiChatSession _aiAgentSession;
   late final PdfAiContextService _pdfAiContextService = PdfAiContextService(
     viewerController: pdfViewerController,
@@ -101,12 +103,15 @@ class HomeController extends GetxController {
   @override
   void onClose() {
     _saveDebounce?.cancel();
-    _invalidateAiWork();
+    _aiActionId++;
     pdfViewerController.removeListener(_handleViewerChanged);
     pageTextController.dispose();
+    // Sidebar owns a listener attached to the package controller, so detach the
+    // host UI controller before disposing the shared chat controller.
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       Get.delete<AiSidebarController>(tag: AiSidebarController.tag);
     }
+    _aiChatController.onClose();
     super.onClose();
   }
 
@@ -220,11 +225,10 @@ class HomeController extends GetxController {
     _applyState(state.copyWith(loading: false, errorMessage: message));
   }
 
-  /// 使当前文档/会话所属的所有 AI 异步工作失效。
+  /// Invalidates all AI work belonging to the current document/conversation.
   ///
-  /// Home 层的 actionId 保护 UI continuation；Agent 层的 generation 保护
-  /// history 并取消 active stream。文档切换、新会话和 Controller 销毁都
-  /// 统一走这里，避免只清 history 却允许旧 Future 回写新界面。
+  /// Home's action id protects PDF/OCR preparation continuations; the package
+  /// controller owns transport cancellation, presentation reset and history.
   void _invalidateAiWork() {
     _aiActionId++;
     _aiAgentSession.clear();
@@ -289,6 +293,7 @@ class HomeController extends GetxController {
     Get.put<AiSidebarController>(
       AiSidebarController(
         state: state.aiPanelState,
+        chatController: _aiChatController,
         onApiKeyChanged: updateAiApiKey,
         onSaveApiKey: saveAiApiKey,
         onSendChat: sendAiChat,
