@@ -14,7 +14,7 @@ import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
 
 class _ControlledBackend implements AiBackend {
   final StreamController<AiStreamEvent> stream =
-      StreamController<AiStreamEvent>();
+      StreamController<AiStreamEvent>(sync: true);
 
   @override
   Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
@@ -234,7 +234,8 @@ void main() {
       reason: '恢复跟随后应贴底，否则后续流式输出不可见',
     );
 
-    h.chat.stop();
+    expect(h.chat.stop(), isTrue);
+    await tester.pump();
     await future;
   });
 
@@ -264,7 +265,8 @@ void main() {
       reason: '用户阅读历史时，流式内容增长不得移动滚动位置',
     );
 
-    h.chat.stop();
+    expect(h.chat.stop(), isTrue);
+    await tester.pump();
     await future;
   });
 }
