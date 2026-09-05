@@ -49,33 +49,15 @@ extension HomeControllerAiSession on HomeController {
 
   Future<void> saveAiApiKey() async {
     await _deepSeekSettingsStore.saveApiKey(state.aiPanelState.apiKey);
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(errorMessage: null),
-      ),
-    );
   }
 
   /// 新建 AI 会话：Package Controller 统一清空 transport history 与消息 UI；
-  /// Home 只递增兼容 sessionId 并清掉尚未移除的旧 panel 字段。
+  /// Home 只结束尚在进行的 PDF/OCR preflight。
   void startNewAiSession() {
     _invalidateAiWork();
-    final int nextSessionId = _aiSessionId + 1;
-    _aiSessionId = nextSessionId;
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          sessionId: nextSessionId,
-          loading: false,
-          actionId: null,
-          actionLabel: null,
-          actionSelectionText: null,
-          actionSelectionImage: null,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: false),
       ),
     );
   }
@@ -97,17 +79,7 @@ extension HomeControllerAiSession on HomeController {
 
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: false,
-          actionId: null,
-          actionLabel: null,
-          actionSelectionText: null,
-          actionSelectionImage: null,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: false),
       ),
     );
   }
@@ -128,17 +100,7 @@ extension HomeControllerAiSession on HomeController {
     _applyState(
       state.copyWith(
         aiSidebarVisible: true,
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: true,
-          actionId: null,
-          actionLabel: null,
-          actionSelectionText: null,
-          actionSelectionImage: null,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: true),
       ),
     );
 
@@ -178,17 +140,7 @@ extension HomeControllerAiSession on HomeController {
           aiSelection: selectionText.trim().isEmpty
               ? selection
               : selection.copyWith(extractedText: selectionText),
-          aiPanelState: state.aiPanelState.copyWith(
-            loading: false,
-            actionId: null,
-            actionLabel: null,
-            actionSelectionText: null,
-            actionSelectionImage: null,
-            result: null,
-            reasoning: null,
-            followUpSuggestions: const <String>[],
-            errorMessage: null,
-          ),
+          aiPanelState: state.aiPanelState.copyWith(loading: false),
         ),
       );
 
@@ -205,8 +157,7 @@ extension HomeControllerAiSession on HomeController {
       }
       // Errors after submit are already represented by AiChatController. This
       // branch primarily covers extraction failures that happen before handoff.
-      if (!_aiAgentSession.isGenerating &&
-          state.aiPanelState.loading) {
+      if (!_aiAgentSession.isGenerating && state.aiPanelState.loading) {
         _finishAiPreflight();
         _aiChatController.presentLocalError(
           message: '请求失败：$error',
@@ -269,17 +220,7 @@ extension HomeControllerAiSession on HomeController {
     }
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: false,
-          actionId: null,
-          actionLabel: null,
-          actionSelectionText: null,
-          actionSelectionImage: null,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: false),
       ),
     );
   }
