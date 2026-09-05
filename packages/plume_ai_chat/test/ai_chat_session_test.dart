@@ -54,7 +54,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> future = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'hello'),
       onPreview: (_, __) {},
     );
@@ -75,11 +74,12 @@ void main() {
     final List<AiChatHistoryMessage> view = session.history;
 
     expect(identical(view, session.history), isTrue);
-    expect(() => view.add(const AiChatHistoryMessage.user(content: 'x')),
-        throwsUnsupportedError);
+    expect(
+      () => view.add(const AiChatHistoryMessage.user(content: 'x')),
+      throwsUnsupportedError,
+    );
 
     final Future<AiChatTurnResult> future = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'hello'),
       onPreview: (_, __) {},
     );
@@ -99,7 +99,6 @@ void main() {
     final List<String> previews = <String>[];
 
     final Future<AiChatTurnResult> future = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'hello'),
       onPreview: (String text, String reasoning) => previews.add(text),
     );
@@ -121,7 +120,6 @@ void main() {
     int previewCount = 0;
 
     final Future<AiChatTurnResult> future = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'hello'),
       onPreview: (_, __) => previewCount++,
     );
@@ -143,7 +141,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> future = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'hello'),
       onPreview: (_, __) {},
     );
@@ -163,7 +160,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> future = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'hello'),
       onPreview: (_, __) {},
     );
@@ -188,7 +184,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> first = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'first'),
       onPreview: (_, __) {},
     );
@@ -198,7 +193,6 @@ void main() {
     expect(session.stopActiveTurn(), isTrue);
 
     final Future<AiChatTurnResult> second = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'second'),
       onPreview: (_, __) {},
     );
@@ -230,7 +224,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> first = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'old'),
       onPreview: (_, __) {},
     );
@@ -238,7 +231,6 @@ void main() {
     expect(session.stopActiveTurn(), isTrue);
 
     final Future<AiChatTurnResult> second = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'new'),
       onPreview: (_, __) {},
     );
@@ -269,7 +261,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> first = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'first'),
       onPreview: (_, __) {},
     );
@@ -279,7 +270,6 @@ void main() {
     expect(session.stopActiveTurn(), isTrue);
 
     final Future<AiChatTurnResult> second = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'second'),
       onPreview: (_, __) {},
     );
@@ -304,7 +294,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> future = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'tool prompt'),
       deferHistoryCommit: true,
       onPreview: (_, __) {},
@@ -330,7 +319,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> first = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'A'),
       stopPrevious: true,
       deferHistoryCommit: true,
@@ -339,14 +327,12 @@ void main() {
     await backend.waitForCalls(1);
 
     final Future<AiChatTurnResult> second = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'B'),
       stopPrevious: true,
       deferHistoryCommit: true,
       onPreview: (_, __) {},
     );
     final Future<AiChatTurnResult> third = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'C'),
       stopPrevious: true,
       deferHistoryCommit: true,
@@ -375,7 +361,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> first = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'tool A'),
       stopPrevious: true,
       deferHistoryCommit: true,
@@ -386,7 +371,6 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     final Future<AiChatTurnResult> second = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'tool B'),
       stopPrevious: true,
       deferHistoryCommit: true,
@@ -420,7 +404,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> running = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'old'),
       onPreview: (_, __) {},
     );
@@ -442,7 +425,6 @@ void main() {
     final AiChatSession session = AiChatSession(backend: backend);
 
     final Future<AiChatTurnResult> oldTurn = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'old'),
       onPreview: (_, __) {},
     );
@@ -450,7 +432,6 @@ void main() {
 
     session.clear();
     final Future<AiChatTurnResult> newTurn = session.send(
-      apiKey: 'key',
       userMessage: const AiChatHistoryMessage.user(content: 'new'),
       onPreview: (_, __) {},
     );
