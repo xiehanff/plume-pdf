@@ -71,4 +71,55 @@ void main() {
         image['image_url'] as Map<String, dynamic>;
     expect(imageUrl['url'], 'data:image/png;base64,AQID');
   });
+
+  test('request options can set max tokens and explicitly omit reasoning effort', () async {
+    late Map<String, dynamic> requestBody;
+    final MockClient client = MockClient((http.Request request) async {
+      requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response('data: [DONE]\n\n', 200);
+    });
+    final DeepSeekBackend backend = DeepSeekBackend(httpClient: client);
+
+    await backend
+        .chat(
+          const AiBackendRequest(
+            apiKey: 'key',
+            history: <AiChatHistoryMessage>[
+              AiChatHistoryMessage.user(content: 'deep dive'),
+            ],
+            options: AiRequestOptions(
+              maxOutputTokens: 32768,
+              providerOptions: <String, Object?>{
+                'reasoning_effort': null,
+              },
+            ),
+          ),
+        )
+        .toList();
+
+    expect(requestBody['max_tokens'], 32768);
+    expect(requestBody.containsKey('reasoning_effort'), isFalse);
+  });
+
+  test('default reasoning effort is used when request does not override it', () async {
+    late Map<String, dynamic> requestBody;
+    final MockClient client = MockClient((http.Request request) async {
+      requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response('data: [DONE]\n\n', 200);
+    });
+    final DeepSeekBackend backend = DeepSeekBackend(httpClient: client);
+
+    await backend
+        .chat(
+          const AiBackendRequest(
+            apiKey: 'key',
+            history: <AiChatHistoryMessage>[
+              AiChatHistoryMessage.user(content: 'hello'),
+            ],
+          ),
+        )
+        .toList();
+
+    expect(requestBody['reasoning_effort'], 'low');
+  });
 }
