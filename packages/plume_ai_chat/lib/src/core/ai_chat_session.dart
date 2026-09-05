@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import '../backend/ai_backend.dart';
 import '../models/ai_chat_history_message.dart';
@@ -54,13 +55,19 @@ class AiChatSession {
 
   final AiBackend _backend;
   final List<AiChatHistoryMessage> _history = <AiChatHistoryMessage>[];
+  late final UnmodifiableListView<AiChatHistoryMessage> _historyView =
+      UnmodifiableListView<AiChatHistoryMessage>(_history);
   int _generation = 0;
   _ActiveTurn? _activeTurn;
   Future<void> _turnTail = Future<void>.value();
   _TurnGate? _latestTurn;
 
-  List<AiChatHistoryMessage> get history =>
-      List<AiChatHistoryMessage>.unmodifiable(_history);
+  /// A live read-only view of the committed conversation history.
+  ///
+  /// The same view instance is reused so frequent UI reads do not allocate a
+  /// defensive List copy. Transport requests still receive their own immutable
+  /// snapshot at the exact Turn boundary.
+  List<AiChatHistoryMessage> get history => _historyView;
 
   void clear() {
     _history.clear();
@@ -254,6 +261,8 @@ class AiChatSession {
       );
       await active.completion.future;
     } finally {
+      // Every terminal path must cancel a pending preview timer. Otherwise a
+      // delayed callback can repaint stale text after the final/error state.
       previewTimer?.cancel();
       if (!active.stopped) {
         await active.subscription?.cancel();
