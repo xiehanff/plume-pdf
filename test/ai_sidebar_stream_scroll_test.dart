@@ -25,8 +25,6 @@ class _ControlledBackend implements AiBackend {
   }
 
   void add(AiStreamEvent event) => _controller!.addSync(event);
-
-  void close() => _controller?.closeSync();
 }
 
 class _Harness {
@@ -56,15 +54,6 @@ class _Harness {
     await tester.pump();
   }
 
-  Future<AiChatTurnResult> startTurn() {
-    return chat.submit(
-      submission: const AiChatSubmission(
-        displayText: '解释',
-        userMessage: AiChatHistoryMessage.user(content: 'prompt'),
-      ),
-    );
-  }
-
   Future<void> waitForTransport(WidgetTester tester) async {
     for (int i = 0; i < 5 && !backend.hasListener; i++) {
       await tester.pump();
@@ -74,24 +63,6 @@ class _Harness {
       isTrue,
       reason: 'AI transport subscription should be attached before test events',
     );
-  }
-
-  Future<void> finishTurn(
-    WidgetTester tester,
-    Future<AiChatTurnResult> future,
-  ) async {
-    backend.close();
-    for (int i = 0; i < 10 && chat.isGenerating; i++) {
-      await tester.pump(const Duration(milliseconds: 1));
-    }
-    expect(
-      chat.isGenerating,
-      isFalse,
-      reason: 'closing the fake transport should finish the chat turn',
-    );
-    await tester.pump();
-    await future;
-    await tester.pump();
   }
 
   void dispose() {
@@ -104,9 +75,9 @@ class _Harness {
 
 /// 贴底流式输出的滚动稳定性回归测试。
 ///
-/// 真实数据源现在是 Package `AiChatController`：跟随态下 SSE preview 更新
-/// 后 pixels 必须等于 maxScrollExtent；用户阅读历史时 Sidebar 会暂缓 markdown
-/// rebuild，因此内容增长也不能移动当前阅读位置。
+/// 这些测试只覆盖“生成进行中”的 UI/滚动行为。Turn 完成、Stop 与 transport
+/// cancellation 已由 plume_ai_chat package 和专门的 stop-state 测试覆盖，避免
+/// widget FakeAsync 再重复承担 Session 收尾职责。
 void main() {
   _Harness createHarness() {
     final _Harness h = _Harness();
@@ -182,7 +153,14 @@ void main() {
   testWidgets('真实流式增量（含代码块渐进闭合）时滚动全程贴底', (tester) async {
     final _Harness h = createHarness();
     await h.mount(tester);
-    final Future<AiChatTurnResult> future = h.startTurn();
+    unawaited(
+      h.chat.submit(
+        submission: const AiChatSubmission(
+          displayText: '解释',
+          userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+        ),
+      ),
+    );
     await h.waitForTransport(tester);
     expectPinnedToBottom(h, 'loading 占位');
 
@@ -226,14 +204,22 @@ void main() {
             '<plume_follow_up_suggestions>["什么是位置编码","对比 RNN 的差异"]</plume_follow_up_suggestions>',
       ),
     );
-    await h.finishTurn(tester, future);
-    expectPinnedToBottom(h, '完成态');
+    await tester.pump(const Duration(milliseconds: 55));
+    expectPinnedToBottom(h, 'follow-up chunk');
+    expectLatestBubbleVisible(tester, 'follow-up chunk');
   });
 
   testWidgets('用户滚回底部阈值内时恢复跟随并刷新被延迟的流式内容', (tester) async {
     final _Harness h = createHarness();
     await h.mount(tester);
-    final Future<AiChatTurnResult> future = h.startTurn();
+    unawaited(
+      h.chat.submit(
+        submission: const AiChatSubmission(
+          displayText: '解释',
+          userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+        ),
+      ),
+    );
     await h.waitForTransport(tester);
 
     h.backend.add(
@@ -269,14 +255,19 @@ void main() {
       position.maxScrollExtent,
       reason: '恢复跟随后应贴底，否则后续流式输出不可见',
     );
-
-    await h.finishTurn(tester, future);
   });
 
   testWidgets('流式增长时用户阅读的历史位置保持稳定', (tester) async {
     final _Harness h = createHarness();
     await h.mount(tester);
-    final Future<AiChatTurnResult> future = h.startTurn();
+    unawaited(
+      h.chat.submit(
+        submission: const AiChatSubmission(
+          displayText: '解释',
+          userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+        ),
+      ),
+    );
     await h.waitForTransport(tester);
 
     h.backend.add(
@@ -298,7 +289,5 @@ void main() {
       pixelsBefore,
       reason: '用户阅读历史时，流式内容增长不得移动滚动位置',
     );
-
-    await h.finishTurn(tester, future);
   });
 }
