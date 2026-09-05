@@ -125,8 +125,8 @@ void main() {
 
     final Future<void> closeFuture = backend.stream.close();
     await tester.pump();
-    await closeFuture;
     await future;
+    await closeFuture;
     await tester.pump();
   });
 }
