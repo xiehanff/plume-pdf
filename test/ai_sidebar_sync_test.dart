@@ -47,6 +47,28 @@ class _Harness {
     await tester.pump();
   }
 
+  Future<void> waitForTransport(WidgetTester tester) async {
+    for (int i = 0; i < 5 && !backend.stream.hasListener; i++) {
+      await tester.pump();
+    }
+    expect(
+      backend.stream.hasListener,
+      isTrue,
+      reason: 'AI transport subscription should be attached before test events',
+    );
+  }
+
+  Future<void> finishTurn(
+    WidgetTester tester,
+    Future<AiChatTurnResult> future,
+  ) async {
+    final Future<void> closeFuture = backend.stream.close();
+    await tester.pump();
+    await closeFuture;
+    await future;
+    await tester.pump();
+  }
+
   void dispose() {
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       Get.delete<AiSidebarController>(tag: AiSidebarController.tag, force: true);
@@ -76,7 +98,7 @@ void main() {
         userMessage: const AiChatHistoryMessage.user(content: '解释图片'),
       ),
     );
-    await tester.pump();
+    await h.waitForTransport(tester);
 
     final List<ChatBubble> bubbles = tester
         .widgetList<ChatBubble>(find.byType(ChatBubble))
@@ -92,8 +114,7 @@ void main() {
 
     h.backend.stream.add(const AiStreamEvent(text: '完成'));
     await tester.pump(const Duration(milliseconds: 55));
-    await h.backend.stream.close();
-    await future;
+    await h.finishTurn(tester, future);
   });
 
   testWidgets('流式：loading 被替换为增量内容，完成后显示追问建议', (tester) async {
@@ -106,7 +127,7 @@ void main() {
         userMessage: AiChatHistoryMessage.user(content: '解释 prompt'),
       ),
     );
-    await tester.pump();
+    await h.waitForTransport(tester);
 
     h.backend.stream.add(const AiStreamEvent(text: '这是一个'));
     await tester.pump(const Duration(milliseconds: 55));
@@ -123,9 +144,7 @@ void main() {
             '<plume_follow_up_suggestions>["根据这段代码再举一个例子","解释它的运行过程"]</plume_follow_up_suggestions>',
       ),
     );
-    await h.backend.stream.close();
-    await future;
-    await tester.pump();
+    await h.finishTurn(tester, future);
 
     expect(find.text('根据这段代码再举一个例子'), findsOneWidget);
     expect(find.text('解释它的运行过程'), findsOneWidget);
@@ -144,11 +163,9 @@ void main() {
         userMessage: AiChatHistoryMessage.user(content: 'prompt'),
       ),
     );
-    await tester.pump();
+    await h.waitForTransport(tester);
     h.backend.stream.add(const AiStreamEvent(text: answer));
-    await h.backend.stream.close();
-    await future;
-    await tester.pump();
+    await h.finishTurn(tester, future);
 
     expect(find.byType(CustomDivider), findsNothing);
     expect(find.textContaining('第一段内容'), findsOneWidget);
@@ -180,7 +197,7 @@ void main() {
         userMessage: AiChatHistoryMessage.user(content: 'prompt'),
       ),
     );
-    await tester.pump();
+    await h.waitForTransport(tester);
     h.backend.stream.add(AiStreamEvent(reasoning: reasoning));
     await tester.pump(const Duration(milliseconds: 55));
 
@@ -198,7 +215,6 @@ void main() {
 
     h.backend.stream.add(const AiStreamEvent(text: '完成'));
     await tester.pump(const Duration(milliseconds: 55));
-    await h.backend.stream.close();
-    await future;
+    await h.finishTurn(tester, future);
   });
 }
