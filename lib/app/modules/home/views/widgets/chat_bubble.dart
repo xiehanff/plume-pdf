@@ -7,9 +7,10 @@ import 'package:gpt_markdown/custom_widgets/markdown_config.dart'
     show GptMarkdownConfig;
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:loading_indicator/loading_indicator.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart'
+    show ChatMessage, MessageAuthor;
 
 import '../../../../theme/app_colors.dart';
-import 'chat_message.dart';
 
 /// 聊天 markdown 统一字体：正文（含标题、思考面板）使用 OPPO Sans，
 /// 代码（行内与代码块）使用 GoogleSansMono。
