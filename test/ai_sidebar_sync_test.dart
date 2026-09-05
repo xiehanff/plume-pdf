@@ -72,6 +72,14 @@ class _Harness {
     Future<AiChatTurnResult> future,
   ) async {
     backend.close();
+    for (int i = 0; i < 10 && chat.isGenerating; i++) {
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+    expect(
+      chat.isGenerating,
+      isFalse,
+      reason: 'closing the fake transport should finish the chat turn',
+    );
     await tester.pump();
     await future;
     await tester.pump();
