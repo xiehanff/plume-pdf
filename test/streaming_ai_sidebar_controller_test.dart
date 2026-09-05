@@ -133,6 +133,14 @@ void main() {
     );
 
     backend.close();
+    for (int i = 0; i < 10 && chatController.isGenerating; i++) {
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+    expect(
+      chatController.isGenerating,
+      isFalse,
+      reason: 'closing the fake transport should finish the chat turn',
+    );
     await tester.pump();
     await future;
     await tester.pump();
