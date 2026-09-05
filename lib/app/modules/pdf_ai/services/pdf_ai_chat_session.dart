@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:plume_ai_chat/plume_ai_chat.dart';
@@ -28,8 +29,16 @@ class AiStreamResult {
 /// Plume-specific adapter between PDF reading semantics and the reusable
 /// `plume_ai_chat` runtime.
 class PdfAiChatSession {
-  PdfAiChatSession({AiChatSession? session})
-    : _session = session ?? AiChatSession(backend: DeepSeekBackend());
+  PdfAiChatSession({
+    AiChatSession? session,
+    FutureOr<String> Function()? apiKeyProvider,
+  }) : _session =
+           session ??
+           AiChatSession(
+             backend: DeepSeekBackend(
+               apiKeyProvider: apiKeyProvider ?? () => '',
+             ),
+           );
 
   static const int _deepDiveMaxTokens = 32768;
 
@@ -43,7 +52,6 @@ class PdfAiChatSession {
 
   Future<AiStreamResult> runToolAction({
     required AiToolAction action,
-    required String apiKey,
     required String selectionText,
     String? pageContext,
     Uint8List? imageBytes,
@@ -60,7 +68,6 @@ class PdfAiChatSession {
 
     return _run(
       _session.send(
-        apiKey: apiKey,
         userMessage: AiChatHistoryMessage.user(
           content: userPrompt,
           image: isVisionMode
@@ -84,14 +91,12 @@ class PdfAiChatSession {
   }
 
   Future<AiStreamResult> sendChat({
-    required String apiKey,
     required AiChatHistoryMessage userMessage,
     PdfAiContext? documentContext,
     required void Function(String text, String reasoning) onPreview,
   }) {
     return _run(
       _session.send(
-        apiKey: apiKey,
         userMessage: userMessage,
         systemPrompt: AiPrompts.chatSystemPrompt(
           documentContext: documentContext,
