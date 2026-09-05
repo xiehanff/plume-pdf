@@ -11,11 +11,20 @@ import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 
 class _ControlledBackend implements AiBackend {
-  final StreamController<AiStreamEvent> stream =
-      StreamController<AiStreamEvent>(sync: true);
+  MultiStreamController<AiStreamEvent>? _controller;
+
+  bool get hasListener => _controller != null;
 
   @override
-  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+  Stream<AiStreamEvent> chat(AiBackendRequest request) {
+    return Stream<AiStreamEvent>.multi((MultiStreamController<AiStreamEvent> controller) {
+      _controller = controller;
+    });
+  }
+
+  void add(AiStreamEvent event) => _controller!.addSync(event);
+
+  void close() => _controller?.closeSync();
 }
 
 void main() {
@@ -61,16 +70,16 @@ void main() {
         userMessage: AiChatHistoryMessage.user(content: 'prompt'),
       ),
     );
-    for (int i = 0; i < 5 && !backend.stream.hasListener; i++) {
+    for (int i = 0; i < 5 && !backend.hasListener; i++) {
       await tester.pump();
     }
     expect(
-      backend.stream.hasListener,
+      backend.hasListener,
       isTrue,
       reason: 'AI transport subscription should be attached before test events',
     );
 
-    backend.stream.add(AiStreamEvent(text: initialResult));
+    backend.add(AiStreamEvent(text: initialResult));
     await tester.pump(const Duration(milliseconds: 55));
 
     final ScrollPosition position = sidebarController.scrollController.position;
@@ -90,7 +99,7 @@ void main() {
     );
 
     const String marker = 'LATEST_STREAM_MARKER';
-    backend.stream.add(const AiStreamEvent(text: '\n\n$marker'));
+    backend.add(const AiStreamEvent(text: '\n\n$marker'));
     await tester.pump(const Duration(milliseconds: 55));
 
     expect(sidebarController.messages.last.text, contains(marker));
@@ -123,10 +132,9 @@ void main() {
       reason: '用户回到底部阈值后应一次性 flush 最新流式内容',
     );
 
-    final Future<void> closeFuture = backend.stream.close();
+    backend.close();
     await tester.pump();
     await future;
-    await closeFuture;
     await tester.pump();
   });
 }
