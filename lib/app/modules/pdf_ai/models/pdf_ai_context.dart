@@ -1,4 +1,4 @@
-import '../../home/models/pdf_outline_entry.dart';
+import '../../reader/models/pdf_outline_entry.dart';
 
 class PdfAiContext {
   const PdfAiContext({
