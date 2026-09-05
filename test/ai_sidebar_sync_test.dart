@@ -90,8 +90,9 @@ void main() {
     expect(second.author, MessageAuthor.ai);
     expect(second.isLoading, isTrue);
 
-    expect(h.chat.stop(), isTrue);
-    await tester.pump();
+    h.backend.stream.add(const AiStreamEvent(text: '完成'));
+    await tester.pump(const Duration(milliseconds: 55));
+    await h.backend.stream.close();
     await future;
   });
 
@@ -195,8 +196,9 @@ void main() {
     expect(find.byType(GptMarkdown), findsOneWidget);
     expect(find.byType(ShaderMask), findsNothing);
 
-    expect(h.chat.stop(), isTrue);
-    await tester.pump();
+    h.backend.stream.add(const AiStreamEvent(text: '完成'));
+    await tester.pump(const Duration(milliseconds: 55));
+    await h.backend.stream.close();
     await future;
   });
 }
