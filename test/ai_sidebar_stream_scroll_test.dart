@@ -1,64 +1,85 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show RenderBox, RenderObject, ScrollDirection;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart';
 import 'package:plume_pdf/app/modules/home/controllers/ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_ai_panel_state.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
 import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
 
-/// 贴底流式输出的滚动稳定性回归测试。
-///
-/// 普通列表 + FollowTailScrollController：跟随态下每个 chunk 更新
-/// （含高度非单调的 markdown 渐进闭合）后 pixels 必须等于
-/// maxScrollExtent（帧内贴底，无 post-frame 补偿）；用户阅读历史时
-/// 内容增长不得移动滚动位置——这两点正是流式输出上下闪动的根因指标。
-void main() {
-  Future<void> pumpSidebar(WidgetTester tester, PdfAiPanelState state) async {
-    if (!Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
-      Get.put(
-        AiSidebarController(
-          state: state,
-          onApiKeyChanged: (_) {},
-          onSaveApiKey: () async {},
-          onSendChat: (_) async {},
-          onStopChat: () {},
-          onNewSession: () {},
-        ),
-        tag: AiSidebarController.tag,
-      );
-      addTearDown(() {
-        if (Get.isRegistered<AiSidebarController>(
-          tag: AiSidebarController.tag,
-        )) {
-          Get.delete<AiSidebarController>(
-            tag: AiSidebarController.tag,
-            force: true,
-          );
-        }
-      });
-    }
-    Get.find<AiSidebarController>(
-      tag: AiSidebarController.tag,
-    ).updateExternalState(
-      state: state,
-      documentPath: null,
-      leftSidebarWidth: 0,
-    );
-    await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: AiSidebar())),
+class _ControlledBackend implements AiBackend {
+  final StreamController<AiStreamEvent> stream =
+      StreamController<AiStreamEvent>();
+
+  @override
+  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+}
+
+class _Harness {
+  _Harness() {
+    backend = _ControlledBackend();
+    chat = AiChatController(session: AiChatSession(backend: backend));
+    sidebar = AiSidebarController(
+      state: const PdfAiPanelState(apiKey: 'test-key'),
+      chatController: chat,
+      onApiKeyChanged: (_) {},
+      onSaveApiKey: () async {},
+      onSendChat: (_) async {},
+      onStopChat: chat.stop,
+      onNewSession: chat.newConversation,
     );
   }
 
-  AiSidebarController controller() =>
-      Get.find<AiSidebarController>(tag: AiSidebarController.tag);
+  late final _ControlledBackend backend;
+  late final AiChatController chat;
+  late final AiSidebarController sidebar;
 
-  void expectPinnedToBottom(String stage) {
-    final ScrollPosition position = controller().scrollController.position;
+  Future<void> mount(WidgetTester tester) async {
+    Get.put<AiSidebarController>(sidebar, tag: AiSidebarController.tag);
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: AiSidebar())),
+    );
+    await tester.pump();
+  }
+
+  Future<AiChatTurnResult> startTurn() {
+    return chat.submit(
+      submission: const AiChatSubmission(
+        displayText: '解释',
+        userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+      ),
+    );
+  }
+
+  void dispose() {
+    if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
+      Get.delete<AiSidebarController>(tag: AiSidebarController.tag, force: true);
+    }
+    chat.onClose();
+  }
+}
+
+/// 贴底流式输出的滚动稳定性回归测试。
+///
+/// 真实数据源现在是 Package `AiChatController`：跟随态下 SSE preview 更新
+/// 后 pixels 必须等于 maxScrollExtent；用户阅读历史时 Sidebar 会暂缓 markdown
+/// rebuild，因此内容增长也不能移动当前阅读位置。
+void main() {
+  _Harness createHarness() {
+    final _Harness h = _Harness();
+    addTearDown(h.dispose);
+    return h;
+  }
+
+  void expectPinnedToBottom(_Harness h, String stage) {
+    final ScrollPosition position = h.sidebar.scrollController.position;
     expect(
-      controller().scrollController.hasClients,
+      h.sidebar.scrollController.hasClients,
       isTrue,
       reason: '$stage：列表应已挂载',
     );
@@ -69,13 +90,10 @@ void main() {
     );
   }
 
-  /// 渲染层验证：最新气泡必须画在视口内。
-  ///
-  /// 仅断言 pixels 数值无法发现"值已修正但画面晚一帧渲染"的错误
-  /// （correction 未触发同帧重排时，气泡底部会超出视口一段增量），
-  /// 因此以最新气泡的渲染位置为准。容差覆盖列表 padding 与气泡
-  /// margin（12 + 12）。
-  void expectLatestBubbleVisible(WidgetTester tester, String stage) {
+  void expectLatestBubbleVisible(
+    WidgetTester tester,
+    String stage,
+  ) {
     final RenderBox viewportBox = tester.renderObject<RenderBox>(
       find.byType(ListView),
     );
@@ -87,9 +105,11 @@ void main() {
     if (renderObject is! RenderBox) {
       return;
     }
-    final RenderBox bubbleBox = renderObject;
-    final double bubbleBottom = bubbleBox
-        .localToGlobal(Offset(0, bubbleBox.size.height), ancestor: viewportBox)
+    final double bubbleBottom = renderObject
+        .localToGlobal(
+          Offset(0, renderObject.size.height),
+          ancestor: viewportBox,
+        )
         .dy;
     expect(
       bubbleBottom,
@@ -99,109 +119,12 @@ void main() {
     );
   }
 
-  testWidgets('流式增量输出（含代码块渐进闭合）时滚动全程贴底', (tester) async {
-    PdfAiPanelState state = const PdfAiPanelState(
-      sessionId: 1,
-      loading: true,
-      actionLabel: '解释',
-      actionId: 1,
-    );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
-    expectPinnedToBottom('loading 占位');
-
-    const String paragraph =
-        'Transformer 模型的核心在于自注意力机制，它允许模型在处理每个词时'
-        '同时关注输入序列中的所有其他词，从而捕捉长距离依赖关系。'
-        '多头注意力将向量空间切分为多个子空间，各自独立计算注意力权重，'
-        '再拼接回统一的表示。\n\n';
-
-    // chunk 序列刻意包含未闭合代码块逐步补全的过程：
-    // 流式中 markdown 语法从不完整到完整，渲染高度会非单调变化。
-    final List<String> pieces = <String>[
-      for (int i = 0; i < 5; i++) paragraph,
-      '示例代码：\n\n```dart\n',
-      'final Stream<String> chunks = service.chatStream();\n',
-      'await for (final String chunk in chunks) {\n',
-      '  buffer.write(chunk);\n',
-      '}\n',
-      '```\n\n',
-      '- 自注意力：全序列关联\n',
-      '- 多头：子空间并行\n',
-      paragraph,
-      paragraph,
-    ];
-
-    final StringBuffer buffer = StringBuffer();
-    bool overflowed = false;
-    for (int i = 0; i < pieces.length; i++) {
-      buffer.write(pieces[i]);
-      state = state.copyWith(result: buffer.toString(), loading: true);
-      await pumpSidebar(tester, state);
-      await tester.pump(const Duration(milliseconds: 16));
-
-      expectPinnedToBottom('chunk $i');
-      expectLatestBubbleVisible(tester, 'chunk $i');
-      // 增量不新增消息。
-      expect(
-        controller().messages,
-        hasLength(2),
-        reason: 'chunk $i：增量更新不应新增消息',
-      );
-
-      if (!overflowed &&
-          controller().scrollController.position.maxScrollExtent > 0) {
-        overflowed = true;
-      }
-    }
-    expect(overflowed, isTrue, reason: '内容应超出视口，否则贴底断言无意义');
-
-    // 完成：追问建议插入列表尾部，滚动位置仍应贴底。
-    state = state.copyWith(
-      loading: false,
-      followUpSuggestions: const <String>['什么是位置编码', '对比 RNN 的差异'],
-    );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
-    expectPinnedToBottom('完成态');
-  });
-
-  testWidgets('响应替换（非前缀更新）时滚动仍贴底', (tester) async {
-    PdfAiPanelState state = const PdfAiPanelState(
-      sessionId: 1,
-      loading: true,
-      actionLabel: '解释',
-      actionId: 1,
-      result:
-          '首先是一段较长的初始回答，'
-          '用于撑出超出视口的内容高度，'
-          '验证替换模式下的滚动行为。',
-    );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
-
-    // 非前缀变化触发 _ResultUpdateMode.replace（整条消息重建）。
-    state = state.copyWith(result: '替换后的短回答。', loading: true);
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 16));
-    expectPinnedToBottom('替换后');
-
-    state = state.copyWith(
-      loading: false,
-      followUpSuggestions: const <String>['继续'],
-    );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
-    expectPinnedToBottom('完成态');
-  });
-
   const String longText =
       'Transformer 模型的核心在于自注意力机制，它允许模型在处理每个词时'
       '同时关注输入序列中的所有其他词，从而捕捉长距离依赖关系。'
       '多头注意力将向量空间切分为多个子空间，各自独立计算注意力权重，'
       '再拼接回统一的表示。\n\n';
 
-  /// 模拟用户滚离底部：跳到距底 300px 处并用滚轮事件进入用户控制态。
   void moveAwayFromBottom(AiSidebarController sidebarController) {
     final ScrollPosition position = sidebarController.scrollController.position;
     sidebarController.scrollController.jumpTo(
@@ -218,25 +141,78 @@ void main() {
     );
   }
 
-  testWidgets('用户滚回底部阈值内时恢复跟随并贴底', (tester) async {
-    PdfAiPanelState state = PdfAiPanelState(
-      sessionId: 1,
-      loading: true,
-      actionLabel: '解释',
-      actionId: 1,
-      result: List<String>.filled(8, longText).join(),
+  testWidgets('真实流式增量（含代码块渐进闭合）时滚动全程贴底', (tester) async {
+    final _Harness h = createHarness();
+    await h.mount(tester);
+    final Future<AiChatTurnResult> future = h.startTurn();
+    await tester.pump();
+    expectPinnedToBottom(h, 'loading 占位');
+
+    const String paragraph = longText;
+    final List<String> pieces = <String>[
+      for (int i = 0; i < 5; i++) paragraph,
+      '示例代码：\n\n```dart\n',
+      'final Stream<String> chunks = service.chatStream();\n',
+      'await for (final String chunk in chunks) {\n',
+      '  buffer.write(chunk);\n',
+      '}\n',
+      '```\n\n',
+      '- 自注意力：全序列关联\n',
+      '- 多头：子空间并行\n',
+      paragraph,
+      paragraph,
+    ];
+
+    bool overflowed = false;
+    for (int i = 0; i < pieces.length; i++) {
+      h.backend.stream.add(AiStreamEvent(text: pieces[i]));
+      await tester.pump(const Duration(milliseconds: 55));
+
+      expectPinnedToBottom(h, 'chunk $i');
+      expectLatestBubbleVisible(tester, 'chunk $i');
+      expect(
+        h.sidebar.messages,
+        hasLength(2),
+        reason: 'chunk $i：增量更新不应新增消息',
+      );
+      if (!overflowed &&
+          h.sidebar.scrollController.position.maxScrollExtent > 0) {
+        overflowed = true;
+      }
+    }
+    expect(overflowed, isTrue, reason: '内容应超出视口，否则贴底断言无意义');
+
+    h.backend.stream.add(
+      const AiStreamEvent(
+        text:
+            '<plume_follow_up_suggestions>["什么是位置编码","对比 RNN 的差异"]</plume_follow_up_suggestions>',
+      ),
     );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    await h.backend.stream.close();
+    await future;
+    await tester.pump();
+    expectPinnedToBottom(h, '完成态');
+  });
 
-    final AiSidebarController sidebarController = controller();
-    final ScrollPosition position = sidebarController.scrollController.position;
+  testWidgets('用户滚回底部阈值内时恢复跟随并刷新被延迟的流式内容', (tester) async {
+    final _Harness h = createHarness();
+    await h.mount(tester);
+    final Future<AiChatTurnResult> future = h.startTurn();
+    await tester.pump();
+
+    h.backend.stream.add(
+      AiStreamEvent(text: List<String>.filled(8, longText).join()),
+    );
+    await tester.pump(const Duration(milliseconds: 55));
+
+    final ScrollPosition position = h.sidebar.scrollController.position;
     expect(position.maxScrollExtent, greaterThan(300));
+    moveAwayFromBottom(h.sidebar);
 
-    moveAwayFromBottom(sidebarController);
+    h.backend.stream.add(const AiStreamEvent(text: '底部新增但暂不打扰历史阅读。'));
+    await tester.pump(const Duration(milliseconds: 55));
 
-    // 模拟用户向底部方向滚动并进入阈值（extentAfter <= 80）。
-    sidebarController.handleScrollNotification(
+    h.sidebar.handleScrollNotification(
       UserScrollNotification(
         direction: ScrollDirection.reverse,
         metrics: FixedScrollMetrics(
@@ -257,31 +233,38 @@ void main() {
       position.maxScrollExtent,
       reason: '恢复跟随后应贴底，否则后续流式输出不可见',
     );
+
+    h.chat.stop();
+    await future;
   });
 
   testWidgets('流式增长时用户阅读的历史位置保持稳定', (tester) async {
-    PdfAiPanelState state = PdfAiPanelState(
-      sessionId: 1,
-      loading: true,
-      actionLabel: '解释',
-      actionId: 1,
-      result: List<String>.filled(6, longText).join(),
-    );
-    await pumpSidebar(tester, state);
-    await tester.pump(const Duration(milliseconds: 100));
+    final _Harness h = createHarness();
+    await h.mount(tester);
+    final Future<AiChatTurnResult> future = h.startTurn();
+    await tester.pump();
 
-    final AiSidebarController sidebarController = controller();
-    final ScrollPosition position = sidebarController.scrollController.position;
-    moveAwayFromBottom(sidebarController);
+    h.backend.stream.add(
+      AiStreamEvent(text: List<String>.filled(6, longText).join()),
+    );
+    await tester.pump(const Duration(milliseconds: 55));
+
+    final ScrollPosition position = h.sidebar.scrollController.position;
+    moveAwayFromBottom(h.sidebar);
     final double pixelsBefore = position.pixels;
 
-    // 流式输出使最新气泡增高：普通列表中增长发生在滚动范围的
-    // 底端之外，阅读位置的 pixels 不应移动。
-    state = state.copyWith(result: List<String>.filled(12, longText).join());
-    await pumpSidebar(tester, state);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 16));
+    h.backend.stream.add(
+      AiStreamEvent(text: List<String>.filled(6, longText).join()),
+    );
+    await tester.pump(const Duration(milliseconds: 55));
 
-    expect(position.pixels, pixelsBefore, reason: '用户阅读历史时，流式内容增长不得移动滚动位置');
+    expect(
+      position.pixels,
+      pixelsBefore,
+      reason: '用户阅读历史时，流式内容增长不得移动滚动位置',
+    );
+
+    h.chat.stop();
+    await future;
   });
 }
