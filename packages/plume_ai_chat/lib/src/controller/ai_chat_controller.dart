@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 
 import '../backend/ai_backend.dart';
 import '../core/ai_chat_session.dart';
+import '../core/ai_response_parser.dart';
 import '../models/ai_chat_history_message.dart';
 import '../models/ai_chat_input.dart';
 
@@ -25,11 +26,13 @@ class AiChatController extends GetxController {
   bool _isGenerating = false;
   String _streamingText = '';
   String _streamingReasoning = '';
+  List<String> _followUpSuggestions = const <String>[];
   int _latestSendId = 0;
 
   bool get isGenerating => _isGenerating;
   String get streamingText => _streamingText;
   String get streamingReasoning => _streamingReasoning;
+  List<String> get followUpSuggestions => _followUpSuggestions;
   List<AiChatHistoryMessage> get history => _session.history;
 
   Future<AiChatTurnResult> send({
@@ -48,7 +51,12 @@ class AiChatController extends GetxController {
     _isGenerating = true;
     _streamingText = '';
     _streamingReasoning = '';
-    update(<String>[AiChatUpdateId.status, AiChatUpdateId.input]);
+    _followUpSuggestions = const <String>[];
+    update(<String>[
+      AiChatUpdateId.status,
+      AiChatUpdateId.input,
+      AiChatUpdateId.suggestions,
+    ]);
 
     try {
       final AiChatTurnResult result = await _session.send(
@@ -65,14 +73,20 @@ class AiChatController extends GetxController {
           if (sendId != _latestSendId) {
             return;
           }
-          _streamingText = text;
+          final AiResponse response = AiResponseParser.parse(text);
+          _streamingText = response.content;
           _streamingReasoning = reasoning;
-          update(<String>[AiChatUpdateId.messages]);
+          _followUpSuggestions = response.followUpSuggestions;
+          update(<String>[
+            AiChatUpdateId.messages,
+            AiChatUpdateId.suggestions,
+          ]);
         },
       );
       if (sendId == _latestSendId) {
         _streamingText = result.content;
         _streamingReasoning = result.reasoning;
+        _followUpSuggestions = result.followUpSuggestions;
       }
       return result;
     } finally {
@@ -84,6 +98,7 @@ class AiChatController extends GetxController {
           AiChatUpdateId.messages,
           AiChatUpdateId.status,
           AiChatUpdateId.input,
+          AiChatUpdateId.suggestions,
         ]);
       }
     }
@@ -93,7 +108,12 @@ class AiChatController extends GetxController {
     final bool stopped = _session.stopActiveTurn();
     if (stopped) {
       _isGenerating = false;
-      update(<String>[AiChatUpdateId.status, AiChatUpdateId.input]);
+      _followUpSuggestions = const <String>[];
+      update(<String>[
+        AiChatUpdateId.status,
+        AiChatUpdateId.input,
+        AiChatUpdateId.suggestions,
+      ]);
     }
     return stopped;
   }
@@ -105,6 +125,7 @@ class AiChatController extends GetxController {
     _isGenerating = false;
     _streamingText = '';
     _streamingReasoning = '';
+    _followUpSuggestions = const <String>[];
     update();
   }
 }
