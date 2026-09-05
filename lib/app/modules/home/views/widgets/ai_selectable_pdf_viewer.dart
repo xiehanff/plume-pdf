@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../../theme/app_colors.dart';
-import '../../models/pdf_ai_selection.dart';
-import '../../models/pdf_ai_tool_action.dart';
+import '../../../pdf_ai/models/pdf_ai_selection.dart';
+import '../../../pdf_ai/models/pdf_ai_tool_action.dart';
 import 'ai_selection_mode_badge.dart';
 import 'pdf_page_area_selection_overlay.dart';
 
