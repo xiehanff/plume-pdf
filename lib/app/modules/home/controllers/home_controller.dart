@@ -14,7 +14,6 @@ import 'package:plume_ai_chat/plume_ai_chat.dart'
         DeepSeekBackend;
 
 import '../../pdf_ai/controllers/ai_sidebar_controller.dart';
-import '../../pdf_ai/models/pdf_ai_context.dart';
 import '../../pdf_ai/models/pdf_ai_panel_state.dart';
 import '../../pdf_ai/models/pdf_ai_selection.dart';
 import '../../pdf_ai/models/pdf_ai_tool_action.dart';
