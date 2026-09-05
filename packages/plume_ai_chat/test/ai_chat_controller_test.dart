@@ -51,6 +51,8 @@ void main() {
     expect(controller.isGenerating, isTrue);
     expect(controller.stop(), isTrue);
     expect(controller.isGenerating, isFalse);
+    expect(controller.messages, hasLength(1));
+    expect(controller.messages.single.text, 'first');
 
     final Future<AiChatTurnResult> second = controller.send(
       apiKey: 'key',
@@ -72,6 +74,10 @@ void main() {
 
     expect(result.content, 'second answer');
     expect(controller.isGenerating, isFalse);
+    expect(
+      controller.messages.map((ChatMessage message) => message.text),
+      <String>['first', 'second', 'second answer'],
+    );
   });
 
   test('streaming controller hides follow-up protocol tags from UI state', () async {
@@ -86,6 +92,9 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
 
+    expect(controller.messages, hasLength(2));
+    expect(controller.messages.last.isLoading, isTrue);
+
     backend.stream
       ..add(
         const AiStreamEvent(
@@ -99,5 +108,31 @@ void main() {
     expect(result.content, '正文');
     expect(controller.streamingText, '正文');
     expect(controller.followUpSuggestions, <String>['继续解释']);
+    expect(controller.messages.last.text, '正文');
+    expect(controller.messages.last.isLoading, isFalse);
+  });
+
+  test('new conversation clears transport and presentation state', () async {
+    final _SingleStreamBackend backend = _SingleStreamBackend();
+    final AiChatController controller = AiChatController(
+      session: AiChatSession(backend: backend),
+    );
+
+    final Future<AiChatTurnResult> future = controller.send(
+      apiKey: 'key',
+      input: const AiChatInput(text: 'hello'),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.messages, isNotEmpty);
+
+    controller.newConversation();
+    expect(controller.messages, isEmpty);
+    expect(controller.history, isEmpty);
+    expect(controller.isGenerating, isFalse);
+
+    await backend.stream.close();
+    await future;
+    expect(controller.messages, isEmpty);
+    expect(controller.history, isEmpty);
   });
 }
