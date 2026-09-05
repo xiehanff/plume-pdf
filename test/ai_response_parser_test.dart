@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plume_pdf/app/modules/home/services/ai_response_parser.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart'
+    show AiResponse, AiResponseParser;
 
 void main() {
   test('拆分 AI 正文和上下文相关的追问建议', () {
