@@ -2,7 +2,7 @@ part of 'home_controller.dart';
 
 /// AI 动作与会话编排：负责状态流转与层间协调。
 ///
-/// 流式累积/历史写入在 [AiAgentSession]（会话层），
+/// 流式累积/历史写入在 [PdfAiChatSession]（会话适配层），
 /// PDF 选区与文档上下文提取在 [PdfAiContextService]（提取层）。
 extension HomeControllerAiSession on HomeController {
   /// 请求发起时捕获的 actionId 是否仍是最新一次：失效的旧请求
@@ -185,7 +185,7 @@ extension HomeControllerAiSession on HomeController {
     );
 
     final AiModelConfig? config = AiModelRegistry.instance.configFor(
-      DeepSeekService.model,
+      DeepSeekBackend.defaultModel,
     );
     if (config != null &&
         config.supportsVision &&
@@ -232,7 +232,7 @@ extension HomeControllerAiSession on HomeController {
       );
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
+    } on DeepSeekBackendException catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
       if (error.canFallbackToText && selectionText.trim().isNotEmpty) {
         return _runTextAction(
@@ -243,6 +243,9 @@ extension HomeControllerAiSession on HomeController {
           extractedText: selectionText,
         );
       }
+      _applyAiErrorState(error.message);
+    } on AiChatException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
@@ -311,7 +314,10 @@ extension HomeControllerAiSession on HomeController {
       );
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
+    } on DeepSeekBackendException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
+      _applyAiErrorState(error.message);
+    } on AiChatException catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {
@@ -384,7 +390,10 @@ extension HomeControllerAiSession on HomeController {
       );
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
+    } on DeepSeekBackendException catch (error) {
+      if (!_isCurrentAiAction(currentActionId)) return;
+      _applyAiErrorState(error.message);
+    } on AiChatException catch (error) {
       if (!_isCurrentAiAction(currentActionId)) return;
       _applyAiErrorState(error.message);
     } catch (error) {
