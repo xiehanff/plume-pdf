@@ -46,6 +46,7 @@ class AiChatController extends GetxController {
   final AiConversationPresenter _presenter;
 
   bool _isGenerating = false;
+  bool _awaitingLocalWork = false;
   String _streamingText = '';
   String _streamingReasoning = '';
   List<String> _followUpSuggestions = const <String>[];
@@ -115,8 +116,9 @@ class AiChatController extends GetxController {
     }
 
     // Latest-wins must finalize/remove the previous presentation placeholder
-    // before appending the new user turn. Otherwise the new response can reuse
-    // the old loading bubble and appear above the new user message.
+    // before appending the new user turn. Even if transport has just completed
+    // and can no longer be cancelled, incrementing the next send id below makes
+    // the newly submitted turn the presentation owner.
     if (_isGenerating && submission.stopPrevious) {
       stop();
     }
@@ -130,15 +132,23 @@ class AiChatController extends GetxController {
       ..ensureLoadingPlaceholder();
 
     _isGenerating = true;
+    _awaitingLocalWork = prepareSubmission != null;
     _streamingText = '';
     _streamingReasoning = '';
     _followUpSuggestions = const <String>[];
     _notifyConversationChanged();
 
     try {
-      final AiChatSubmission preparedSubmission = prepareSubmission == null
-          ? submission
-          : await prepareSubmission();
+      AiChatSubmission preparedSubmission = submission;
+      if (prepareSubmission != null) {
+        try {
+          preparedSubmission = await prepareSubmission();
+        } finally {
+          if (sendId == _latestSendId) {
+            _awaitingLocalWork = false;
+          }
+        }
+      }
       if (sendId != _latestSendId) {
         return _stoppedBeforeTransport;
       }
@@ -170,6 +180,7 @@ class AiChatController extends GetxController {
     } finally {
       if (sendId == _latestSendId) {
         _isGenerating = false;
+        _awaitingLocalWork = false;
         _notifyConversationChanged();
       }
     }
@@ -190,7 +201,15 @@ class AiChatController extends GetxController {
         rethrow;
       }
 
-      final AiChatSubmission? fallback = await fallbackBuilder(error);
+      AiChatSubmission? fallback;
+      _awaitingLocalWork = true;
+      try {
+        fallback = await fallbackBuilder(error);
+      } finally {
+        if (sendId == _latestSendId) {
+          _awaitingLocalWork = false;
+        }
+      }
       if (sendId != _latestSendId) {
         return _stoppedBeforeTransport;
       }
@@ -205,6 +224,7 @@ class AiChatController extends GetxController {
     required int sendId,
     required AiChatSubmission submission,
   }) {
+    _awaitingLocalWork = false;
     return _session.send(
       userMessage: submission.userMessage,
       systemPrompt: submission.systemPrompt,
@@ -242,7 +262,20 @@ class AiChatController extends GetxController {
     bool stopPrevious = false,
   }) {
     if (_isGenerating && stopPrevious) {
-      stop();
+      // A local error that explicitly supersedes the previous turn must own the
+      // presentation even when the old transport completed a microtask before
+      // cancellation could reach it.
+      if (!stop()) {
+        _latestSendId++;
+        _isGenerating = false;
+        _awaitingLocalWork = false;
+        _followUpSuggestions = const <String>[];
+        _presenter.syncResponse(
+          loading: false,
+          result: _streamingText,
+          reasoning: _streamingReasoning,
+        );
+      }
     }
     final String visibleText = displayText?.trim() ?? '';
     if (visibleText.isNotEmpty || displayImageBytes != null) {
@@ -258,16 +291,36 @@ class AiChatController extends GetxController {
     _notifyConversationChanged();
   }
 
-  /// Stops either active transport or an asynchronous pre-transport
-  /// preparation owned by this controller.
+  /// Stops either active transport or asynchronous host work (submission
+  /// preparation / fallback construction) owned by this controller.
+  ///
+  /// During host work there is no Session turn to cancel, so ownership is
+  /// invalidated locally. Once control is inside [AiChatSession], however, a
+  /// false `stopActiveTurn()` means transport has already crossed its
+  /// cancellable boundary; in that completion window we leave ownership intact
+  /// so the Session's final result cannot be accidentally discarded.
   bool stop() {
     if (!_isGenerating) {
       return false;
     }
 
-    _session.stopActiveTurn();
+    if (_awaitingLocalWork) {
+      _finalizeStoppedPresentation();
+      return true;
+    }
+
+    final bool stopped = _session.stopActiveTurn();
+    if (!stopped) {
+      return false;
+    }
+    _finalizeStoppedPresentation();
+    return true;
+  }
+
+  void _finalizeStoppedPresentation() {
     _latestSendId++;
     _isGenerating = false;
+    _awaitingLocalWork = false;
     _followUpSuggestions = const <String>[];
     _presenter.syncResponse(
       loading: false,
@@ -275,7 +328,6 @@ class AiChatController extends GetxController {
       reasoning: _streamingReasoning,
     );
     _notifyConversationChanged();
-    return true;
   }
 
   void newConversation() {
@@ -295,6 +347,7 @@ class AiChatController extends GetxController {
     _session.clear();
     _presenter.reset();
     _isGenerating = false;
+    _awaitingLocalWork = false;
     _streamingText = '';
     _streamingReasoning = '';
     _followUpSuggestions = const <String>[];
