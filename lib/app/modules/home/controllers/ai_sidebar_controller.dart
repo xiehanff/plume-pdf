@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:get/get.dart';
 import 'package:plume_ai_chat/plume_ai_chat.dart'
-    show FollowTailScrollController;
+    show AiConversationPresenter, FollowTailScrollController;
 
 import '../models/ai_chat_input.dart';
 import '../models/pdf_ai_panel_state.dart';
@@ -17,25 +17,6 @@ typedef SendChatCallback = Future<void> Function(AiChatInput input);
 enum AiSidebarMode { conversation, settings }
 
 enum _ScrollFollowState { followingTail, userControlled }
-
-enum _ResultUpdateMode { replace, incremental }
-
-class _ConversationState {
-  final List<ChatMessage> messages = <ChatMessage>[];
-  int? lastActionId;
-  String? lastResult;
-  String? lastReasoning;
-  int _nextMessageId = 0;
-
-  String nextMessageId() => 'msg_${_nextMessageId++}';
-
-  void reset() {
-    messages.clear();
-    lastActionId = null;
-    lastResult = null;
-    lastReasoning = null;
-  }
-}
 
 class AiSidebarController extends GetxController {
   static const String tag = 'ai-sidebar';
@@ -87,7 +68,8 @@ class AiSidebarController extends GetxController {
 
   AiSidebarMode _mode = AiSidebarMode.conversation;
   double _sidebarWidth = 320;
-  final _ConversationState _conversation = _ConversationState();
+  final AiConversationPresenter _conversation = AiConversationPresenter();
+  int? _lastActionId;
 
   _ScrollFollowState _scrollFollowState = _ScrollFollowState.followingTail;
   ScrollDirection _userScrollDirection = ScrollDirection.idle;
@@ -102,7 +84,7 @@ class AiSidebarController extends GetxController {
     if (_panelState.loading ||
         _panelState.errorMessage != null ||
         _panelState.followUpSuggestions.isEmpty ||
-        _conversation.messages.isEmpty) {
+        _conversation.isEmpty) {
       return false;
     }
     final ChatMessage last = _conversation.messages.last;
@@ -274,17 +256,11 @@ class AiSidebarController extends GetxController {
     if (trimmedText.isEmpty && (image?.bytes.isEmpty ?? true)) {
       return;
     }
-    _conversation.lastResult = null;
-    _conversation.lastReasoning = null;
-    _conversation.messages.add(
-      ChatMessage(
-        author: MessageAuthor.human,
-        text: trimmedText,
-        id: _conversation.nextMessageId(),
-        imageBytes: image?.bytes,
-      ),
+    _conversation.addUserMessage(
+      text: trimmedText,
+      imageBytes: image?.bytes,
     );
-    _ensureLoadingPlaceholder();
+    _conversation.ensureLoadingPlaceholder();
     _resumeScrollFollowing();
     _hasDeferredStreamingUpdate = false;
     update();
@@ -303,155 +279,26 @@ class AiSidebarController extends GetxController {
 
   void _syncConversationWithPanelState() {
     _syncAction(_panelState);
-
-    if (_panelState.loading) {
-      _ensureLoadingPlaceholder();
-    }
-
-    if (_panelState.errorMessage != null &&
-        _panelState.errorMessage != _conversation.lastResult) {
-      _conversation.lastResult = _panelState.errorMessage;
-      _conversation.lastReasoning = null;
-      _replaceLoadingOrAdd(
-        author: MessageAuthor.ai,
-        text: '❌ ${_panelState.errorMessage}',
-      );
-      return;
-    }
-
-    final String? result = _panelState.result;
-    if (result != null &&
-        result.trim().isNotEmpty &&
-        result != _conversation.lastResult) {
-      _syncResult(result);
-    }
-
-    final String? reasoning = _panelState.reasoning;
-    if (reasoning != null &&
-        reasoning.trim().isNotEmpty &&
-        reasoning != _conversation.lastReasoning) {
-      _syncReasoning(reasoning);
-    }
-
-    if (!_panelState.loading) {
-      _finishLastAiMessage();
-    }
+    _conversation.syncResponse(
+      loading: _panelState.loading,
+      result: _panelState.result,
+      reasoning: _panelState.reasoning,
+      errorMessage: _panelState.errorMessage,
+    );
   }
 
   void _syncAction(PdfAiPanelState state) {
-    if (state.actionLabel == null ||
-        state.actionId == _conversation.lastActionId) {
+    if (state.actionLabel == null || state.actionId == _lastActionId) {
       return;
     }
 
-    _conversation.lastActionId = state.actionId;
-    _conversation.lastResult = null;
-    _conversation.lastReasoning = null;
-    _conversation.messages.add(
-      ChatMessage(
-        author: MessageAuthor.human,
-        text: _buildActionUserText(state),
-        imageBytes: state.actionSelectionImage,
-        id: _conversation.nextMessageId(),
-      ),
+    _lastActionId = state.actionId;
+    _conversation.addUserMessage(
+      text: _buildActionUserText(state),
+      imageBytes: state.actionSelectionImage,
     );
     _resumeScrollFollowing();
     _scheduleScrollToBottom();
-  }
-
-  void _syncResult(String result) {
-    final _ResultUpdateMode updateMode = _resultUpdateMode(result);
-    _conversation.lastResult = result;
-    switch (updateMode) {
-      case _ResultUpdateMode.replace:
-        _replaceLoadingOrAdd(
-          author: MessageAuthor.ai,
-          text: result,
-          reasoning: _panelState.reasoning,
-          isLoading: _panelState.loading,
-        );
-      case _ResultUpdateMode.incremental:
-        _updateLastAiMessage(
-          result,
-          reasoning: _panelState.reasoning,
-          isLoading: _panelState.loading,
-        );
-    }
-  }
-
-  void _syncReasoning(String reasoning) {
-    _conversation.lastReasoning = reasoning;
-    final int loadingIndex = _conversation.messages.indexWhere(
-      (ChatMessage message) =>
-          message.author == MessageAuthor.ai && message.isLoading,
-    );
-    if (loadingIndex >= 0) {
-      final ChatMessage previousMessage = _conversation.messages[loadingIndex];
-      _conversation.messages[loadingIndex] = ChatMessage(
-        author: MessageAuthor.ai,
-        text: previousMessage.text,
-        id: previousMessage.id,
-        isLoading: _panelState.loading,
-        reasoning: reasoning,
-      );
-    } else {
-      final int lastIndex = _conversation.messages.length - 1;
-      if (lastIndex >= 0 &&
-          _conversation.messages[lastIndex].author == MessageAuthor.ai) {
-        final ChatMessage previousMessage = _conversation.messages[lastIndex];
-        _conversation.messages[lastIndex] = ChatMessage(
-          author: MessageAuthor.ai,
-          text: previousMessage.text,
-          id: previousMessage.id,
-          isLoading: previousMessage.isLoading,
-          reasoning: reasoning,
-        );
-      } else {
-        _conversation.messages.add(
-          ChatMessage(
-            author: MessageAuthor.ai,
-            text: '',
-            id: _conversation.nextMessageId(),
-            isLoading: _panelState.loading,
-            reasoning: reasoning,
-          ),
-        );
-      }
-    }
-  }
-
-  void _finishLastAiMessage() {
-    final int lastIndex = _conversation.messages.length - 1;
-    if (lastIndex < 0 ||
-        _conversation.messages[lastIndex].author != MessageAuthor.ai ||
-        !_conversation.messages[lastIndex].isLoading) {
-      return;
-    }
-    final ChatMessage previousMessage = _conversation.messages[lastIndex];
-    final bool isEmpty =
-        previousMessage.text.trim().isEmpty &&
-        (previousMessage.reasoning?.trim().isEmpty ?? true);
-    if (isEmpty) {
-      _conversation.messages.removeAt(lastIndex);
-      return;
-    }
-    _conversation.messages[lastIndex] = ChatMessage(
-      author: MessageAuthor.ai,
-      text: previousMessage.text,
-      id: previousMessage.id,
-      isLoading: false,
-      reasoning: previousMessage.reasoning,
-    );
-  }
-
-  _ResultUpdateMode _resultUpdateMode(String result) {
-    final String? previousResult = _conversation.lastResult;
-    if (previousResult != null &&
-        result.length > previousResult.length &&
-        result.startsWith(previousResult)) {
-      return _ResultUpdateMode.incremental;
-    }
-    return _ResultUpdateMode.replace;
   }
 
   String _buildActionUserText(PdfAiPanelState state) {
@@ -473,75 +320,9 @@ class AiSidebarController extends GetxController {
     return '$label $shortened';
   }
 
-  void _ensureLoadingPlaceholder() {
-    final int loadingIndex = _conversation.messages.indexWhere(
-      (ChatMessage message) =>
-          message.author == MessageAuthor.ai && message.isLoading,
-    );
-    if (loadingIndex >= 0) {
-      return;
-    }
-    _conversation.messages.add(
-      ChatMessage(
-        author: MessageAuthor.ai,
-        text: '',
-        id: _conversation.nextMessageId(),
-        isLoading: true,
-      ),
-    );
-  }
-
-  void _replaceLoadingOrAdd({
-    required MessageAuthor author,
-    required String text,
-    String? reasoning,
-    bool isLoading = false,
-  }) {
-    final int loadingIndex = _conversation.messages.indexWhere(
-      (ChatMessage message) =>
-          message.author == MessageAuthor.ai && message.isLoading,
-    );
-    if (loadingIndex >= 0) {
-      final ChatMessage loadingMessage = _conversation.messages[loadingIndex];
-      _conversation.messages[loadingIndex] = ChatMessage(
-        author: author,
-        text: text,
-        id: loadingMessage.id,
-        isLoading: isLoading,
-        reasoning: reasoning,
-      );
-    } else {
-      _updateLastAiMessage(text, reasoning: reasoning, isLoading: isLoading);
-    }
-  }
-
-  void _updateLastAiMessage(String text, {String? reasoning, bool? isLoading}) {
-    final int lastIndex = _conversation.messages.length - 1;
-    if (lastIndex >= 0 &&
-        _conversation.messages[lastIndex].author == MessageAuthor.ai) {
-      final ChatMessage previousMessage = _conversation.messages[lastIndex];
-      _conversation.messages[lastIndex] = ChatMessage(
-        author: MessageAuthor.ai,
-        text: text,
-        id: previousMessage.id,
-        isLoading: isLoading ?? previousMessage.isLoading,
-        reasoning: reasoning ?? previousMessage.reasoning,
-      );
-    } else {
-      _conversation.messages.add(
-        ChatMessage(
-          author: MessageAuthor.ai,
-          text: text,
-          id: _conversation.nextMessageId(),
-          isLoading: isLoading ?? false,
-          reasoning: reasoning,
-        ),
-      );
-    }
-  }
-
   void _resetConversation({required bool notify}) {
     _conversation.reset();
+    _lastActionId = null;
     _inputController.clear();
     _resumeScrollFollowing();
     _userScrollDirection = ScrollDirection.idle;
