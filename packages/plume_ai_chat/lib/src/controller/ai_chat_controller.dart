@@ -115,12 +115,14 @@ class AiChatController extends GetxController {
       return const AiChatTurnResult(content: '', reasoning: '');
     }
 
-    // Latest-wins must finalize/remove the previous presentation placeholder
-    // before appending the new user turn. Even if transport has just completed
-    // and can no longer be cancelled, incrementing the next send id below makes
-    // the newly submitted turn the presentation owner.
+    // `Stop` and latest-wins have different boundary semantics. A user Stop
+    // must not discard a response whose transport already completed, whereas a
+    // new latest-wins turn must always take presentation ownership and remove
+    // the old placeholder even if that old transport is no longer cancellable.
     if (_isGenerating && submission.stopPrevious) {
-      stop();
+      if (!stop()) {
+        _supersedeCurrentPresentation();
+      }
     }
 
     final int sendId = ++_latestSendId;
@@ -262,19 +264,8 @@ class AiChatController extends GetxController {
     bool stopPrevious = false,
   }) {
     if (_isGenerating && stopPrevious) {
-      // A local error that explicitly supersedes the previous turn must own the
-      // presentation even when the old transport completed a microtask before
-      // cancellation could reach it.
       if (!stop()) {
-        _latestSendId++;
-        _isGenerating = false;
-        _awaitingLocalWork = false;
-        _followUpSuggestions = const <String>[];
-        _presenter.syncResponse(
-          loading: false,
-          result: _streamingText,
-          reasoning: _streamingReasoning,
-        );
+        _supersedeCurrentPresentation();
       }
     }
     final String visibleText = displayText?.trim() ?? '';
@@ -305,7 +296,7 @@ class AiChatController extends GetxController {
     }
 
     if (_awaitingLocalWork) {
-      _finalizeStoppedPresentation();
+      _finalizeCurrentPresentation();
       return true;
     }
 
@@ -313,11 +304,17 @@ class AiChatController extends GetxController {
     if (!stopped) {
       return false;
     }
-    _finalizeStoppedPresentation();
+    _finalizeCurrentPresentation();
     return true;
   }
 
-  void _finalizeStoppedPresentation() {
+  /// Latest-wins is stronger than Stop: the newly requested turn must own the
+  /// message list even when the old Session crossed its cancellation boundary.
+  void _supersedeCurrentPresentation() {
+    _finalizeCurrentPresentation();
+  }
+
+  void _finalizeCurrentPresentation() {
     _latestSendId++;
     _isGenerating = false;
     _awaitingLocalWork = false;
