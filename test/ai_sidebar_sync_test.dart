@@ -14,7 +14,7 @@ import 'package:plume_pdf/app/modules/home/views/widgets/chat_bubble.dart';
 
 class _ControlledBackend implements AiBackend {
   final StreamController<AiStreamEvent> stream =
-      StreamController<AiStreamEvent>();
+      StreamController<AiStreamEvent>(sync: true);
 
   @override
   Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
@@ -90,7 +90,8 @@ void main() {
     expect(second.author, MessageAuthor.ai);
     expect(second.isLoading, isTrue);
 
-    h.chat.stop();
+    expect(h.chat.stop(), isTrue);
+    await tester.pump();
     await future;
   });
 
@@ -194,7 +195,8 @@ void main() {
     expect(find.byType(GptMarkdown), findsOneWidget);
     expect(find.byType(ShaderMask), findsNothing);
 
-    h.chat.stop();
+    expect(h.chat.stop(), isTrue);
+    await tester.pump();
     await future;
   });
 }
