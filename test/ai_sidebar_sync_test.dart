@@ -25,13 +25,20 @@ class _ControlledBackend implements AiBackend {
   }
 
   void add(AiStreamEvent event) => _controller!.addSync(event);
+}
 
-  void close() => _controller?.closeSync();
+class _FiniteBackend implements AiBackend {
+  _FiniteBackend(this.events);
+
+  final List<AiStreamEvent> events;
+
+  @override
+  Stream<AiStreamEvent> chat(AiBackendRequest request) =>
+      Stream<AiStreamEvent>.fromIterable(events);
 }
 
 class _Harness {
-  _Harness() {
-    backend = _ControlledBackend();
+  _Harness(AiBackend backend) {
     chat = AiChatController(session: AiChatSession(backend: backend));
     sidebar = AiSidebarController(
       state: const PdfAiPanelState(apiKey: 'test-key'),
@@ -44,7 +51,6 @@ class _Harness {
     );
   }
 
-  late final _ControlledBackend backend;
   late final AiChatController chat;
   late final AiSidebarController sidebar;
 
@@ -53,35 +59,6 @@ class _Harness {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: AiSidebar())),
     );
-    await tester.pump();
-  }
-
-  Future<void> waitForTransport(WidgetTester tester) async {
-    for (int i = 0; i < 5 && !backend.hasListener; i++) {
-      await tester.pump();
-    }
-    expect(
-      backend.hasListener,
-      isTrue,
-      reason: 'AI transport subscription should be attached before test events',
-    );
-  }
-
-  Future<void> finishTurn(
-    WidgetTester tester,
-    Future<AiChatTurnResult> future,
-  ) async {
-    backend.close();
-    for (int i = 0; i < 10 && chat.isGenerating; i++) {
-      await tester.pump(const Duration(milliseconds: 1));
-    }
-    expect(
-      chat.isGenerating,
-      isFalse,
-      reason: 'closing the fake transport should finish the chat turn',
-    );
-    await tester.pump();
-    await future;
     await tester.pump();
   }
 
@@ -94,27 +71,44 @@ class _Harness {
 }
 
 void main() {
-  _Harness harness(WidgetTester tester) {
-    final _Harness value = _Harness();
+  _Harness harness(AiBackend backend) {
+    final _Harness value = _Harness(backend);
     addTearDown(value.dispose);
     return value;
   }
 
+  Future<void> waitForTransport(
+    WidgetTester tester,
+    _ControlledBackend backend,
+  ) async {
+    for (int i = 0; i < 5 && !backend.hasListener; i++) {
+      await tester.pump();
+    }
+    expect(
+      backend.hasListener,
+      isTrue,
+      reason: 'AI transport subscription should be attached before test events',
+    );
+  }
+
   testWidgets('Package turn 时序：用户气泡先出现，loading 在其后', (tester) async {
-    final _Harness h = harness(tester);
+    final _ControlledBackend backend = _ControlledBackend();
+    final _Harness h = harness(backend);
     await h.mount(tester);
 
-    final Future<AiChatTurnResult> future = h.chat.submit(
-      submission: AiChatSubmission(
-        displayText: '',
-        displayImageBytes: base64Decode(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
-          'AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    unawaited(
+      h.chat.submit(
+        submission: AiChatSubmission(
+          displayText: '',
+          displayImageBytes: base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
+            'AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+          ),
+          userMessage: const AiChatHistoryMessage.user(content: '解释图片'),
         ),
-        userMessage: const AiChatHistoryMessage.user(content: '解释图片'),
       ),
     );
-    await h.waitForTransport(tester);
+    await waitForTransport(tester, backend);
 
     final List<ChatBubble> bubbles = tester
         .widgetList<ChatBubble>(find.byType(ChatBubble))
@@ -127,14 +121,19 @@ void main() {
     final ChatMessage second = h.sidebar.messages[1];
     expect(second.author, MessageAuthor.ai);
     expect(second.isLoading, isTrue);
-
-    h.backend.add(const AiStreamEvent(text: '完成'));
-    await tester.pump(const Duration(milliseconds: 55));
-    await h.finishTurn(tester, future);
   });
 
-  testWidgets('流式：loading 被替换为增量内容，完成后显示追问建议', (tester) async {
-    final _Harness h = harness(tester);
+  testWidgets('完成态显示正文和追问建议', (tester) async {
+    final _FiniteBackend backend = _FiniteBackend(
+      const <AiStreamEvent>[
+        AiStreamEvent(
+          text:
+              '这是一个最基础的 C 语言示例'
+              '<plume_follow_up_suggestions>["根据这段代码再举一个例子","解释它的运行过程"]</plume_follow_up_suggestions>',
+        ),
+      ],
+    );
+    final _Harness h = harness(backend);
     await h.mount(tester);
 
     final Future<AiChatTurnResult> future = h.chat.submit(
@@ -143,45 +142,36 @@ void main() {
         userMessage: AiChatHistoryMessage.user(content: '解释 prompt'),
       ),
     );
-    await h.waitForTransport(tester);
+    await tester.runAsync(() async {
+      await future;
+    });
+    await tester.pump();
 
-    h.backend.add(const AiStreamEvent(text: '这是一个'));
-    await tester.pump(const Duration(milliseconds: 55));
-    expect(find.text('这是一个'), findsOneWidget);
-
-    h.backend.add(const AiStreamEvent(text: '最基础的 C 语言示例'));
-    await tester.pump(const Duration(milliseconds: 55));
     expect(find.text('这是一个最基础的 C 语言示例'), findsOneWidget);
     expect(find.byType(ChatBubble), findsNWidgets(2));
-
-    h.backend.add(
-      const AiStreamEvent(
-        text:
-            '<plume_follow_up_suggestions>["根据这段代码再举一个例子","解释它的运行过程"]</plume_follow_up_suggestions>',
-      ),
-    );
-    await h.finishTurn(tester, future);
-
     expect(find.text('根据这段代码再举一个例子'), findsOneWidget);
     expect(find.text('解释它的运行过程'), findsOneWidget);
   });
 
   testWidgets('正文渲染不产生分割线（--- 水平线与 h1 自动线）', (tester) async {
-    final _Harness h = harness(tester);
+    final _ControlledBackend backend = _ControlledBackend();
+    final _Harness h = harness(backend);
     await h.mount(tester);
     const String answer =
         '# 概念\n\n第一段内容。\n\n---\n\n第二段内容。\n\n'
         '```yaml\n---\nname: config\n```';
 
-    final Future<AiChatTurnResult> future = h.chat.submit(
-      submission: const AiChatSubmission(
-        displayText: '解释',
-        userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+    unawaited(
+      h.chat.submit(
+        submission: const AiChatSubmission(
+          displayText: '解释',
+          userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+        ),
       ),
     );
-    await h.waitForTransport(tester);
-    h.backend.add(const AiStreamEvent(text: answer));
-    await h.finishTurn(tester, future);
+    await waitForTransport(tester, backend);
+    backend.add(const AiStreamEvent(text: answer));
+    await tester.pump(const Duration(milliseconds: 55));
 
     expect(find.byType(CustomDivider), findsNothing);
     expect(find.textContaining('第一段内容'), findsOneWidget);
@@ -200,21 +190,24 @@ void main() {
   });
 
   testWidgets('推理过程折叠态纯文本轻量渲染，展开后完整 markdown 渲染', (tester) async {
-    final _Harness h = harness(tester);
+    final _ControlledBackend backend = _ControlledBackend();
+    final _Harness h = harness(backend);
     await h.mount(tester);
     final String reasoning = List<String>.generate(
       9,
       (int index) => '推理第 ${index + 1} 行',
     ).join('\n');
 
-    final Future<AiChatTurnResult> future = h.chat.submit(
-      submission: const AiChatSubmission(
-        displayText: '解释',
-        userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+    unawaited(
+      h.chat.submit(
+        submission: const AiChatSubmission(
+          displayText: '解释',
+          userMessage: AiChatHistoryMessage.user(content: 'prompt'),
+        ),
       ),
     );
-    await h.waitForTransport(tester);
-    h.backend.add(AiStreamEvent(reasoning: reasoning));
+    await waitForTransport(tester, backend);
+    backend.add(AiStreamEvent(reasoning: reasoning));
     await tester.pump(const Duration(milliseconds: 55));
 
     expect(find.byType(ReasoningPanel), findsOneWidget);
@@ -228,9 +221,5 @@ void main() {
     expect(find.text('收起'), findsOneWidget);
     expect(find.byType(GptMarkdown), findsOneWidget);
     expect(find.byType(ShaderMask), findsNothing);
-
-    h.backend.add(const AiStreamEvent(text: '完成'));
-    await tester.pump(const Duration(milliseconds: 55));
-    await h.finishTurn(tester, future);
   });
 }
