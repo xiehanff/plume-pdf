@@ -27,6 +27,14 @@ class _QueuedBackend implements AiBackend {
   }
 }
 
+class _SingleStreamBackend implements AiBackend {
+  final StreamController<AiStreamEvent> stream =
+      StreamController<AiStreamEvent>();
+
+  @override
+  Stream<AiStreamEvent> chat(AiBackendRequest request) => stream.stream;
+}
+
 void main() {
   test('old stopped Future cannot clear a newer send state', () async {
     final _QueuedBackend backend = _QueuedBackend();
@@ -64,5 +72,32 @@ void main() {
 
     expect(result.content, 'second answer');
     expect(controller.isGenerating, isFalse);
+  });
+
+  test('streaming controller hides follow-up protocol tags from UI state', () async {
+    final _SingleStreamBackend backend = _SingleStreamBackend();
+    final AiChatController controller = AiChatController(
+      session: AiChatSession(backend: backend),
+    );
+
+    final Future<AiChatTurnResult> future = controller.send(
+      apiKey: 'key',
+      input: const AiChatInput(text: 'hello'),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    backend.stream
+      ..add(
+        const AiStreamEvent(
+          text:
+              '正文<plume_follow_up_suggestions>["继续解释"]</plume_follow_up_suggestions>',
+        ),
+      )
+      ..close();
+
+    final AiChatTurnResult result = await future;
+    expect(result.content, '正文');
+    expect(controller.streamingText, '正文');
+    expect(controller.followUpSuggestions, <String>['继续解释']);
   });
 }
