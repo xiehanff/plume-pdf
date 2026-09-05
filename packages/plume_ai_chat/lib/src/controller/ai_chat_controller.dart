@@ -5,6 +5,8 @@ import '../core/ai_chat_session.dart';
 import '../core/ai_response_parser.dart';
 import '../models/ai_chat_history_message.dart';
 import '../models/ai_chat_input.dart';
+import '../models/chat_message.dart';
+import 'ai_conversation_presenter.dart';
 
 abstract final class AiChatUpdateId {
   static const String messages = 'messages';
@@ -19,9 +21,14 @@ abstract final class AiChatUpdateId {
 /// The host app owns creation/lifecycle and passes the controller to widgets.
 /// The package does not require Get.put/Get.find or GetX routing.
 class AiChatController extends GetxController {
-  AiChatController({required AiChatSession session}) : _session = session;
+  AiChatController({
+    required AiChatSession session,
+    AiConversationPresenter? presenter,
+  }) : _session = session,
+       _presenter = presenter ?? AiConversationPresenter();
 
   final AiChatSession _session;
+  final AiConversationPresenter _presenter;
 
   bool _isGenerating = false;
   String _streamingText = '';
@@ -34,6 +41,7 @@ class AiChatController extends GetxController {
   String get streamingReasoning => _streamingReasoning;
   List<String> get followUpSuggestions => _followUpSuggestions;
   List<AiChatHistoryMessage> get history => _session.history;
+  List<ChatMessage> get messages => _presenter.messages;
 
   Future<AiChatTurnResult> send({
     required String apiKey,
@@ -48,11 +56,19 @@ class AiChatController extends GetxController {
     }
 
     final int sendId = ++_latestSendId;
+    final String displayText = input.text.trim().isEmpty && input.image != null
+        ? '请分析这张图片。'
+        : input.text.trim();
+    _presenter
+      ..addUserMessage(text: displayText, imageBytes: input.image?.bytes)
+      ..ensureLoadingPlaceholder();
+
     _isGenerating = true;
     _streamingText = '';
     _streamingReasoning = '';
     _followUpSuggestions = const <String>[];
     update(<String>[
+      AiChatUpdateId.messages,
       AiChatUpdateId.status,
       AiChatUpdateId.input,
       AiChatUpdateId.suggestions,
@@ -62,7 +78,7 @@ class AiChatController extends GetxController {
       final AiChatTurnResult result = await _session.send(
         apiKey: apiKey,
         userMessage: AiChatHistoryMessage.user(
-          content: input.text,
+          content: displayText,
           image: input.image,
         ),
         systemPrompt: systemPrompt,
@@ -77,6 +93,11 @@ class AiChatController extends GetxController {
           _streamingText = response.content;
           _streamingReasoning = reasoning;
           _followUpSuggestions = response.followUpSuggestions;
+          _presenter.syncResponse(
+            loading: true,
+            result: response.content,
+            reasoning: reasoning,
+          );
           update(<String>[
             AiChatUpdateId.messages,
             AiChatUpdateId.suggestions,
@@ -87,8 +108,21 @@ class AiChatController extends GetxController {
         _streamingText = result.content;
         _streamingReasoning = result.reasoning;
         _followUpSuggestions = result.followUpSuggestions;
+        _presenter.syncResponse(
+          loading: false,
+          result: result.content,
+          reasoning: result.reasoning,
+        );
       }
       return result;
+    } catch (error) {
+      if (sendId == _latestSendId) {
+        _presenter.syncResponse(
+          loading: false,
+          errorMessage: error.toString(),
+        );
+      }
+      rethrow;
     } finally {
       // Stop/latest-wins allows a new turn to take UI ownership immediately.
       // An older Future finishing later must not overwrite the new turn.
@@ -109,7 +143,13 @@ class AiChatController extends GetxController {
     if (stopped) {
       _isGenerating = false;
       _followUpSuggestions = const <String>[];
+      _presenter.syncResponse(
+        loading: false,
+        result: _streamingText,
+        reasoning: _streamingReasoning,
+      );
       update(<String>[
+        AiChatUpdateId.messages,
         AiChatUpdateId.status,
         AiChatUpdateId.input,
         AiChatUpdateId.suggestions,
@@ -122,6 +162,7 @@ class AiChatController extends GetxController {
     // Let still-finishing old send() Futures lose UI state ownership.
     _latestSendId++;
     _session.clear();
+    _presenter.reset();
     _isGenerating = false;
     _streamingText = '';
     _streamingReasoning = '';
