@@ -43,7 +43,8 @@ class _TurnGate {
 /// Framework-independent conversation runtime.
 ///
 /// It owns history ordering, Stop semantics and the turn barrier. UI frameworks
-/// such as GetX belong above this layer.
+/// such as GetX belong above this layer. Provider authentication belongs below
+/// this layer, inside the concrete [AiBackend].
 class AiChatSession {
   AiChatSession({required AiBackend backend}) : _backend = backend;
 
@@ -116,7 +117,6 @@ class AiChatSession {
   /// includes [userMessage], so model behavior is identical while host UI cannot
   /// observe an uncommitted tool turn.
   Future<AiChatTurnResult> send({
-    required String apiKey,
     required AiChatHistoryMessage userMessage,
     String? systemPrompt,
     AiRequestOptions options = const AiRequestOptions(),
@@ -145,7 +145,6 @@ class AiChatSession {
         final AiChatTurnResult result = await _runStream(
           _backend.chat(
             AiBackendRequest(
-              apiKey: apiKey,
               history: snapshot,
               systemPrompt: systemPrompt,
               options: options,
@@ -261,8 +260,6 @@ class AiChatSession {
       );
       await active.completion.future;
     } finally {
-      // Every terminal path must cancel a pending preview timer. Otherwise a
-      // delayed callback can repaint stale text after the final/error state.
       previewTimer?.cancel();
       if (!active.stopped) {
         await active.subscription?.cancel();
