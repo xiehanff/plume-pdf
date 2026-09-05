@@ -5,10 +5,10 @@ import 'dart:ui' as ui;
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
 
-import '../../home/models/pdf_outline_entry.dart';
-import '../../home/services/macos_ocr_service.dart';
+import '../../reader/models/pdf_outline_entry.dart';
 import '../models/pdf_ai_context.dart';
 import '../models/pdf_ai_selection.dart';
+import 'macos_ocr_service.dart';
 
 /// PDF 上下文提取层：从当前文档提取选区文本、选区截图、页面全文
 /// 与文档级 AI 上下文，供 AI 会话适配层组装请求使用。
