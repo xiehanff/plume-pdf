@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plume_pdf/app/modules/home/services/pdf_outline_mapper.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:plume_pdf/app/modules/reader/services/pdf_outline_mapper.dart';
 
 void main() {
   const PdfOutlineMapper mapper = PdfOutlineMapper();
