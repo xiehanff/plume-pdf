@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plume_pdf/app/modules/home/controllers/home_controller.dart';
-import 'package:plume_pdf/app/modules/home/models/pdf_outline_entry.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_reader_state.dart';
 import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_panel_state.dart';
+import 'package:plume_pdf/app/modules/reader/models/pdf_outline_entry.dart';
 
 void main() {
   testWidgets(
