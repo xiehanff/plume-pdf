@@ -8,7 +8,7 @@ import 'package:get/get.dart';
 import 'package:plume_ai_chat/plume_ai_chat.dart';
 import 'package:plume_pdf/app/modules/pdf_ai/controllers/ai_sidebar_controller.dart';
 import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_panel_state.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/ai_sidebar.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/views/widgets/ai_sidebar.dart';
 
 class _ControlledBackend implements AiBackend {
   MultiStreamController<AiStreamEvent>? _controller;
