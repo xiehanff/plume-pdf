@@ -23,13 +23,13 @@ import '../../pdf_ai/services/macos_ocr_service.dart';
 import '../../pdf_ai/services/pdf_ai_chat_session.dart';
 import '../../pdf_ai/services/pdf_ai_context_service.dart';
 import '../../reader/models/pdf_outline_entry.dart';
+import '../../reader/models/pdf_recent_file.dart';
+import '../../reader/services/pdf_cover_cache.dart';
+import '../../reader/services/pdf_file_picker.dart';
 import '../../reader/services/pdf_outline_mapper.dart';
+import '../../reader/services/pdf_reader_store.dart';
 import '../models/pdf_reader_state.dart';
-import '../models/pdf_recent_file.dart';
 import '../services/macos_file_open_service.dart';
-import '../services/pdf_file_picker.dart';
-import '../services/pdf_cover_cache.dart';
-import '../services/pdf_reader_store.dart';
 import '../../../services/app_launch_args.dart';
 import '../../../theme/app_colors.dart';
 
