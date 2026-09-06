@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 
-import '../../models/pdf_recent_file.dart';
+import '../../../reader/models/pdf_recent_file.dart';
 import '../../../../theme/app_colors.dart';
 import 'empty_reader_view.dart';
 
