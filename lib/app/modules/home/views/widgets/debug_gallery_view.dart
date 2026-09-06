@@ -6,9 +6,9 @@ import 'package:plume_ai_chat/plume_ai_chat.dart';
 
 import '../../../pdf_ai/controllers/ai_sidebar_controller.dart';
 import '../../../pdf_ai/models/pdf_ai_panel_state.dart';
+import '../../../pdf_ai/views/widgets/ai_sidebar.dart';
 import '../../../reader/models/pdf_outline_entry.dart';
 import '../../../../theme/app_colors.dart';
-import 'ai_sidebar.dart';
 import 'empty_reader_view.dart';
 import 'error_reader_view.dart';
 import 'page_status_bar.dart';
