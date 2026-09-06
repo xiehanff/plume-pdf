@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 
 import 'package:get/get.dart';
 
+import '../../pdf_ai/views/widgets/ai_sidebar.dart';
 import '../controllers/home_controller.dart';
 import '../models/pdf_reader_state.dart';
 import '../../../theme/app_colors.dart';
-import 'widgets/ai_sidebar.dart';
 import 'widgets/app_title_bar.dart';
 import 'widgets/error_reader_view.dart';
 import 'widgets/ai_selectable_pdf_viewer.dart';
