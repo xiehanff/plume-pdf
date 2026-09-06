@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/selection_toolbar_placement.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/views/widgets/selection_toolbar_placement.dart';
 
 void main() {
   const Rect viewport = Rect.fromLTRB(12, 32, 388, 788);
