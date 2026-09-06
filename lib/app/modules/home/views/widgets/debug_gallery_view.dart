@@ -8,11 +8,11 @@ import '../../../pdf_ai/controllers/ai_sidebar_controller.dart';
 import '../../../pdf_ai/models/pdf_ai_panel_state.dart';
 import '../../../pdf_ai/views/widgets/ai_sidebar.dart';
 import '../../../reader/models/pdf_outline_entry.dart';
+import '../../../reader/views/widgets/empty_reader_view.dart';
+import '../../../reader/views/widgets/error_reader_view.dart';
+import '../../../reader/views/widgets/page_status_bar.dart';
+import '../../../reader/views/widgets/reader_sidebar.dart';
 import '../../../../theme/app_colors.dart';
-import 'empty_reader_view.dart';
-import 'error_reader_view.dart';
-import 'page_status_bar.dart';
-import 'reader_sidebar.dart';
 
 class _DebugGalleryAiBackend implements AiBackend {
   const _DebugGalleryAiBackend();
