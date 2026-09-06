@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plume_ai_chat/plume_ai_chat.dart' show AiImageAttachment;
-import 'package:plume_pdf/app/modules/home/services/local_image_attachment_loader.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/services/local_image_attachment_loader.dart';
 
 void main() {
   late Directory tempDirectory;
