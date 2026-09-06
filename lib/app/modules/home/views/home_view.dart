@@ -4,17 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../pdf_ai/views/widgets/ai_sidebar.dart';
+import '../../reader/views/widgets/error_reader_view.dart';
+import '../../reader/views/widgets/page_status_bar.dart';
+import '../../reader/views/widgets/reader_sidebar.dart';
+import '../../reader/views/widgets/recent_files_grid.dart';
 import '../controllers/home_controller.dart';
 import '../models/pdf_reader_state.dart';
 import '../../../theme/app_colors.dart';
 import 'widgets/app_title_bar.dart';
-import 'widgets/error_reader_view.dart';
 import 'widgets/ai_selectable_pdf_viewer.dart';
-import 'widgets/page_status_bar.dart';
-import 'widgets/reader_sidebar.dart';
 import 'widgets/reader_shortcuts.dart';
 import 'widgets/reader_toolbar.dart';
-import 'widgets/recent_files_grid.dart';
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
