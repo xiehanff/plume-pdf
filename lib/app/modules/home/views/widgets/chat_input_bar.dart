@@ -8,7 +8,7 @@ import 'package:plume_ai_chat/plume_ai_chat.dart'
 import 'package:super_clipboard/super_clipboard.dart';
 
 import '../../../../theme/app_colors.dart';
-import '../../services/local_image_attachment_loader.dart';
+import '../../../pdf_ai/services/local_image_attachment_loader.dart';
 
 class ChatInputBar extends StatefulWidget {
   const ChatInputBar({
