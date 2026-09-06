@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/pdf_outline_entry.dart';
+import '../../../reader/models/pdf_outline_entry.dart';
 import '../../../../theme/app_colors.dart';
 
 class ReaderSidebar extends StatelessWidget {
