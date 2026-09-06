@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../reader/models/pdf_outline_entry.dart';
 import '../controllers/home_controller.dart';
-import '../models/pdf_outline_entry.dart';
 import '../../../theme/app_colors.dart';
 import 'widgets/reader_sidebar.dart';
 
