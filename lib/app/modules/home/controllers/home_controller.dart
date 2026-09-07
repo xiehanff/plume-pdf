@@ -6,28 +6,30 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:pdfrx/pdfrx.dart';
+import 'package:plume_ai_chat/plume_ai_chat.dart'
+    show
+        AiChatController,
+        AiChatInput,
+        AiChatSession,
+        DeepSeekBackend;
 
-import '../models/ai_chat_history_message.dart';
-import '../models/pdf_outline_entry.dart';
-import '../models/ai_chat_input.dart';
-import '../models/pdf_ai_panel_state.dart';
-import '../models/pdf_ai_context.dart';
-import 'ai_sidebar_controller.dart';
-import '../models/pdf_ai_selection.dart';
+import '../../pdf_ai/controllers/ai_sidebar_controller.dart';
+import '../../pdf_ai/models/pdf_ai_panel_state.dart';
+import '../../pdf_ai/models/pdf_ai_selection.dart';
+import '../../pdf_ai/models/pdf_ai_tool_action.dart';
+import '../../pdf_ai/services/ai_model_config.dart';
+import '../../pdf_ai/services/deepseek_settings_store.dart';
+import '../../pdf_ai/services/macos_ocr_service.dart';
+import '../../pdf_ai/services/pdf_ai_chat_session.dart';
+import '../../pdf_ai/services/pdf_ai_context_service.dart';
+import '../../reader/models/pdf_outline_entry.dart';
+import '../../reader/models/pdf_recent_file.dart';
+import '../../reader/services/pdf_cover_cache.dart';
+import '../../reader/services/pdf_file_picker.dart';
+import '../../reader/services/pdf_outline_mapper.dart';
+import '../../reader/services/pdf_reader_store.dart';
 import '../models/pdf_reader_state.dart';
-import '../models/pdf_recent_file.dart';
-import '../services/ai_agent_session.dart';
-import '../services/deepseek_service.dart';
-import '../services/deepseek_settings_store.dart';
 import '../services/macos_file_open_service.dart';
-import '../services/macos_ocr_service.dart';
-import '../services/pdf_ai_context_service.dart';
-import '../services/pdf_file_picker.dart';
-import '../services/pdf_outline_mapper.dart';
-import '../services/pdf_cover_cache.dart';
-import '../services/pdf_reader_store.dart';
-import '../services/ai_model_config.dart';
-import '../services/ai_response_parser.dart';
 import '../../../services/app_launch_args.dart';
 import '../../../theme/app_colors.dart';
 
@@ -36,6 +38,17 @@ part 'home_controller_ai_session.dart';
 part 'home_controller_file_manager.dart';
 
 class HomeController extends GetxController {
+  HomeController() {
+    _aiChatController = AiChatController(
+      session: AiChatSession(
+        backend: DeepSeekBackend(
+          apiKeyProvider: () => state.aiPanelState.apiKey,
+        ),
+      ),
+    );
+    _aiAgentSession = PdfAiChatSession(controller: _aiChatController);
+  }
+
   static const String viewId = 'reader_view';
   static const double _zoomStepFactor = 1.08;
   static const double _kScrollbarWidth = 12; // 8px thumb + 4px margin
@@ -51,12 +64,12 @@ class HomeController extends GetxController {
   final DeepSeekSettingsStore _deepSeekSettingsStore = DeepSeekSettingsStore();
   final MacosFileOpenService _macosFileOpenService = MacosFileOpenService();
   final MacosOcrService _macosOcrService = MacosOcrService();
-  final AiAgentSession _aiAgentSession = AiAgentSession();
+  late final AiChatController _aiChatController;
+  late final PdfAiChatSession _aiAgentSession;
   late final PdfAiContextService _pdfAiContextService = PdfAiContextService(
     viewerController: pdfViewerController,
     ocrService: _macosOcrService,
   );
-  int _aiSessionId = 0;
   int _aiActionId = 0;
   int _outlineLoadId = 0;
   String? _pinnedOutlineId;
@@ -88,12 +101,15 @@ class HomeController extends GetxController {
   @override
   void onClose() {
     _saveDebounce?.cancel();
-    _invalidateAiWork();
+    _aiActionId++;
     pdfViewerController.removeListener(_handleViewerChanged);
     pageTextController.dispose();
+    // Sidebar owns a listener attached to the package controller, so detach the
+    // host UI controller before disposing the shared chat controller.
     if (Get.isRegistered<AiSidebarController>(tag: AiSidebarController.tag)) {
       Get.delete<AiSidebarController>(tag: AiSidebarController.tag);
     }
+    _aiChatController.onClose();
     super.onClose();
   }
 
@@ -114,14 +130,23 @@ class HomeController extends GetxController {
     );
   }
 
-  void onViewerReady(PdfDocument document, PdfViewerController controller) {
+  void onViewerReady(String filePath) {
+    if (state.filePath != filePath) {
+      return;
+    }
     _applyState(state.copyWith(loading: false, errorMessage: null));
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isClosed || state.filePath != filePath) {
+        return;
+      }
       fitWidth();
     });
   }
 
-  void onLoadError(Object error, StackTrace? stackTrace) {
+  void onLoadError(String filePath, Object error, StackTrace? stackTrace) {
+    if (state.filePath != filePath) {
+      return;
+    }
     debugPrint('[plume_pdf] onLoadError: $error');
     _showError('打开失败：$error');
   }
@@ -179,17 +204,7 @@ class HomeController extends GetxController {
       zoom: 1,
       fitWidthActive: false,
       aiSelection: null,
-      aiPanelState: state.aiPanelState.copyWith(
-        sessionId: _aiSessionId,
-        loading: false,
-        actionId: null,
-        actionLabel: null,
-        actionSelectionText: null,
-        actionSelectionImage: null,
-        result: null,
-        followUpSuggestions: const <String>[],
-        errorMessage: null,
-      ),
+      aiPanelState: state.aiPanelState.copyWith(loading: false),
     );
   }
 
@@ -197,11 +212,10 @@ class HomeController extends GetxController {
     _applyState(state.copyWith(loading: false, errorMessage: message));
   }
 
-  /// 使当前文档/会话所属的所有 AI 异步工作失效。
+  /// Invalidates all AI work belonging to the current document/conversation.
   ///
-  /// Home 层的 actionId 保护 UI continuation；Agent 层的 generation 保护
-  /// history 并取消 active stream。文档切换、新会话和 Controller 销毁都
-  /// 统一走这里，避免只清 history 却允许旧 Future 回写新界面。
+  /// Home's action id protects PDF/OCR preparation continuations; the package
+  /// controller owns transport cancellation, presentation reset and history.
   void _invalidateAiWork() {
     _aiActionId++;
     _aiAgentSession.clear();
@@ -266,6 +280,7 @@ class HomeController extends GetxController {
     Get.put<AiSidebarController>(
       AiSidebarController(
         state: state.aiPanelState,
+        chatController: _aiChatController,
         onApiKeyChanged: updateAiApiKey,
         onSaveApiKey: saveAiApiKey,
         onSendChat: sendAiChat,

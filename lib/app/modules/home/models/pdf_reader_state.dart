@@ -1,8 +1,8 @@
 import '../../../theme/app_colors.dart';
-import 'pdf_outline_entry.dart';
-import 'pdf_ai_panel_state.dart';
-import 'pdf_ai_selection.dart';
-import 'pdf_recent_file.dart';
+import '../../pdf_ai/models/pdf_ai_panel_state.dart';
+import '../../pdf_ai/models/pdf_ai_selection.dart';
+import '../../reader/models/pdf_outline_entry.dart';
+import '../../reader/models/pdf_recent_file.dart';
 
 class PdfReaderState {
   const PdfReaderState({

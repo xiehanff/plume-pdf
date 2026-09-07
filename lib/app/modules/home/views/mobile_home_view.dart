@@ -3,13 +3,13 @@ import 'package:get/get.dart';
 
 import '../../../routes/app_pages.dart';
 import '../../../theme/app_colors.dart';
+import '../../pdf_ai/models/pdf_ai_tool_action.dart';
+import '../../reader/views/widgets/error_reader_view.dart';
+import '../../reader/views/widgets/recent_files_grid.dart';
 import '../controllers/home_controller.dart';
 import '../models/pdf_reader_state.dart';
-import '../services/deepseek_service.dart';
 import 'widgets/ai_selectable_pdf_viewer.dart';
-import 'widgets/error_reader_view.dart';
 import 'widgets/mobile_reader_floating_toolbar.dart';
-import 'widgets/recent_files_grid.dart';
 
 /// iOS / Android 阅读器主界面。
 ///

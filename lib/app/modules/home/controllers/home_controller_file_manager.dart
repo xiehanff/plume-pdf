@@ -87,9 +87,6 @@ extension HomeControllerFileManager on HomeController {
       return;
     }
 
-    // 只有确认新文档真实存在以后才切换 Reader / AI 生命周期。
-    // stale recent file、被移动的文件等失败尝试不应该取消当前 AI 会话，
-    // 也不应该推进 outline/session generation。
     final File file = File(filePath);
     if (!await file.exists()) {
       await _markRecentFileUnavailable(filePath);
@@ -98,7 +95,6 @@ extension HomeControllerFileManager on HomeController {
     }
 
     _outlineLoadId++;
-    _aiSessionId++;
     _invalidateAiWork();
     _pinnedOutlineId = null;
     _pinnedOutlinePage = null;
@@ -133,14 +129,7 @@ extension HomeControllerFileManager on HomeController {
         outline: const <PdfOutlineEntry>[],
         aiSelectionMode: false,
         aiSelection: null,
-        aiPanelState: aiPanelState.copyWith(
-          loading: false,
-          actionLabel: null,
-          actionId: null,
-          result: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: aiPanelState.copyWith(loading: false),
       ),
     );
     unawaited(_refreshRecentFileAvailability(state.recentFiles));

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:plume_pdf/app/modules/home/models/pdf_ai_selection.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_selection.dart';
 
 void main() {
   test('单页 selection 保持原有 pageNumber 和 bounds 兼容访问', () {

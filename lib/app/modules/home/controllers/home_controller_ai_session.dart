@@ -1,12 +1,13 @@
 part of 'home_controller.dart';
 
-/// AI 动作与会话编排：负责状态流转与层间协调。
+/// PDF AI orchestration.
 ///
-/// 流式累积/历史写入在 [AiAgentSession]（会话层），
-/// PDF 选区与文档上下文提取在 [PdfAiContextService]（提取层）。
+/// Home owns only PDF/OCR preparation, selection lifecycle and app-level
+/// settings. Generic conversation presentation, streaming state, Stop/history
+/// semantics and follow-up suggestions are owned by [AiChatController] through
+/// [PdfAiChatSession].
 extension HomeControllerAiSession on HomeController {
-  /// 请求发起时捕获的 actionId 是否仍是最新一次：失效的旧请求
-  /// 不得再写入面板状态，避免覆盖新请求或新会话的结果。
+  /// Whether PDF/OCR preparation started by this action is still current.
   bool _isCurrentAiAction(int actionId) => actionId == _aiActionId;
 
   void toggleAiSelectionMode() {
@@ -30,32 +31,14 @@ extension HomeControllerAiSession on HomeController {
     return true;
   }
 
+  /// Selection lifecycle 只描述“当前框选是什么”。
+  ///
+  /// 框选开始、变化、取消以及 Overlay 因 viewport/focus 重置 selection，
+  /// 都不能结束正在运行的 AI Turn，也不能清理模型输出。只有明确的 AI
+  /// 动作、停止、新会话、切文档等入口才有资格改变 AI request/session
+  /// 生命周期。
   void onAiSelectionChanged(PdfAiSelection? selection) {
-    _applyState(
-      state.copyWith(
-        aiSelection: selection,
-        aiPanelState: selection == null
-            ? state.aiPanelState.copyWith(
-                actionId: null,
-                actionLabel: null,
-                actionSelectionText: null,
-                actionSelectionImage: null,
-                result: null,
-                reasoning: null,
-                followUpSuggestions: const <String>[],
-                errorMessage: null,
-                loading: false,
-              )
-            : state.aiPanelState.copyWith(
-                actionId: null,
-                actionLabel: null,
-                actionSelectionText: null,
-                actionSelectionImage: null,
-                followUpSuggestions: const <String>[],
-                errorMessage: null,
-              ),
-      ),
-    );
+    _applyState(state.copyWith(aiSelection: selection));
   }
 
   void updateAiApiKey(String apiKey) {
@@ -66,59 +49,37 @@ extension HomeControllerAiSession on HomeController {
 
   Future<void> saveAiApiKey() async {
     await _deepSeekSettingsStore.saveApiKey(state.aiPanelState.apiKey);
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(errorMessage: null),
-      ),
-    );
   }
 
-  /// 新建 AI 会话：清空对话历史，递增会话 ID（触发侧栏消息清空）。
+  /// 新建 AI 会话：Package Controller 统一清空 transport history 与消息 UI；
+  /// Home 只结束尚在进行的 PDF/OCR preflight。
   void startNewAiSession() {
     _invalidateAiWork();
-    final int nextSessionId = _aiSessionId + 1;
-    _aiSessionId = nextSessionId;
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          sessionId: nextSessionId,
-          loading: false,
-          actionId: null,
-          actionLabel: null,
-          actionSelectionText: null,
-          actionSelectionImage: null,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: false),
       ),
     );
   }
 
-  /// 停止当前 AI 生成。
-  ///
-  /// 已进入 SSE 流式阶段时直接取消底层 subscription，并保留已经收到的
-  /// 正文/推理；如果还停留在文档上下文准备阶段，则递增 actionId 让这轮
-  /// 异步任务立即失效，后续不会再真正发起模型请求。UI 的 loading 状态
-  /// 在点击当下同步结束，因此发送按钮会立即恢复。
+  /// Stops either Home-side PDF/OCR preflight or Package-owned preparation /
+  /// transport immediately. Partial model output is finalized by
+  /// [AiChatController] and remains visible.
   void stopAiResponse() {
-    if (!state.aiPanelState.loading) {
+    final bool preparingPdfContext = state.aiPanelState.loading;
+    final bool generating = _aiAgentSession.isGenerating;
+    if (!preparingPdfContext && !generating) {
       return;
     }
 
-    final bool stoppedActiveStream = _aiAgentSession.stopActiveStream();
-    if (!stoppedActiveStream) {
-      _aiActionId++;
+    _aiActionId++;
+    if (generating) {
+      _aiAgentSession.stopActiveStream();
     }
 
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: false,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: false),
       ),
     );
   }
@@ -130,193 +91,81 @@ extension HomeControllerAiSession on HomeController {
     }
 
     final int currentActionId = ++_aiActionId;
+    // A new PDF tool action is latest-wins from the moment the user clicks it,
+    // not only after OCR/screenshot extraction finishes.
+    if (_aiAgentSession.isGenerating) {
+      _aiAgentSession.stopActiveStream();
+    }
+
     _applyState(
       state.copyWith(
         aiSidebarVisible: true,
-        aiPanelState: state.aiPanelState.copyWith(
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: true),
       ),
     );
 
-    final String apiKey = state.aiPanelState.apiKey;
-    if (apiKey.trim().isEmpty) {
+    if (state.aiPanelState.apiKey.trim().isEmpty) {
+      _finishAiPreflight();
+      _aiChatController.presentLocalError(
+        message: '请先填写 DeepSeek API Key。',
+        stopPrevious: true,
+      );
+      return;
+    }
+
+    try {
+      final Uint8List? imageBytes = await _pdfAiContextService
+          .extractSelectionImageBytes(selection);
+      if (!_isCurrentAiAction(currentActionId)) {
+        return;
+      }
+
+      final String selectionText = await _pdfAiContextService
+          .resolveSelectionText(selection, imageBytes: imageBytes);
+      if (!_isCurrentAiAction(currentActionId)) {
+        return;
+      }
+
+      final AiModelConfig? config = AiModelRegistry.instance.configFor(
+        DeepSeekBackend.defaultModel,
+      );
+      final bool useVision =
+          config != null &&
+          config.supportsVision &&
+          imageBytes != null &&
+          imageBytes.isNotEmpty;
+
       _applyState(
         state.copyWith(
-          aiSidebarVisible: true,
-          aiPanelState: state.aiPanelState.copyWith(
-            loading: false,
-            reasoning: null,
-            followUpSuggestions: const <String>[],
-            errorMessage: '请先填写 DeepSeek API Key。',
-          ),
+          aiSelection: selectionText.trim().isEmpty
+              ? selection
+              : selection.copyWith(extractedText: selectionText),
+          aiPanelState: state.aiPanelState.copyWith(loading: false),
         ),
       );
-      return;
-    }
 
-    // 预提取选区截图与文本：提取完成后再一次性写入 loading + actionId +
-    // 选区信息，确保界面上先出现用户气泡（含截图/文本），再出现模型侧
-    // loading，随后流式输出 —— 避免 loading 占位先于用户消息入列。
-    final Uint8List? imageBytes = await _pdfAiContextService
-        .extractSelectionImageBytes(selection);
-    final String selectionText = await _pdfAiContextService
-        .resolveSelectionText(selection, imageBytes: imageBytes);
-    if (!_isCurrentAiAction(currentActionId)) {
-      return;
-    }
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: true,
-          actionLabel: action.label,
-          actionId: currentActionId,
-          actionSelectionText: selectionText.trim().isEmpty
-              ? null
-              : selectionText,
-          actionSelectionImage: imageBytes,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-        ),
-      ),
-    );
-
-    final AiModelConfig? config = AiModelRegistry.instance.configFor(
-      DeepSeekService.model,
-    );
-    if (config != null &&
-        config.supportsVision &&
-        imageBytes != null &&
-        imageBytes.isNotEmpty) {
-      return _runVisionAction(
+      await _aiAgentSession.runToolAction(
         action: action,
-        selection: selection,
-        apiKey: apiKey,
-        currentActionId: currentActionId,
-        imageBytes: imageBytes,
         selectionText: selectionText,
+        imageBytes: useVision ? imageBytes : null,
+        pageContextProvider: () =>
+            _pdfAiContextService.extractPageContext(selection),
       );
-    }
-    return _runTextAction(
-      action: action,
-      selection: selection,
-      apiKey: apiKey,
-      currentActionId: currentActionId,
-      extractedText: selectionText,
-    );
-  }
-
-  /// 视觉模式只在服务端明确拒绝图片/多模态输入时回退纯文本；
-  /// 认证、限流和网络错误直接展示，避免同一动作重复请求。
-  Future<void> _runVisionAction({
-    required AiToolAction action,
-    required PdfAiSelection selection,
-    required String apiKey,
-    required int currentActionId,
-    required Uint8List imageBytes,
-    required String selectionText,
-  }) async {
-    try {
-      final AiStreamResult result = await _aiAgentSession.runToolAction(
-        action: action,
-        apiKey: apiKey,
-        selectionText: '',
-        imageBytes: imageBytes,
-        onPreview: (String text, String reasoning) {
-          if (!_isCurrentAiAction(currentActionId)) return;
-          _applyAiResponsePreview(text, reasoning: reasoning);
-        },
-      );
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
-      if (!_isCurrentAiAction(currentActionId)) return;
-      if (error.canFallbackToText && selectionText.trim().isNotEmpty) {
-        return _runTextAction(
-          action: action,
-          selection: selection,
-          apiKey: apiKey,
-          currentActionId: currentActionId,
-          extractedText: selectionText,
+    } catch (error, stackTrace) {
+      if (!_isCurrentAiAction(currentActionId)) {
+        return;
+      }
+      // Errors after submit are already represented by AiChatController. This
+      // branch primarily covers extraction failures that happen before handoff.
+      if (!_aiAgentSession.isGenerating && state.aiPanelState.loading) {
+        _finishAiPreflight();
+        _aiChatController.presentLocalError(
+          message: '请求失败：$error',
+          stopPrevious: true,
         );
       }
-      _applyAiErrorState(error.message);
-    } catch (error) {
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiErrorState('请求失败：$error');
-    }
-  }
-
-  Future<void> _runTextAction({
-    required AiToolAction action,
-    required PdfAiSelection selection,
-    required String apiKey,
-    required int currentActionId,
-    required String extractedText,
-  }) async {
-    if (extractedText.trim().isEmpty) {
-      _applyState(
-        state.copyWith(
-          aiSidebarVisible: true,
-          aiPanelState: state.aiPanelState.copyWith(
-            loading: false,
-            actionLabel: action.label,
-            actionId: currentActionId,
-            result: null,
-            reasoning: null,
-            followUpSuggestions: const <String>[],
-            errorMessage: '当前框选区域没有识别到可用文本。',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final String? pageContext = await _pdfAiContextService.extractPageContext(
-      selection,
-    );
-    if (!_isCurrentAiAction(currentActionId)) {
-      return;
-    }
-
-    _applyState(
-      state.copyWith(
-        aiSidebarVisible: true,
-        aiSelection: selection.copyWith(extractedText: extractedText),
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: true,
-          actionLabel: action.label,
-          actionId: currentActionId,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
-      ),
-    );
-
-    try {
-      final AiStreamResult result = await _aiAgentSession.runToolAction(
-        action: action,
-        apiKey: apiKey,
-        selectionText: extractedText,
-        pageContext: pageContext,
-        onPreview: (String text, String reasoning) {
-          if (!_isCurrentAiAction(currentActionId)) return;
-          _applyAiResponsePreview(text, reasoning: reasoning);
-        },
-      );
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiErrorState(error.message);
-    } catch (error) {
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiErrorState('请求失败：$error');
+      debugPrint('[plume_pdf] PDF AI action failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
@@ -324,119 +173,55 @@ extension HomeControllerAiSession on HomeController {
     if (input.isEmpty) {
       return;
     }
-    final String apiKey = state.aiPanelState.apiKey;
-    if (apiKey.trim().isEmpty) {
-      _applyState(
-        state.copyWith(
-          aiSidebarVisible: true,
-          aiPanelState: state.aiPanelState.copyWith(
-            errorMessage: '请先填写 DeepSeek API Key。',
-            followUpSuggestions: const <String>[],
-          ),
-        ),
+
+    final String trimmedMessage = input.text.trim();
+    final String displayText = trimmedMessage.isEmpty && input.image != null
+        ? '请分析这张图片。'
+        : trimmedMessage;
+    if (state.aiPanelState.apiKey.trim().isEmpty) {
+      _aiChatController.presentLocalError(
+        message: '请先填写 DeepSeek API Key。',
+        displayText: displayText,
+        displayImageBytes: input.image?.bytes,
       );
       return;
     }
-    final String trimmedMessage = input.text.trim();
-    final AiImageAttachment? image = input.image;
-    final String historyMessage = trimmedMessage.isEmpty && image != null
-        ? '请分析这张图片。'
-        : trimmedMessage;
-    final AiChatHistoryMessage userHistoryMessage = AiChatHistoryMessage.user(
-      content: historyMessage,
-      image: image,
-    );
-    final int currentActionId = ++_aiActionId;
 
-    _applyState(
-      state.copyWith(
-        aiSidebarVisible: true,
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: true,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: null,
-        ),
-      ),
-    );
+    // Capture the document identity/state at submission time. If the reader
+    // switches documents while context extraction is running, clearing the
+    // Package Controller invalidates the pending transport before it can start.
+    final String? filePath = state.filePath;
+    final String? fileName = state.fileName;
+    final int currentPage = state.currentPage;
+    final List<PdfOutlineEntry> outline = List<PdfOutlineEntry>.of(state.outline);
 
     try {
-      final PdfAiContext? documentContext = await _pdfAiContextService
-          .buildDocumentContext(
-            filePath: state.filePath,
-            fileName: state.fileName,
-            currentPage: state.currentPage,
-            outline: state.outline,
-            message: trimmedMessage,
-          );
-      if (!_isCurrentAiAction(currentActionId)) {
-        return;
-      }
-      final AiStreamResult result = await _aiAgentSession.sendChat(
-        apiKey: apiKey,
-        userMessage: userHistoryMessage,
-        documentContext: documentContext,
-        onPreview: (String text, String reasoning) {
-          if (!_isCurrentAiAction(currentActionId)) return;
-          _applyAiResponsePreview(text, reasoning: reasoning);
-        },
+      await _aiAgentSession.sendChat(
+        input: input,
+        documentContextProvider: () => _pdfAiContextService
+            .buildDocumentContext(
+              filePath: filePath,
+              fileName: fileName,
+              currentPage: currentPage,
+              outline: outline,
+              message: trimmedMessage,
+            ),
       );
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiResponseState(result);
-    } on DeepSeekException catch (error) {
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiErrorState(error.message);
-    } catch (error) {
-      if (!_isCurrentAiAction(currentActionId)) return;
-      _applyAiErrorState('请求失败：$error');
+    } catch (error, stackTrace) {
+      // AiChatController has already finalized the visible error bubble.
+      debugPrint('[plume_pdf] AI chat failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
-  /// 流式完成后写入终态：正文、推理过程与追问建议。
-  void _applyAiResponseState(AiStreamResult result) {
+  void _finishAiPreflight() {
+    if (!state.aiPanelState.loading) {
+      return;
+    }
     _applyState(
       state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: false,
-          result: result.content,
-          reasoning: _nullableText(result.reasoning),
-          followUpSuggestions: result.followUpSuggestions,
-          errorMessage: null,
-        ),
+        aiPanelState: state.aiPanelState.copyWith(loading: false),
       ),
     );
-  }
-
-  void _applyAiErrorState(String message) {
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          loading: false,
-          result: null,
-          reasoning: null,
-          followUpSuggestions: const <String>[],
-          errorMessage: message,
-        ),
-      ),
-    );
-  }
-
-  void _applyAiResponsePreview(String rawResponse, {String? reasoning}) {
-    final AiResponse response = AiResponseParser.parse(rawResponse);
-    _applyState(
-      state.copyWith(
-        aiPanelState: state.aiPanelState.copyWith(
-          result: response.content,
-          reasoning: _nullableText(reasoning),
-          followUpSuggestions: response.followUpSuggestions,
-        ),
-      ),
-    );
-  }
-
-  String? _nullableText(String? value) {
-    final String text = value?.trim() ?? '';
-    return text.isEmpty ? null : value;
   }
 }

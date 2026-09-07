@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'reader_shortcut_platform.dart';
+import '../../../reader/views/widgets/reader_shortcut_platform.dart';
 
 class ReaderShortcuts extends StatefulWidget {
   const ReaderShortcuts({

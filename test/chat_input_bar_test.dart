@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/chat_input_bar.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/views/widgets/chat_input_bar.dart';
 
 void main() {
   testWidgets('输入框提示文字从左上角开始布局', (WidgetTester tester) async {

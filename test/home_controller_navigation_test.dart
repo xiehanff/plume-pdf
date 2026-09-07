@@ -1,7 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plume_pdf/app/modules/home/controllers/home_controller.dart';
-import 'package:plume_pdf/app/modules/home/models/pdf_outline_entry.dart';
 import 'package:plume_pdf/app/modules/home/models/pdf_reader_state.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_panel_state.dart';
+import 'package:plume_pdf/app/modules/reader/models/pdf_outline_entry.dart';
 
 void main() {
   testWidgets(
@@ -54,14 +55,19 @@ void main() {
     },
   );
 
-  testWidgets('missing PDF does not advance document or AI session lifecycle', (
+  testWidgets('missing PDF does not advance document or AI preflight lifecycle', (
     WidgetTester tester,
   ) async {
     final HomeController controller = HomeController();
+    const PdfAiPanelState runningPreflight = PdfAiPanelState(
+      apiKey: 'cached-key',
+      loading: true,
+    );
     controller.state = const PdfReaderState(
       filePath: '/tmp/current-reader-document.pdf',
       currentPage: 4,
       pageCount: 12,
+      aiPanelState: runningPreflight,
     );
 
     const String missingPath =
@@ -76,11 +82,12 @@ void main() {
     expect(controller.state.unavailableRecentFilePaths, contains(missingPath));
     expect(controller.state.errorMessage, '文件不存在，可能已经被移动或删除。');
 
-    // 如果失败路径错误地推进了 _aiSessionId，这里会得到 sessionId == 2。
-    // 正确语义是失败尝试不算一次文档/AI 生命周期切换，因此下一次真实
-    // “新会话”仍然从 0 递增到 1。
-    controller.startNewAiSession();
-    expect(controller.state.aiPanelState.sessionId, 1);
+    // 失败发生在文档切换正式开始之前，因此不应结束当前 PDF/OCR preflight，
+    // 也不应重建 Host AI 状态。Package conversation generation 由
+    // AiChatController 自己的生命周期测试覆盖。
+    expect(controller.state.aiPanelState, same(runningPreflight));
+    expect(controller.state.aiPanelState.apiKey, 'cached-key');
+    expect(controller.state.aiPanelState.loading, isTrue);
 
     controller.onClose();
   });

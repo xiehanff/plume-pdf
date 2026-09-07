@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../pdf_ai/views/widgets/ai_sidebar.dart';
 import '../../../theme/app_colors.dart';
-import 'widgets/ai_sidebar.dart';
 
 class MobileAiView extends StatelessWidget {
   const MobileAiView({super.key});

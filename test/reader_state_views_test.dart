@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:plume_pdf/app/modules/home/models/pdf_recent_file.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/empty_reader_view.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/error_reader_view.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/recent_files_grid.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/reader_shortcut_platform.dart';
+import 'package:plume_pdf/app/modules/reader/models/pdf_recent_file.dart';
+import 'package:plume_pdf/app/modules/reader/views/widgets/empty_reader_view.dart';
+import 'package:plume_pdf/app/modules/reader/views/widgets/error_reader_view.dart';
+import 'package:plume_pdf/app/modules/reader/views/widgets/recent_files_grid.dart';
+import 'package:plume_pdf/app/modules/reader/views/widgets/reader_shortcut_platform.dart';
 
 void main() {
   testWidgets('空态在 macOS 显示 Command 快捷键提示', (

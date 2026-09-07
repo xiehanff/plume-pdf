@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:plume_pdf/app/modules/home/models/pdf_ai_selection.dart';
-import 'package:plume_pdf/app/modules/home/services/deepseek_service.dart';
-import 'package:plume_pdf/app/modules/home/views/widgets/pdf_page_area_selection_overlay.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_selection.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/models/pdf_ai_tool_action.dart';
+import 'package:plume_pdf/app/modules/pdf_ai/views/widgets/pdf_page_area_selection_overlay.dart';
 
 void main() {
   testWidgets(
