@@ -91,6 +91,16 @@ class AiChatSession {
   }
 
   bool stopActiveTurn() {
+    // A real transport turn is the active work the caller can currently see.
+    // Prefer cancelling it before touching any queued turn. If no transport is
+    // active, cancelling the newest pending gate still lets callers stop work
+    // before it reaches the backend.
+    final _ActiveTurn? active = _activeTurn;
+    if (active != null && !active.stopped) {
+      unawaited(_stopTurn(active));
+      return true;
+    }
+
     final _TurnGate? latestTurn = _latestTurn;
     if (latestTurn != null &&
         !latestTurn.started &&
@@ -99,12 +109,7 @@ class AiChatSession {
       return true;
     }
 
-    final _ActiveTurn? active = _activeTurn;
-    if (active == null || active.stopped) {
-      return false;
-    }
-    unawaited(_stopTurn(active));
-    return true;
+    return false;
   }
 
   /// Executes one conversation turn.
