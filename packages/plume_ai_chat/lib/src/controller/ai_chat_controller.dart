@@ -172,12 +172,17 @@ class AiChatController extends GetxController {
       }
       return result;
     } catch (error) {
-      if (sendId == _latestSendId) {
-        _presenter.syncResponse(
-          loading: false,
-          errorMessage: error.toString(),
-        );
+      // Stop/new-conversation/latest-wins already revoked this turn's
+      // presentation ownership. A later failure from async host preparation or
+      // fallback construction is therefore stale cancellation fallout, not a
+      // new error the caller should have to handle.
+      if (sendId != _latestSendId) {
+        return _stoppedBeforeTransport;
       }
+      _presenter.syncResponse(
+        loading: false,
+        errorMessage: error.toString(),
+      );
       rethrow;
     } finally {
       if (sendId == _latestSendId) {
